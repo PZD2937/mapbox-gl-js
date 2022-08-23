@@ -821,7 +821,7 @@ class Camera extends Evented {
      * });
      * @see [Example: Fit a map to a bounding box](https://www.mapbox.com/mapbox-gl-js/example/fitbounds/)
      */
-    fitBounds(bounds: LngLatBoundsLike, options?: EasingOptions, eventData?: Object): this {
+    fitBounds(bounds: LngLatBoundsLike, options?: EasingOptions, eventData?: Object, callback): this {
         if (this.transform.projection.name === 'globe') {
             warnOnce('Globe projection does not support fitBounds API, this API may behave unexpectedly.');
         }
@@ -829,7 +829,7 @@ class Camera extends Evented {
         return this._fitInternal(
             this.cameraForBounds(bounds, options),
             options,
-            eventData);
+            eventData, callback);
     }
 
     _raycastElevationBox(point0: Point, point1: Point): ?ElevationBoxRaycast {
@@ -945,7 +945,7 @@ class Camera extends Evented {
             options, eventData);
     }
 
-    _fitInternal(calculatedOptions?: ?EasingOptions, options?: EasingOptions, eventData?: Object): this {
+    _fitInternal(calculatedOptions?: ?EasingOptions, options?: EasingOptions, eventData?: Object, callback): this {
         // cameraForBounds warns + returns undefined if unable to fit:
         if (!calculatedOptions) return this;
 
@@ -954,8 +954,8 @@ class Camera extends Evented {
         delete options.padding;
 
         return options.linear ?
-            this.easeTo(options, eventData) :
-            this.flyTo(options, eventData);
+            this.easeTo(options, eventData, callback) :
+            this.flyTo(options, eventData, callback);
     }
 
     /**
