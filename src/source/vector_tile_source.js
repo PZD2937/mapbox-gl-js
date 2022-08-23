@@ -54,6 +54,7 @@ class VectorTileSource extends Evented implements Source {
     minzoom: number;
     maxzoom: number;
     url: string;
+    customTags: ?Object;
     scheme: string;
     tileSize: number;
     promoteId: ?PromoteIdSpecification;
@@ -94,6 +95,7 @@ class VectorTileSource extends Evented implements Source {
         this._options = extend({type: 'vector'}, options);
 
         this._collectResourceTiming = options.collectResourceTiming;
+        this.customTags = options.customTags;
 
         if (this.tileSize !== 512) {
             throw new Error('vector tile sources must have a tileSize of 512');
@@ -251,7 +253,8 @@ class VectorTileSource extends Evented implements Source {
 
     loadTile(tile: Tile, callback: Callback<void>) {
         const url = this.map._requestManager.normalizeTileURL(tile.tileID.canonical.url(this.tiles, this.scheme));
-        const request = this.map._requestManager.transformRequest(url, ResourceType.Tile);
+        const {x, y, z} = tile.tileID.canonical;
+        const request = this.map._requestManager.transformRequest(url, ResourceType.Tile, this.customTags,{x, y, z});
 
         const params = {
             request,

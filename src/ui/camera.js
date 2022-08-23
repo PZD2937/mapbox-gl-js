@@ -1194,7 +1194,7 @@ class Camera extends Evented {
      * });
      * @see [Example: Navigate the map with game-like controls](https://www.mapbox.com/mapbox-gl-js/example/game-controls/)
      */
-    easeTo(options: EasingOptions & {easeId?: string, preloadOnly?: boolean}, eventData?: Object): this {
+    easeTo(options: EasingOptions & {easeId?: string, preloadOnly?: boolean}, eventData?: Object, finish?: Function): this {
         this._stop(false, options.easeId);
 
         options = extend({
@@ -1320,6 +1320,7 @@ class Camera extends Evented {
         this._ease(frame(tr), (interruptingEaseId?: string) => {
             tr.recenterOnTerrain();
             this._afterEase(eventData, interruptingEaseId);
+            finish && finish();
         }, options);
 
         return this;
@@ -1417,6 +1418,7 @@ class Camera extends Evented {
      * @param {number} [options.maxDuration] The animation's maximum duration, measured in milliseconds.
      *     If duration exceeds maximum duration, it resets to 0.
      * @param {Object | null} eventData Additional properties to be added to event objects of events triggered by this method.
+     * @param finish
      * @fires Map.event:movestart
      * @fires Map.event:zoomstart
      * @fires Map.event:pitchstart
@@ -1445,11 +1447,13 @@ class Camera extends Evented {
      * @see [Example: Slowly fly to a location](https://www.mapbox.com/mapbox-gl-js/example/flyto-options/)
      * @see [Example: Fly to a location based on scroll position](https://www.mapbox.com/mapbox-gl-js/example/scroll-fly-to/)
      */
-    flyTo(options: EasingOptions & {preloadOnly?: boolean}, eventData?: Object): this {
+    flyTo(options: EasingOptions & {preloadOnly?: boolean}, eventData?: Object, finish?: Function): this {
         // Fall through to jumpTo if user has set prefers-reduced-motion
         if (!options.essential && browser.prefersReducedMotion) {
             const coercedOptions = pick(options, ['center', 'zoom', 'bearing', 'pitch', 'around']);
-            return this.jumpTo(coercedOptions, eventData);
+            this.jumpTo(coercedOptions, eventData);
+            finish && finish();
+            return this
         }
 
         // This method implements an “optimal path” animation, as detailed in:
@@ -1614,7 +1618,10 @@ class Camera extends Evented {
         this._padding = paddingChanged;
 
         this._prepareEase(eventData, false);
-        this._ease(frame(tr), () => this._afterEase(eventData), options);
+        this._ease(frame(tr), () => {
+            this._afterEase(eventData)
+            finish && finish();
+        }, options);
 
         return this;
     }

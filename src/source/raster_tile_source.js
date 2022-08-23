@@ -33,6 +33,7 @@ class RasterTileSource extends Evented implements Source {
     url: string;
     scheme: string;
     tileSize: number;
+    customTags: ?Object;
 
     bounds: ?[number, number, number, number];
     tileBounds: TileBounds;
@@ -61,6 +62,7 @@ class RasterTileSource extends Evented implements Source {
 
         this._options = extend({type: 'raster'}, options);
         extend(this, pick(options, ['url', 'scheme', 'tileSize']));
+        this.customTags = options.customTags;
     }
 
     load() {
@@ -113,7 +115,8 @@ class RasterTileSource extends Evented implements Source {
     loadTile(tile: Tile, callback: Callback<void>) {
         const use2x = browser.devicePixelRatio >= 2;
         const url = this.map._requestManager.normalizeTileURL(tile.tileID.canonical.url(this.tiles, this.scheme), use2x, this.tileSize);
-        tile.request = getImage(this.map._requestManager.transformRequest(url, ResourceType.Tile), (error, data, cacheControl, expires) => {
+        const {x, y, z} = tile.tileID.canonical;
+        tile.request = getImage(this.map._requestManager.transformRequest(url, ResourceType.Tile, this.customTags, {x, y, z}), (error, data, cacheControl, expires) => {
             delete tile.request;
 
             if (tile.aborted) {

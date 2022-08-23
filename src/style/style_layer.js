@@ -57,6 +57,7 @@ class StyleLayer extends Evented {
 
     _featureFilter: FeatureFilter;
     _filterCompiled: boolean;
+    zIndex: number;
 
     +queryRadius: (bucket: Bucket) => number;
     +queryIntersectsFeature: (queryGeometry: TilespaceQueryGeometry,
@@ -87,6 +88,7 @@ class StyleLayer extends Evented {
         this.metadata = layer.metadata;
         this.minzoom = layer.minzoom;
         this.maxzoom = layer.maxzoom;
+        this.zIndex = layer.zIndex;
 
         if (layer.type !== 'background' && layer.type !== 'sky') {
             this.source = layer.source;
@@ -237,7 +239,8 @@ class StyleLayer extends Evented {
             'maxzoom': this.maxzoom,
             'filter': this.filter,
             'layout': this._unevaluatedLayout && this._unevaluatedLayout.serialize(),
-            'paint': this._transitionablePaint && this._transitionablePaint.serialize()
+            'paint': this._transitionablePaint && this._transitionablePaint.serialize(),
+            'zIndex': this.zIndex
         };
 
         if (this.visibility) {
@@ -319,6 +322,10 @@ class StyleLayer extends Evented {
 
     dynamicFilterNeedsFeature(): boolean {
         return this._featureFilter.needFeature;
+    }
+
+    getId(): string{
+        return this.id;
     }
 }
 

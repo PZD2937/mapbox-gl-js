@@ -63,7 +63,22 @@ export class RequestManager {
         return Date.now() > this._skuTokenExpiresAt;
     }
 
-    transformRequest(url: string, type: ResourceTypeEnum): RequestParameters {
+    transformRequest(url: string, type: ResourceTypeEnum, tags?: Object, tileObject?: Object<{
+        x: number,
+        y: number,
+        z: number
+    }>): RequestParameters {
+        if(typeof tags === 'object'){
+            url = url.replace(/\{ *([\w_]+) *\}/g, function (str, key) {
+                let value = tags[key];
+                if (value === undefined) {
+                    throw new Error('No value provided for variable ' + str);
+                } else if (typeof value === 'function') {
+                    value = value(tileObject);
+                }
+                return value;
+            });
+        }
         if (this._transformRequestFn) {
             return this._transformRequestFn(url, type) || {url};
         }

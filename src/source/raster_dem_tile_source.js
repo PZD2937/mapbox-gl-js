@@ -26,11 +26,13 @@ class RasterDEMTileSource extends RasterTileSource implements Source {
         this.maxzoom = 22;
         this._options = extend({type: 'raster-dem'}, options);
         this.encoding = options.encoding || "mapbox";
+        this.customTags = options.customTags;
     }
 
     loadTile(tile: Tile, callback: Callback<void>) {
         const url = this.map._requestManager.normalizeTileURL(tile.tileID.canonical.url(this.tiles, this.scheme), false, this.tileSize);
-        tile.request = getImage(this.map._requestManager.transformRequest(url, ResourceType.Tile), imageLoaded.bind(this));
+        const {x, y, z} = tile.tileID.canonical;
+        tile.request = getImage(this.map._requestManager.transformRequest(url, ResourceType.Tile, this.customTags, {x, y, z}), imageLoaded.bind(this));
 
         function imageLoaded(err, img, cacheControl, expires) {
             delete tile.request;

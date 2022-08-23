@@ -145,25 +145,25 @@ class Style extends Evented {
 
     _request: ?Cancelable;
     _spriteRequest: ?Cancelable;
-    _layers: {[_: string]: StyleLayer};
+    _layers: { [_: string]: StyleLayer };
     _num3DLayers: number;
     _numSymbolLayers: number;
     _numCircleLayers: number;
-    _serializedLayers: {[_: string]: Object};
+    _serializedLayers: { [_: string]: Object };
     _order: Array<string>;
     _drapedFirstOrder: Array<string>;
-    _sourceCaches: {[_: string]: SourceCache};
-    _otherSourceCaches: {[_: string]: SourceCache};
-    _symbolSourceCaches: {[_: string]: SourceCache};
+    _sourceCaches: { [_: string]: SourceCache };
+    _otherSourceCaches: { [_: string]: SourceCache };
+    _symbolSourceCaches: { [_: string]: SourceCache };
     zoomHistory: ZoomHistory;
     _loaded: boolean;
     _rtlTextPluginCallback: Function;
     _changed: boolean;
-    _updatedSources: {[_: string]: 'clear' | 'reload'};
-    _updatedLayers: {[_: string]: true};
-    _removedLayers: {[_: string]: StyleLayer};
-    _changedImages: {[_: string]: true};
-    _updatedPaintProps: {[layer: string]: true};
+    _updatedSources: { [_: string]: 'clear' | 'reload' };
+    _updatedLayers: { [_: string]: true };
+    _removedLayers: { [_: string]: StyleLayer };
+    _changedImages: { [_: string]: true };
+    _updatedPaintProps: { [layer: string]: true };
     _layerOrderChanged: boolean;
     _availableImages: Array<string>;
     _markersNeedUpdate: boolean;
@@ -204,7 +204,7 @@ class Style extends Evented {
         this.zoomHistory = new ZoomHistory();
         this._loaded = false;
         this._availableImages = [];
-        this._order  = [];
+        this._order = [];
         this._drapedFirstOrder = [];
         this._markersNeedUpdate = false;
 
@@ -574,7 +574,11 @@ class Style extends Evented {
         for (const sourceId in sourcesUsedBefore) {
             const sourceCache = this._sourceCaches[sourceId];
             if (sourcesUsedBefore[sourceId] !== sourceCache.used) {
-                sourceCache.getSource().fire(new Event('data', {sourceDataType: 'visibility', dataType:'source', sourceId: sourceCache.getSource().id}));
+                sourceCache.getSource().fire(new Event('data', {
+                    sourceDataType: 'visibility',
+                    dataType: 'source',
+                    sourceId: sourceCache.getSource().id
+                }));
             }
         }
 
@@ -783,7 +787,11 @@ class Style extends Evented {
         for (const sourceCache of sourceCaches) {
             delete this._sourceCaches[sourceCache.id];
             delete this._updatedSources[sourceCache.id];
-            sourceCache.fire(new Event('data', {sourceDataType: 'metadata', dataType:'source', sourceId: sourceCache.getSource().id}));
+            sourceCache.fire(new Event('data', {
+                sourceDataType: 'metadata',
+                dataType: 'source',
+                sourceId: sourceCache.getSource().id
+            }));
             sourceCache.setEventedParent(null);
             sourceCache.clearTiles();
         }
@@ -799,10 +807,10 @@ class Style extends Evented {
     }
 
     /**
-    * Set the data of a GeoJSON source, given its ID.
-    * @param {string} id ID of the source.
-    * @param {GeoJSON|string} data GeoJSON source.
-    */
+     * Set the data of a GeoJSON source, given its ID.
+     * @param {string} id ID of the source.
+     * @param {GeoJSON|string} data GeoJSON source.
+     */
     setGeoJSONSourceData(id: string, data: GeoJSON | string) {
         this._checkLoaded();
 
@@ -868,14 +876,6 @@ class Style extends Evented {
             this._updateLayerCount(layer, true);
         }
 
-        const index = before ? this._order.indexOf(before) : this._order.length;
-        if (before && index === -1) {
-            this.fire(new ErrorEvent(new Error(`Layer with id "${before}" does not exist on this map.`)));
-            return;
-        }
-
-        this._order.splice(index, 0, id);
-        this._layerOrderChanged = true;
 
         this._layers[id] = layer;
 
@@ -897,6 +897,8 @@ class Style extends Evented {
                 sourceCache.pause();
             }
         }
+        this._order.push(id);
+        this._layerSort();
         this._updateLayer(layer);
 
         if (layer.onAdd) {
@@ -904,6 +906,14 @@ class Style extends Evented {
         }
 
         this._updateDrapeFirstLayers();
+    }
+
+    _layerSort() {
+        const layers = this.serialize().layers;
+        layers.sort((a, b) => a.zIndex - b.zIndex);
+        const order = layers.map(l => l.id);
+        this._order = order;
+        this._layerOrderChanged = true;
     }
 
     /**
@@ -1036,7 +1046,7 @@ class Style extends Evented {
         this._updateLayer(layer);
     }
 
-    setFilter(layerId: string, filter: ?FilterSpecification,  options: StyleSetterOptions = {}) {
+    setFilter(layerId: string, filter: ?FilterSpecification, options: StyleSetterOptions = {}) {
         this._checkLoaded();
 
         const layer = this.getLayer(layerId);
@@ -1073,7 +1083,7 @@ class Style extends Evented {
         return layer && clone(layer.filter);
     }
 
-    setLayoutProperty(layerId: string, name: string, value: any,  options: StyleSetterOptions = {}) {
+    setLayoutProperty(layerId: string, name: string, value: any, options: StyleSetterOptions = {}) {
         this._checkLoaded();
 
         const layer = this.getLayer(layerId);
@@ -1239,7 +1249,9 @@ class Style extends Evented {
             projection: this.stylesheet.projection,
             sources,
             layers: this._serializeLayers(this._order)
-        }, (value) => { return value !== undefined; });
+        }, (value) => {
+            return value !== undefined;
+        });
     }
 
     _updateLayer(layer: StyleLayer) {
@@ -1393,7 +1405,7 @@ class Style extends Evented {
         return (this._flattenAndSortRenderedFeatures(sourceResults): any);
     }
 
-    querySourceFeatures(sourceID: string, params: ?{sourceLayer: ?string, filter: ?Array<any>, validate?: boolean}): Array<QueryFeature> {
+    querySourceFeatures(sourceID: string, params: ?{ sourceLayer: ?string, filter: ?Array<any>, validate?: boolean }): Array<QueryFeature> {
         if (params && params.filter) {
             this._validate(validateFilter, 'querySourceFeatures.filter', params.filter, null, params);
         }
@@ -1771,7 +1783,7 @@ class Style extends Evented {
 
     // Callbacks from web workers
 
-    getImages(mapId: string, params: {icons: Array<string>, source: string, tileID: OverscaledTileID, type: string}, callback: Callback<{[_: string]: StyleImage}>) {
+    getImages(mapId: string, params: { icons: Array<string>, source: string, tileID: OverscaledTileID, type: string }, callback: Callback<{ [_: string]: StyleImage }>) {
 
         this.imageManager.getImages(params.icons, callback);
 
@@ -1794,7 +1806,7 @@ class Style extends Evented {
         setDependencies(this._symbolSourceCaches[params.source]);
     }
 
-    getGlyphs(mapId: string, params: {stacks: {[_: string]: Array<number>}}, callback: Callback<{[_: string]: {glyphs: {[_: number]: ?StyleGlyph}, ascender?: number, descender?: number}}>) {
+    getGlyphs(mapId: string, params: { stacks: { [_: string]: Array<number> } }, callback: Callback<{ [_: string]: { glyphs: { [_: number]: ?StyleGlyph }, ascender?: number, descender?: number } }>) {
         this.glyphManager.getGlyphs(params.stacks, callback);
     }
 

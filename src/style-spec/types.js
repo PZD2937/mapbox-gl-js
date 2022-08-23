@@ -108,6 +108,7 @@ export type VectorSourceSpecification = {
     "url"?: string,
     "tiles"?: Array<string>,
     "bounds"?: [number, number, number, number],
+    "customTags"?: Object,
     "scheme"?: "xyz" | "tms",
     "minzoom"?: number,
     "maxzoom"?: number,
@@ -121,6 +122,7 @@ export type RasterSourceSpecification = {
     "url"?: string,
     "tiles"?: Array<string>,
     "bounds"?: [number, number, number, number],
+    "customTags"?: Object,
     "minzoom"?: number,
     "maxzoom"?: number,
     "tileSize"?: number,
@@ -134,6 +136,7 @@ export type RasterDEMSourceSpecification = {
     "url"?: string,
     "tiles"?: Array<string>,
     "bounds"?: [number, number, number, number],
+    "customTags"?: Object,
     "minzoom"?: number,
     "maxzoom"?: number,
     "tileSize"?: number,
@@ -146,6 +149,7 @@ export type GeoJSONSourceSpecification = {|
     "type": "geojson",
     "data"?: mixed,
     "maxzoom"?: number,
+    "customTags"?: Object,
     "attribution"?: string,
     "buffer"?: number,
     "filter"?: mixed,
@@ -163,12 +167,14 @@ export type GeoJSONSourceSpecification = {|
 export type VideoSourceSpecification = {|
     "type": "video",
     "urls": Array<string>,
+    "customTags"?: Object,
     "coordinates": [[number, number], [number, number], [number, number], [number, number]]
 |}
 
 export type ImageSourceSpecification = {|
     "type": "image",
     "url": string,
+    "customTags"?: Object,
     "coordinates": [[number, number], [number, number], [number, number], [number, number]]
 |}
 
@@ -189,6 +195,7 @@ export type FillLayerSpecification = {|
     "minzoom"?: number,
     "maxzoom"?: number,
     "filter"?: FilterSpecification,
+    "zIndex"?: number,
     "layout"?: {|
         "fill-sort-key"?: DataDrivenPropertyValueSpecification<number>,
         "visibility"?: "visible" | "none"
@@ -213,6 +220,7 @@ export type LineLayerSpecification = {|
     "minzoom"?: number,
     "maxzoom"?: number,
     "filter"?: FilterSpecification,
+    "zIndex"?: number,
     "layout"?: {|
         "line-cap"?: DataDrivenPropertyValueSpecification<"butt" | "round" | "square">,
         "line-join"?: DataDrivenPropertyValueSpecification<"bevel" | "round" | "miter">,
@@ -246,6 +254,7 @@ export type SymbolLayerSpecification = {|
     "minzoom"?: number,
     "maxzoom"?: number,
     "filter"?: FilterSpecification,
+    "zIndex"?: number,
     "layout"?: {|
         "symbol-placement"?: PropertyValueSpecification<"point" | "line" | "line-center">,
         "symbol-spacing"?: PropertyValueSpecification<number>,
@@ -317,6 +326,7 @@ export type CircleLayerSpecification = {|
     "minzoom"?: number,
     "maxzoom"?: number,
     "filter"?: FilterSpecification,
+    "zIndex"?: number,
     "layout"?: {|
         "circle-sort-key"?: DataDrivenPropertyValueSpecification<number>,
         "visibility"?: "visible" | "none"
@@ -345,6 +355,7 @@ export type HeatmapLayerSpecification = {|
     "minzoom"?: number,
     "maxzoom"?: number,
     "filter"?: FilterSpecification,
+    "zIndex"?: number,
     "layout"?: {|
         "visibility"?: "visible" | "none"
     |},
@@ -366,6 +377,7 @@ export type FillExtrusionLayerSpecification = {|
     "minzoom"?: number,
     "maxzoom"?: number,
     "filter"?: FilterSpecification,
+    "zIndex"?: number,
     "layout"?: {|
         "visibility"?: "visible" | "none",
         "fill-extrusion-edge-radius"?: number
@@ -393,6 +405,7 @@ export type RasterLayerSpecification = {|
     "minzoom"?: number,
     "maxzoom"?: number,
     "filter"?: FilterSpecification,
+    "zIndex"?: number,
     "layout"?: {|
         "visibility"?: "visible" | "none"
     |},
@@ -417,6 +430,7 @@ export type HillshadeLayerSpecification = {|
     "minzoom"?: number,
     "maxzoom"?: number,
     "filter"?: FilterSpecification,
+    "zIndex"?: number,
     "layout"?: {|
         "visibility"?: "visible" | "none"
     |},
@@ -436,6 +450,7 @@ export type BackgroundLayerSpecification = {|
     "metadata"?: mixed,
     "minzoom"?: number,
     "maxzoom"?: number,
+    "zIndex"?: number,
     "layout"?: {|
         "visibility"?: "visible" | "none"
     |},
@@ -452,6 +467,7 @@ export type SkyLayerSpecification = {|
     "metadata"?: mixed,
     "minzoom"?: number,
     "maxzoom"?: number,
+    "zIndex"?: number,
     "layout"?: {|
         "visibility"?: "visible" | "none"
     |},

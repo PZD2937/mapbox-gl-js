@@ -100,6 +100,7 @@ class ImageSource extends Evented implements Source {
     url: string;
     width: number;
     height: number;
+    customTags: Object;
 
     coordinates: Coordinates;
     tiles: {[_: string]: Tile};
@@ -123,6 +124,7 @@ class ImageSource extends Evented implements Source {
         this.id = id;
         this.dispatcher = dispatcher;
         this.coordinates = options.coordinates;
+        this.customTags = options.customTags;
 
         this.type = 'image';
         this.minzoom = 0;
@@ -142,7 +144,7 @@ class ImageSource extends Evented implements Source {
 
         this.url = this.options.url;
 
-        getImage(this.map._requestManager.transformRequest(this.url, ResourceType.Image), (err, image) => {
+        getImage(this.map._requestManager.transformRequest(this.url, ResourceType.Image, this.customTags), (err, image) => {
             this._loaded = true;
             if (err) {
                 this.fire(new ErrorEvent(err));

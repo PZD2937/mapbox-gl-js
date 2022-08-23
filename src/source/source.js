@@ -42,6 +42,7 @@ export interface Source {
     maxzoom: number,
     tileSize: number,
     attribution?: string,
+    customTags?: Object,
 
     roundZoom?: boolean,
     isTileClipped?: boolean,

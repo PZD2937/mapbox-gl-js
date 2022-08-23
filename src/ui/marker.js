@@ -19,6 +19,7 @@ import assert from 'assert';
 type Options = {
     element?: HTMLElement,
     offset?: PointLike,
+    customOpacity?: boolean,
     anchor?: Anchor,
     color?: string,
     scale?: number,
@@ -102,6 +103,7 @@ export default class Marker extends Evented {
             '_clearFadeTimer'
         ], this);
 
+        this._customOpacity = !!(options && options.customOpacity);
         this._anchor = (options && options.anchor) || 'center';
         this._color = (options && options.color) || '#3FB1CE';
         this._scale = (options && options.scale) || 1;
@@ -573,7 +575,7 @@ export default class Marker extends Evented {
                 this._updateDOM();
             }
 
-            if ((map._showingGlobe() || map.getTerrain() || map.getFog()) && !this._fadeTimer) {
+            if (this._customOpacity && (map._showingGlobe() || map.getTerrain() || map.getFog()) && !this._fadeTimer) {
                 this._fadeTimer = setTimeout(this._evaluateOpacity.bind(this), 60);
             }
         });
