@@ -1168,6 +1168,7 @@ class Camera extends Evented {
      * @param {EasingOptions} options Options describing the destination and animation of the transition.
      *            Accepts {@link CameraOptions} and {@link AnimationOptions}.
      * @param {Object | null} eventData Additional properties to be added to event objects of events triggered by this method.
+     * @param finish
      * @fires Map.event:movestart
      * @fires Map.event:zoomstart
      * @fires Map.event:pitchstart
