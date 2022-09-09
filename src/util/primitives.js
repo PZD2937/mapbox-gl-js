@@ -3,7 +3,7 @@
 import {vec3, vec4} from 'gl-matrix';
 import assert from 'assert';
 
-import type {Vec3} from 'gl-matrix';
+import type {Vec3, Mat4} from 'gl-matrix';
 
 class Ray {
     pos: Vec3;
@@ -174,18 +174,24 @@ class Aabb {
     center: Vec3;
 
     static fromPoints(points: Array<Vec3>): Aabb {
-        const aabbMin = [Number.MAX_VALUE, Number.MAX_VALUE, Number.MAX_VALUE];
-        const aabbMax = [Number.MIN_VALUE, Number.MIN_VALUE, Number.MIN_VALUE];
-        for (const p of points) {
-            aabbMin[0] = Math.min(aabbMin[0], p[0]);
-            aabbMin[1] = Math.min(aabbMin[1], p[1]);
-            aabbMin[2] = Math.min(aabbMin[2], p[2]);
+        const min = [Infinity, Infinity, Infinity];
+        const max = [-Infinity, -Infinity, -Infinity];
 
-            aabbMax[0] = Math.max(aabbMax[0], p[0]);
-            aabbMax[1] = Math.max(aabbMax[1], p[1]);
-            aabbMax[2] = Math.max(aabbMax[2], p[2]);
+        for (const p of points) {
+            vec3.min(min, min, p);
+            vec3.max(max, max, p);
         }
-        return new Aabb(aabbMin, aabbMax);
+
+        return new Aabb(min, max);
+    }
+
+    static applyTransform(aabb: Aabb, transform: Mat4): Aabb {
+        const corners = aabb.getCorners();
+
+        for (let i = 0; i < corners.length; ++i) {
+            vec3.transformMat4(corners[i], corners[i], transform);
+        }
+        return Aabb.fromPoints(corners);
     }
 
     constructor(min_: Vec3, max_: Vec3) {

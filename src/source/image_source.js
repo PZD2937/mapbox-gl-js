@@ -114,6 +114,7 @@ class ImageSource extends Evented implements Source {
     boundsBuffer: ?VertexBuffer;
     boundsSegments: ?SegmentVector;
     _loaded: boolean;
+    _dirty: boolean;
     perspectiveTransform: [number, number];
 
     /**
@@ -136,6 +137,7 @@ class ImageSource extends Evented implements Source {
         this.setEventedParent(eventedParent);
 
         this.options = options;
+        this._dirty = false;
     }
 
     load(newCoordinates?: Coordinates, loaded?: boolean) {
@@ -155,6 +157,7 @@ class ImageSource extends Evented implements Source {
                 } else {
                     this.image = image;
                 }
+                this._dirty = true;
                 this.width = this.image.width;
                 this.height = this.image.height;
                 if (newCoordinates) {
@@ -325,11 +328,14 @@ class ImageSource extends Evented implements Source {
         const context = this.map.painter.context;
         const gl = context.gl;
 
-        if (!this.texture) {
-            this.texture = new Texture(context, this.image, gl.RGBA);
-            this.texture.bind(gl.LINEAR, gl.CLAMP_TO_EDGE);
-        } else {
-            this.texture.update(this.image);
+        if (this._dirty) {
+            if (!this.texture) {
+                this.texture = new Texture(context, this.image, gl.RGBA);
+                this.texture.bind(gl.LINEAR, gl.CLAMP_TO_EDGE);
+            } else {
+                this.texture.update(this.image);
+            }
+            this._dirty = false;
         }
 
         this._prepareData(context);
