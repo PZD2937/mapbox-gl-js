@@ -69,7 +69,6 @@ export interface Source {
     +hasTile?: (tileID: OverscaledTileID) => boolean;
     +abortTile?: (tile: Tile, callback: Callback<void>) => void;
     +unloadTile?: (tile: Tile, callback: Callback<void>) => void;
-    +prepareTile?: (tile: Tile) => ?any;
     +reload?: () => void;
 
     /**

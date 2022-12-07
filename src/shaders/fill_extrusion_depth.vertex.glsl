@@ -20,9 +20,6 @@ void main() {
     // z is sign of ny: 1 for positive, 0 for values <= 0.
     mediump vec3 top_up_ny = a_pos_normal_ed.xyz - 2.0 * pos_nx;
 
-    float x_normal = pos_nx.z / 8192.0;
-    vec3 normal = top_up_ny.y == 1.0 ? vec3(0.0, 0.0, 1.0) : normalize(vec3(x_normal, (2.0 * top_up_ny.z - 1.0) * (1.0 - abs(x_normal)), 0.0));
-
     base = max(0.0, base);
     height = max(0.0, top_up_ny.y == 0.0 && top_up_ny.x == 1.0 ? height - u_edge_radius : height);
 
@@ -33,15 +30,16 @@ void main() {
     centroid_pos = a_centroid_pos;
 #endif
 
+vec3 pos;
 #ifdef TERRAIN
     bool flat_roof = centroid_pos.x != 0.0 && t > 0.0;
     float ele = elevation(pos_nx.xy);
     float c_ele = flat_roof ? centroid_pos.y == 0.0 ? elevationFromUint16(centroid_pos.x) : flatElevation(centroid_pos) : ele;
     // If centroid elevation lower than vertex elevation, roof at least 2 meters height above base.
     float h = flat_roof ? max(c_ele + height, ele + base + 2.0) : ele + (t > 0.0 ? height : base);
-    vec3 pos = vec3(pos_nx.xy, h);
+    pos = vec3(pos_nx.xy, h);
 #else
-    vec3 pos = vec3(pos_nx.xy, t > 0.0 ? height : base);
+    pos = vec3(pos_nx.xy, t > 0.0 ? height : base);
 #endif
 
     float hidden = float(centroid_pos.x == 0.0 && centroid_pos.y == 1.0);

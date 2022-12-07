@@ -57,6 +57,7 @@ import type Painter from '../render/painter.js';
 import type {QueryFeature} from '../util/vectortile_to_geojson.js';
 import type {Vec3} from 'gl-matrix';
 import type {TextureImage} from '../render/texture.js';
+import type {VectorTileLayer} from '@mapbox/vector-tile';
 
 const CLOCK_SKEW_RETRY_TIMEOUT = 30000;
 export type TileState =
@@ -598,7 +599,7 @@ class Tile {
     setTexture(img: TextureImage, painter: Painter) {
         const context = painter.context;
         const gl = context.gl;
-        this.texture = painter.getTileTexture(img.width);
+        this.texture = this.texture || painter.getTileTexture(img.width);
         if (this.texture) {
             this.texture.update(img, {useMipmap: true});
         } else {
