@@ -7585,16 +7585,7 @@ tap-mocha-reporter@^5.0.3:
     tap-yaml "^1.0.0"
     unicode-length "^2.0.2"
 
-tap-parser@^11.0.0:
-  version "11.0.1"
-  resolved "https://registry.yarnpkg.com/tap-parser/-/tap-parser-11.0.1.tgz#513be88daa179cd5b158bbb939b8613e6125312b"
-  integrity sha512-5ow0oyFOnXVSALYdidMX94u0GEjIlgc/BPFYLx0yRh9hb8+cFGNJqJzDJlUqbLOwx8+NBrIbxCWkIQi7555c0w==
-  dependencies:
-    events-to-array "^1.0.1"
-    minipass "^3.1.6"
-    tap-yaml "^1.0.0"
-
-tap-parser@^11.0.2:
+tap-parser@^11.0.0, tap-parser@^11.0.2:
   version "11.0.2"
   resolved "https://registry.yarnpkg.com/tap-parser/-/tap-parser-11.0.2.tgz#5d3e76e2cc521e23a8c50201487b273ca0fba800"
   integrity sha512-6qGlC956rcORw+fg7Fv1iCRAY8/bU9UabUAhs3mXRH6eRmVZcNPLheSXCYaVaYeSwx5xa/1HXZb1537YSvwDZg==
@@ -7752,9 +7743,9 @@ test-exclude@^6.0.0:
     minimatch "^3.0.4"
 
 testem@^3.10.0:
-  version "3.10.0"
-  resolved "https://registry.yarnpkg.com/testem/-/testem-3.10.0.tgz#df3f43839892c17f35f4c5994c50c99aa8242bb0"
-  integrity sha512-2BMbPkAJT5xNojNxQGKT8CU9ix4EYDmHjjKFpUeeSW6tBVfFVgOi2vfrpJ5Hwdq4HsfnOALNAWN8/yjuFTgQfA==
+  version "3.10.1"
+  resolved "https://registry.yarnpkg.com/testem/-/testem-3.10.1.tgz#bab8a83bec11e975f7d1e47e924eed6135957e5b"
+  integrity sha512-42c4e7qlAelwMd8O3ogtVGRbgbr6fJnX6H51ACOIG1V1IjsKPlcQtxPyOwaL4iikH22Dfh+EyIuJnMG4yxieBQ==
   dependencies:
     "@xmldom/xmldom" "^0.8.0"
     backbone "^1.1.2"
