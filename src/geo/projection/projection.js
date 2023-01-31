@@ -125,6 +125,7 @@ export default class Projection {
     }
 
     createTileMatrix(tr: Transform, worldSize: number, id: UnwrappedTileID): Float64Array {
+        // console.log(id, this.isReprojectedInTileSpace)
         let scale, scaledX, scaledY;
         const canonical = id.canonical;
         const posMatrix = mat4.identity(new Float64Array(16));
@@ -138,6 +139,7 @@ export default class Projection {
         } else {
             scale = worldSize / tr.zoomScale(canonical.z);
             const unwrappedX = canonical.x + Math.pow(2, canonical.z) * id.wrap;
+            console.log(id, unwrappedX, scale)
             scaledX = unwrappedX * scale;
             scaledY = canonical.y * scale;
         }

@@ -63,3 +63,24 @@ export function encrypt() {
     return `${date}/${md5Str}`
 }
 
+/**
+ * 必应地图查询编码
+ * @param data
+ * @param x
+ * @param y
+ * @param z
+ * @return {string}
+ */
+export function bingQuadKey(data, x, y, z) {
+    x = x || data.x;
+    y = y || data.y;
+    z = z || data.z;
+    let quadKey = '';
+    for (let i = 0; i < z; i++) {
+        quadKey = ((x & 1) + 2 * (y & 1)).toString() + quadKey;
+        x >>= 1;
+        y >>= 1;
+    }
+    return quadKey
+}
+

@@ -207,7 +207,7 @@ export class RequestManager {
     }
 
     _makeAPIURL(urlObject: UrlObject, accessToken: string | null | void): string {
-        const help = 'See https://www.mapbox.com/api-documentation/#access-tokens-and-token-scopes';
+        const help = 'See https://docs.mapbox.com/api/overview/#access-tokens-and-token-scopes';
         const apiUrlObject = parseUrl(config.API_URL);
         urlObject.protocol = apiUrlObject.protocol;
         urlObject.authority = apiUrlObject.authority;
@@ -243,6 +243,10 @@ export function isMapboxURL(url: string): boolean {
 
 export function isMapboxHTTPURL(url: string): boolean {
     return config.API_URL_REGEX.test(url);
+}
+
+export function isMapboxHTTPCDNURL(url: string): boolean {
+    return config.API_CDN_URL_REGEX.test(url);
 }
 
 export function isMapboxHTTPStyleURL(url: string): boolean {

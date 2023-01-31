@@ -12,18 +12,30 @@ const generateResultHTML = template(`
     <% } %>
     <label class="tab-label" style="background: <%- r.color %>" for="<%- r.id %>"><p class="status-container"><span class="status"><%- r.status %></span> - <%- r.name %> - diff: <%- r.minDiff %></p></label>
     <div class="tab-content">
-      <% if (r.status !== 'errored') { %>
-          <img src="<%- r.actual %>">
+      <% if (r.actual) { %>
+          <img title="actual" src="<%- r.actual %>">
       <% } %>
       <% if (r.expected) { %>
-          <img src="<%- r.expected %>">
+          <img title="expected" src="<%- r.expected %>">
       <% } %>
       <% if (r.imgDiff) { %>
-          <img src="<%- r.imgDiff %>">
+          <img title="diff" src="<%- r.imgDiff %>">
       <% } %>
-      <% if (r.error) { %><p style="color: red"><strong>Error:</strong> <%- r.error.message %></p><% } %>
-      <% if (r.jsonDiff) { %>
-          <pre><%- r.jsonDiff.trim() %></pre>
+      <% if (r.error) { %>
+          <p style="color: red">
+            <strong>Error:</strong>
+            <pre><%- r.error.stack %></pre>
+          </p>
+      <% } %>
+      <% if (r.errors && r.errors.length !== 0) { %>
+          <p style="color: red">
+            <strong>Errors:</strong>
+            <dl>
+                <% r.errors.forEach(function(error) { %>
+                    <dt><%- error.message %></dt>
+                    <dd><pre><%- error.stack %></pre></dd>
+                <% }); %>
+            </dl>
       <% } %>
     </div>
   </div>
@@ -42,7 +54,7 @@ input { position: absolute; opacity: 0; z-index: -1;}
 .tab-label { display: flex; color: white; border-radius: 5px; justify-content: space-between; padding: 1em; font-weight: bold; cursor: pointer; }
 .tab-label:hover { filter: brightness(85%); }
 .tab-label::after { content: "\\276F"; width: 1em; height: 1em; text-align: center; transition: all .35s; }
-.tab-content { max-height: 0; padding: 0 1em; background: white; transition: all .35s; }
+.tab-content { max-height: 0; padding: 0 1em; background: white; overflow: scroll; transition: all .35s; }
 .tab-content pre { font-size: 14px; margin: 0 0 10px; }
 input:checked + .tab-label { filter: brightness(90%); };
 input:checked + .tab-label::after { transform: rotate(90deg); }

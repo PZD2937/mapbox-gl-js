@@ -19,18 +19,140 @@
         #map {
             height: 100%;
         }
+
+        .map-overlay {
+            font: 12px/20px 'Helvetica Neue', Arial, Helvetica, sans-serif;
+            position: absolute;
+            width: 200px;
+            top: 0;
+            left: 0;
+            padding: 10px;
+        }
+
+        .map-overlay .map-overlay-inner {
+            background-color: #fff;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+            border-radius: 3px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+
+        .map-overlay-inner fieldset {
+            border: none;
+            padding: 0;
+            margin: 0 0 10px;
+        }
+
+        .map-overlay-inner fieldset:last-child {
+            margin: 0;
+        }
+
+        .map-overlay-inner select,
+        .map-overlay-inner input {
+            width: 100%;
+        }
+
+        .map-overlay-inner label {
+            display: block;
+            font-weight: bold;
+            margin: 0 0 5px;
+        }
+
+        .debug label{
+            display: inline;
+            font-weight: normal;
+        }
+
+        .debug input{
+            width: auto;
+        }
     </style>
 </head>
 
 <body>
 
 <div id='map'></div>
+<div class="map-overlay top">
+    <details open>
+        <summary>Toggle controls</summary>
+        <div class="map-overlay-inner">
+            <fieldset>
+                <label>Select base layer</label>
+                <select id="layer" name="layer">
+                    <option value="arcgis_satellite">arcgis 卫星</option>
+                    <option value="bing_satellite">必应卫星</option>
+                    <option value="amap_satellite">高德卫星</option>
+                </select>
+            </fieldset>
+            <fieldset>
+                <label>Select road layer</label>
+                <select id="road" name="road">
+                    <option>无</option>
+                    <option value="tian_road">天地图路网</option>
+                    <option value="amap_road">高德路网</option>
+                </select>
+            </fieldset>
+            <fieldset>
+                <label>Select terrain</label>
+                <select id="terrain", name="terrain">
+                    <option value="xinzhi-dem">新知</option>
+                    <option value="mapbox-dem" selected>mapbox</option>
+                </select>
+            </fieldset>
+            <fieldset>
+                <label>exaggeratedTerrain</label>
+                <input
+                    id="exaggeratedTerrain"
+                    type="range"
+                    min="0"
+                    max="10"
+                    step="0.1"
+                    value="1"
+                />
+            </fieldset>
+            <fieldset>
+                <label>Select projection</label>
+                <select id="projection" name="projection">
+                    <option value="equalEarth">Equal Earth</option>
+                    <option value="equirectangular">Equirectangular</option>
+                    <option value="mercator">Mercator</option>
+                    <option value="globe" selected>Globe</option>
+                    <option value="naturalEarth">Natural Earth</option>
+                    <option value="winkelTripel">Winkel Tripel</option>
+                </select>
+            </fieldset>
+            <fieldset>
+                <label>Show Debug </label>
+                <div class="debug" id="debug">
+                    <label>showTileBoundaries <input id="showTileBoundaries" type="checkbox"></label>
+                    <label>showTerrainWireframe <input id="showTerrainWireframe" type="checkbox"></label>
+                    <label>showPadding <input id="showPadding" type="checkbox"></label>
+                    <label>showCollisionBoxes <input id="showCollisionBoxes" type="checkbox"></label>
+                    <label>showOverdraw <input id="showOverdraw" type="checkbox"></label>
+                </div>
+            </fieldset>
+        </div>
+    </details>
+</div>
 
 <script src='../dist/mapbox-gl-dev.js'></script>
 <script src='../debug/access_token_generated.js'></script>
 
 <script>
-    var map = new mapboxgl.Map({
+    function bingQuadKey(data, x, y, z) {
+        x = x || data.x;
+        y = y || data.y;
+        z = z || data.z;
+        let quadKey = '';
+        for (let i = 0; i < z; i++) {
+            quadKey = ((x & 1) + 2 * (y & 1)).toString() + quadKey;
+            x >>= 1;
+            y >>= 1;
+        }
+        return quadKey
+    }
+
+    const map = new mapboxgl.Map({
         container: 'map',
         style: {
             version: 8,
@@ -46,8 +168,21 @@
                 'space-color': '#d8f2ff',
                 'star-intensity': 0.0
             },
+            terrain: {
+                source: 'mapbox-dem',
+                exaggeration: 1
+            },
             sources: {
-                terrain: {
+                'mapbox-dem': {
+                    type: 'raster-dem',
+                    tileSize: 512,
+                    maxzoom: 14,
+                    minzoom: 5,
+                    tiles: ['https://api.mapbox.com/raster/v1/mapbox.mapbox-terrain-dem-v1/{z}/{x}/{y}.webp?access_token=pk.eyJ1IjoiYWRzMjkzNDk3MDc3OSIsImEiOiJjbDZuZnp6angwMGkwM2pzM2tueXN1NGl0In0.0l_OvoBv3UqIuDuWmbW-sw'],
+                    // tiles: ['https://map.xinzhi.space/terrain/srtmv4/{z}/{x}/{y}.png'],
+                    // bounds: [71.25, 18, 135.5, 54]
+                },
+                'xinzhi-dem': {
                     type: 'raster-dem',
                     tileSize: 512,
                     maxzoom: 10,
@@ -59,29 +194,114 @@
                     type: 'raster',
                     tileSize: 512,
                     tiles: ['https://webst01.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}']
+                },
+                'bing_satellite': {
+                    type: 'raster',
+                    tileSize: 512,
+                    tiles: ['https://t.ssl.ak.tiles.virtualearth.net/tiles/a{quad}.jpeg?g=12946&n=z&prx=1'],
+                    customTags: {
+                        quad: bingQuadKey
+                    }
+                },
+                'amap_satellite': {
+                    type: 'raster',
+                    tileSize: 512,
+                    tiles: ['https://webst01.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}']
+                },
+                'tian_road': {
+                    type: 'raster',
+                    tileSize: 512,
+                    tiles: ['https://t0.tianditu.gov.cn/cia_w/wmts?service=WMTS&version=1.0.0&request=GetTile&tilematrix={z}&layer=cia&style=default&tilerow={y}&tilecol={x}&tilematrixset=w&format=tiles&tk=e67b6383a8f8d5826792cdb19f302c71'],
+                },
+                'amap_road': {
+                    type: 'raster',
+                    tileSize: 512,
+                    tiles: ['https://webst01.is.autonavi.com/appmaptile?style=8&x={x}&y={y}&z={z}']
                 }
             },
             layers: [{
                 id: "background", type: "background", "layout": {}, paint: {
                     "background-color": "hsl(0,0%,30%)"
                 }, zIndex: -10
+            }, {
+                id: 'arcgis_satellite', type: 'raster', source: 'arcgis_satellite',
+                layout: {
+                    visibility: 'visible'
+                }
+            }, {
+                id: 'bing_satellite', type: 'raster', source: 'bing_satellite',
+                layout: {
+                    visibility: 'none'
+                }
+            }, {
+                id: 'amap_satellite', type: 'raster', source: 'amap_satellite',
+                layout: {
+                    visibility: 'none'
+                }
+            }, {
+                id: 'tian_road', type: 'raster', source: 'tian_road',
+                layout: {
+                    visibility: 'none'
+                }
+            }, {
+                id: 'amap_road', type: 'raster', source: 'amap_road',
+                layout: {
+                    visibility: 'none'
+                }
             }]
         },
         projection: 'globe',
         zoom: 17,
-        center: [106, 29],
+        center: [106.494548, 29.580586],
         pitch: 75
     });
 
-    map.on('style.load', function () {
-        map.setTerrain({"source": "terrain"});
-        map.addLayer({
-            id: 'arcgis_satellite',
-            source: 'arcgis_satellite',
-            type: 'raster',
-            zIndex: 10
-        })
+    const layerInput = document.getElementById('layer');
+    const roadInput = document.getElementById('road');
+    const terrain = document.getElementById('terrain')
+    const exaggeratedTerrainInput = document.getElementById('exaggeratedTerrain');
+    const projectionInput = document.getElementById('projection');
+    const debugDiv = document.getElementById('debug');
+
+    let lastLayer = 'arcgis_satellite', lastRoad = ''
+
+    layerInput.addEventListener('change', () => {
+        lastLayer && map.setLayoutProperty(lastLayer, 'visibility', 'none');
+        layerInput.value && map.setLayoutProperty(layerInput.value, 'visibility', 'visible');
+        lastLayer = layerInput.value
     });
+
+    roadInput.addEventListener('change', () => {
+        lastRoad && map.setLayoutProperty(lastRoad, 'visibility', 'none');
+        roadInput.value && map.setLayoutProperty(roadInput.value, 'visibility', 'visible');
+        lastRoad = roadInput.value;
+    });
+
+    terrain.addEventListener('change', () => {
+        map.setTerrain({
+            source: terrain.value,
+            exaggeration:Number(exaggeratedTerrainInput.value)
+        });
+    })
+
+    exaggeratedTerrainInput.addEventListener('change', () => {
+        const terrain = map.getTerrain();
+        if (terrain) {
+            terrain.exaggeration = Number(exaggeratedTerrainInput.value);
+            map.setTerrain(terrain);
+        }
+    });
+
+    projectionInput.addEventListener('change', (e) => {
+        map.setProjection(e.target.value);
+    });
+
+    debugDiv.addEventListener('click', (e) => {
+        if(e.target instanceof HTMLInputElement){
+            map[e.target.id] = e.target.checked
+        }
+    });
+
 </script>
 
 </body>
