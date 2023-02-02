@@ -511,15 +511,17 @@ class SourceCache extends Evented {
             idealTileIDs = [];
         } else if (this._source.tileID) {
             idealTileIDs = transform.getVisibleUnwrappedCoordinates(this._source.tileID)
-                .map((unwrapped) => new OverscaledTileID(unwrapped.canonical.z, unwrapped.wrap, unwrapped.canonical.z, unwrapped.canonical.x, unwrapped.canonical.y));
+                .map((unwrapped) => new OverscaledTileID(unwrapped.canonical.z, unwrapped.wrap, unwrapped.canonical.z, unwrapped.canonical.x, unwrapped.canonical.y, this._source.projection));
         } else {
             idealTileIDs = transform.coveringTiles({
+                id: this._source.id,
                 tileSize: tileSize || this._source.tileSize,
                 minzoom: this._source.minzoom,
                 maxzoom: this._source.maxzoom,
                 roundZoom: this._source.roundZoom && !updateForTerrain,
                 reparseOverscaled: this._source.reparseOverscaled,
-                isTerrainDEM: this.usedForTerrain
+                isTerrainDEM: this.usedForTerrain,
+                projection: this._source.projection
             });
 
             if (this._source.hasTile) {

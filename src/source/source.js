@@ -43,6 +43,7 @@ export interface Source {
     tileSize: number,
     attribution?: string,
     customTags?: Object,
+    projection?: string,
 
     roundZoom?: boolean,
     isTileClipped?: boolean,

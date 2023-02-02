@@ -34,6 +34,7 @@ class RasterTileSource extends Evented implements Source {
     scheme: string;
     tileSize: number;
     customTags: ?Object;
+    projection: ?string;
 
     bounds: ?[number, number, number, number];
     tileBounds: TileBounds;
@@ -61,8 +62,7 @@ class RasterTileSource extends Evented implements Source {
         this._loaded = false;
 
         this._options = extend({type: 'raster'}, options);
-        extend(this, pick(options, ['url', 'scheme', 'tileSize']));
-        this.customTags = options.customTags;
+        extend(this, pick(options, ['url', 'scheme', 'tileSize', 'projection', 'customTags']));
     }
 
     load() {
