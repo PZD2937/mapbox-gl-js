@@ -80,26 +80,27 @@
                 <label>Select base layer</label>
                 <select id="layer" name="layer">
                     <option value="arcgis_satellite">arcgis 卫星</option>
-                    <option value="bing_satellite">必应卫星</option>
+                    <option value="bing_satellite" selected>必应卫星</option>
                     <option value="amap_satellite">高德卫星</option>
                 </select>
             </fieldset>
             <fieldset>
                 <label>Select road layer</label>
                 <select id="road" name="road">
-                    <option>无</option>
+                    <option value="">无</option>
                     <option value="tian_road">天地图路网</option>
-                    <option value="amap_road">高德路网</option>
+                    <option value="amap_road" selected>高德路网</option>
                 </select>
             </fieldset>
             <fieldset>
                 <label>Select terrain</label>
-                <select id="terrain", name="terrain">
+                <select id="terrain" name="terrain">
+                    <option value="" selected>无</option>
                     <option value="xinzhi-dem">新知</option>
-                    <option value="mapbox-dem" selected>mapbox</option>
+                    <option value="mapbox-dem">mapbox</option>
                 </select>
             </fieldset>
-            <fieldset>
+            <fieldset id="exaggeratedTerrain-div">
                 <label>exaggeratedTerrain</label>
                 <input
                     id="exaggeratedTerrain"
@@ -115,8 +116,8 @@
                 <select id="projection" name="projection">
                     <option value="equalEarth">Equal Earth</option>
                     <option value="equirectangular">Equirectangular</option>
-                    <option value="mercator">Mercator</option>
-                    <option value="globe" selected>Globe</option>
+                    <option value="mercator" selected>Mercator</option>
+                    <option value="globe">Globe</option>
                     <option value="naturalEarth">Natural Earth</option>
                     <option value="winkelTripel">Winkel Tripel</option>
                 </select>
@@ -154,6 +155,7 @@
 
     const map = new mapboxgl.Map({
         container: 'map',
+        renderWorldCopies: false,
         style: {
             version: 8,
             light: {
@@ -168,10 +170,10 @@
                 'space-color': '#d8f2ff',
                 'star-intensity': 0.0
             },
-            terrain: {
-                source: 'mapbox-dem',
-                exaggeration: 1
-            },
+            // terrain: {
+            //     source: 'mapbox-dem',
+            //     exaggeration: 1
+            // },
             sources: {
                 'mapbox-dem': {
                     type: 'raster-dem',
@@ -193,7 +195,8 @@
                 'arcgis_satellite': {
                     type: 'raster',
                     tileSize: 512,
-                    tiles: ['https://webst01.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}']
+                    tiles: ['https://webst01.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}'],
+                    projection: 'GCJ02',
                 },
                 'bing_satellite': {
                     type: 'raster',
@@ -206,7 +209,8 @@
                 'amap_satellite': {
                     type: 'raster',
                     tileSize: 512,
-                    tiles: ['https://webst01.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}']
+                    tiles: ['https://webst01.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}'],
+                    projection: 'GCJ02',
                 },
                 'tian_road': {
                     type: 'raster',
@@ -216,6 +220,7 @@
                 'amap_road': {
                     type: 'raster',
                     tileSize: 512,
+                    projection: 'GCJ02',
                     tiles: ['https://webst01.is.autonavi.com/appmaptile?style=8&x={x}&y={y}&z={z}']
                 }
             },
@@ -226,12 +231,12 @@
             }, {
                 id: 'arcgis_satellite', type: 'raster', source: 'arcgis_satellite',
                 layout: {
-                    visibility: 'visible'
+                    visibility: 'none'
                 }
             }, {
                 id: 'bing_satellite', type: 'raster', source: 'bing_satellite',
                 layout: {
-                    visibility: 'none'
+                    visibility: 'visible'
                 }
             }, {
                 id: 'amap_satellite', type: 'raster', source: 'amap_satellite',
@@ -246,11 +251,11 @@
             }, {
                 id: 'amap_road', type: 'raster', source: 'amap_road',
                 layout: {
-                    visibility: 'none'
+                    visibility: 'visible'
                 }
             }]
         },
-        projection: 'globe',
+        projection: 'mercator',
         zoom: 17,
         center: [106.494548, 29.580586],
         pitch: 75
@@ -262,8 +267,10 @@
     const exaggeratedTerrainInput = document.getElementById('exaggeratedTerrain');
     const projectionInput = document.getElementById('projection');
     const debugDiv = document.getElementById('debug');
+    const exaggeratedTerrainDiv = document.getElementById('exaggeratedTerrain-div');
+    exaggeratedTerrainDiv.style.display = 'none'
 
-    let lastLayer = 'arcgis_satellite', lastRoad = ''
+    let lastLayer = 'arcgis_satellite', lastRoad = 'amap_road';
 
     layerInput.addEventListener('change', () => {
         lastLayer && map.setLayoutProperty(lastLayer, 'visibility', 'none');
@@ -278,10 +285,16 @@
     });
 
     terrain.addEventListener('change', () => {
-        map.setTerrain({
-            source: terrain.value,
-            exaggeration:Number(exaggeratedTerrainInput.value)
-        });
+        if(terrain.value){
+            exaggeratedTerrainDiv.style.display = ''
+            map.setTerrain({
+                source: terrain.value,
+                exaggeration: Number(exaggeratedTerrainInput.value)
+            });
+        }else {
+            map.setTerrain(undefined);
+            exaggeratedTerrainDiv.style.display = 'none'
+        }
     })
 
     exaggeratedTerrainInput.addEventListener('change', () => {
@@ -301,6 +314,7 @@
             map[e.target.id] = e.target.checked
         }
     });
+    console.log(map)
 
 </script>
 

@@ -5,7 +5,7 @@ import Point from '@mapbox/point-geometry';
 import {farthestPixelDistanceOnPlane} from './far_z.js';
 import {mat4} from 'gl-matrix';
 import EXTENT from '../../data/extent.js';
-import tileTransform from './tile_transform.js';
+import tileTransform, {getTileOffset} from './tile_transform.js';
 
 import type Transform from '../../geo/transform.js';
 import type {Vec3} from 'gl-matrix';
@@ -72,8 +72,8 @@ export default class Projection {
         return {x, y, z: 0};
     }
 
-    locationPoint(tr: Transform, lngLat: LngLat, terrain: boolean = true): Point {
-        return tr._coordinatePoint(tr.locationCoordinate(lngLat), terrain);
+    locationPoint(tr: Transform, lngLat: LngLat, terrain: boolean = true, premultipliedPixelMatrix: boolean = true): Point {
+        return tr._coordinatePoint(tr.locationCoordinate(lngLat), terrain, premultipliedPixelMatrix);
     }
 
     pixelsPerMeter(lat: number, worldSize: number): number {
@@ -125,7 +125,6 @@ export default class Projection {
     }
 
     createTileMatrix(tr: Transform, worldSize: number, id: UnwrappedTileID): Float64Array {
-        // console.log(id, this.isReprojectedInTileSpace)
         let scale, scaledX, scaledY;
         const canonical = id.canonical;
         const posMatrix = mat4.identity(new Float64Array(16));
@@ -139,12 +138,17 @@ export default class Projection {
         } else {
             scale = worldSize / tr.zoomScale(canonical.z);
             const unwrappedX = canonical.x + Math.pow(2, canonical.z) * id.wrap;
-            console.log(id, unwrappedX, scale)
             scaledX = unwrappedX * scale;
             scaledY = canonical.y * scale;
         }
 
         mat4.translate(posMatrix, posMatrix, [scaledX, scaledY, 0]);
+
+        if(id.projection){
+            const offset = getTileOffset(tr, canonical, id.projection);
+            mat4.translate(posMatrix, posMatrix, [offset.x, offset.y, 0]);
+        }
+
         mat4.scale(posMatrix, posMatrix, [scale / EXTENT, scale / EXTENT, 1]);
 
         return posMatrix;

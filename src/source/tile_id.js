@@ -71,7 +71,7 @@ export class OverscaledTileID {
         assert(overscaledZ >= z);
         this.overscaledZ = overscaledZ;
         this.wrap = wrap;
-        this.canonical = new CanonicalTileID(z, +x, +y, this.projection);
+        this.canonical = new CanonicalTileID(z, +x, +y, projection);
         this.key = wrap === 0 && overscaledZ === z ? this.canonical.key : calculateKey(wrap, overscaledZ, z, x, y);
         this.projection = projection;
     }

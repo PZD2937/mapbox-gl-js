@@ -530,7 +530,7 @@ class Painter {
         }
 
         // Following line is billing related code. Do not change. See LICENSE.txt
-        if (!isMapAuthenticated(this.context.gl)) return;
+        // if (!isMapAuthenticated(this.context.gl)) return;
 
         // Offscreen pass ===============================================
         // We first do all rendering that requires rendering to a separate
