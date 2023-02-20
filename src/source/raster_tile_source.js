@@ -119,7 +119,7 @@ class RasterTileSource extends Evented implements Source {
         const url = this.map._requestManager.normalizeTileURL(tile.tileID.canonical.url(this.tiles, this.scheme), use2x, this.tileSize);
         const {x, y, z} = tile.tileID.canonical;
         const tiles = tile.getCoverTile(tile.tileID.projection);
-        if(tiles.needOffset){
+        if(z > 9 && tiles.needOffset && tiles.tiles.length){
             const cancels = [];
             asyncAll(tiles.tiles, (item, cb) => {
                 const url = this.map._requestManager.normalizeTileURL(new CanonicalTileID(item.z, item.x, item.y).url(this.tiles, this.scheme), use2x, this.tileSize);
@@ -145,7 +145,7 @@ class RasterTileSource extends Evented implements Source {
                 }
 
                 const imageSize = results[0].data.width;
-                const worldSize = Math.pow(2, z) * imageSize;
+                // const worldSize = Math.pow(2, z) * imageSize;
                 const bbox = tiles.bbox;
 
                 const lngResolution = imageSize / (bbox.maxx - bbox.minx);
