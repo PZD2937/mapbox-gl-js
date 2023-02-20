@@ -5,7 +5,7 @@ import Point from '@mapbox/point-geometry';
 import {farthestPixelDistanceOnPlane} from './far_z.js';
 import {mat4} from 'gl-matrix';
 import EXTENT from '../../data/extent.js';
-import tileTransform, {getTileOffset} from './tile_transform.js';
+import tileTransform from './tile_transform.js';
 
 import type Transform from '../../geo/transform.js';
 import type {Vec3} from 'gl-matrix';
@@ -144,10 +144,10 @@ export default class Projection {
 
         mat4.translate(posMatrix, posMatrix, [scaledX, scaledY, 0]);
 
-        if(id.projection){
-            const offset = getTileOffset(tr, canonical, id.projection);
-            mat4.translate(posMatrix, posMatrix, [offset.x, offset.y, 0]);
-        }
+        // if(id.projection){
+        //     const offset = getTileOffset(tr, canonical, id.projection);
+        //     mat4.translate(posMatrix, posMatrix, [offset.x, offset.y, 0]);
+        // }
 
         mat4.scale(posMatrix, posMatrix, [scale / EXTENT, scale / EXTENT, 1]);
 

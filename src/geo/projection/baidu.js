@@ -16,15 +16,18 @@ export default class Baidu extends Mercator {
         this.supportsTerrain = true;
         this.supportsFog = true;
         this.supportsFreeCamera = true;
-        this.isReprojectedInTileSpace = false;
+        this.isReprojectedInTileSpace = true;
         this.unsupportedLayers = [];
         this.range = null;
     }
 
-    createTileMatrix(tr: Transform, worldSize: number, id: UnwrappedTileID): Float64Array {
-        let scale, scaledX, scaledY;
-        const canonical = id.canonical;
-        const posMatrix = mat4.identity(new Float64Array(16));
+    // createTileMatrix(tr: Transform, worldSize: number, id: UnwrappedTileID): Float64Array {
+    //     let scale, scaledX, scaledY;
+    //     const canonical = id.canonical;
+    //     const posMatrix = mat4.identity(new Float64Array(16));
+    //
+    // }
 
-    }
+
+
 }

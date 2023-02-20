@@ -1,6 +1,6 @@
 // @flow
 
-import {extend, pick} from '../util/util.js';
+import {asyncAll, extend, pick} from '../util/util.js';
 
 import {getImage, ResourceType} from '../util/ajax.js';
 import {Event, ErrorEvent, Evented} from '../util/evented.js';
@@ -24,6 +24,8 @@ import type {
     RasterSourceSpecification,
     RasterDEMSourceSpecification
 } from '../style-spec/types.js';
+import {mergerAndCutFromTextureImage} from "../util/canvas.js";
+import {CanonicalTileID} from "./tile_id.js";
 
 class RasterTileSource extends Evented implements Source {
     type: 'raster' | 'raster-dem';
@@ -116,28 +118,79 @@ class RasterTileSource extends Evented implements Source {
         const use2x = browser.devicePixelRatio >= 2;
         const url = this.map._requestManager.normalizeTileURL(tile.tileID.canonical.url(this.tiles, this.scheme), use2x, this.tileSize);
         const {x, y, z} = tile.tileID.canonical;
-        tile.request = getImage(this.map._requestManager.transformRequest(url, ResourceType.Tile, this.customTags, {x, y, z}), (error, data, cacheControl, expires) => {
-            delete tile.request;
+        const tiles = tile.getCoverTile(tile.tileID.projection);
+        if(tiles.needOffset){
+            const cancels = [];
+            asyncAll(tiles.tiles, (item, cb) => {
+                const url = this.map._requestManager.normalizeTileURL(new CanonicalTileID(item.z, item.x, item.y).url(this.tiles, this.scheme), use2x, this.tileSize);
+                const cancel = getImage(this.map._requestManager.transformRequest(url, ResourceType.Tile, this.customTags, item), (error, data, cacheControl, expires) => {
+                    cb(error, {
+                        x: item.x,
+                        y: item.y,
+                        z: item.z,
+                        offsetX: item.offsetX,
+                        offsetY: item.offsetY,
+                        data,
+                    });
+                })
+                cancels.push(cancel);
+            }, (error, results) => {
+                if (tile.aborted) {
+                    tile.state = 'unloaded';
+                    return callback(null);
+                }
+                if(error){
+                    tile.state = 'errored';
+                    return callback(error)
+                }
 
-            if (tile.aborted) {
-                tile.state = 'unloaded';
-                return callback(null);
+                const imageSize = results[0].data.width;
+                const worldSize = Math.pow(2, z) * imageSize;
+                const bbox = tiles.bbox;
+
+                const lngResolution = imageSize / (bbox.maxx - bbox.minx);
+                const latResolution = imageSize / (bbox.maxy - bbox.miny);
+
+                const tileOffset = tiles.offset;
+                const mergerOpt = {offsetX: -(tileOffset.x * lngResolution) % imageSize, offsetY: -(tileOffset.y * latResolution) % imageSize, imageSize};
+
+                mergerAndCutFromTextureImage(results[0].data, results, mergerOpt, textureImage => {
+                    tile.setTexture(textureImage, this.map.painter);
+                    tile.state = 'loaded';
+                    cacheEntryPossiblyAdded(this.dispatcher);
+                    callback(null);
+                });
+            })
+            tile.request = {
+                cancel: function () {
+                    cancels.forEach(c => c.cancel())
+                    cancels.length = 0;
+                }
             }
+        }else {
+            tile.request = getImage(this.map._requestManager.transformRequest(url, ResourceType.Tile, this.customTags, {x, y, z}), (error, data, cacheControl, expires) => {
+                delete tile.request;
 
-            if (error) {
-                tile.state = 'errored';
-                return callback(error);
-            }
+                if (tile.aborted) {
+                    tile.state = 'unloaded';
+                    return callback(null);
+                }
 
-            if (!data) return callback(null);
+                if (error) {
+                    tile.state = 'errored';
+                    return callback(error);
+                }
 
-            if (this.map._refreshExpiredTiles) tile.setExpiryData({cacheControl, expires});
-            tile.setTexture(data, this.map.painter);
-            tile.state = 'loaded';
+                if (!data) return callback(null);
 
-            cacheEntryPossiblyAdded(this.dispatcher);
-            callback(null);
-        });
+                if (this.map._refreshExpiredTiles) tile.setExpiryData({cacheControl, expires});
+                tile.setTexture(data, this.map.painter);
+                tile.state = 'loaded';
+
+                cacheEntryPossiblyAdded(this.dispatcher);
+                callback(null);
+            });
+        }
     }
 
     static loadTileData(tile: Tile, data: TextureImage, painter: Painter) {

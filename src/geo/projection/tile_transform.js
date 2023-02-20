@@ -128,23 +128,23 @@ export function getTileVec3(tileTransform: TileTransform, coord: MercatorCoordin
     return vec3.fromValues(x, y, altitudeFromMercatorZ(coord.z, coord.y));
 }
 
-export function tileIndexToLngLat(x: number, y: number, z: number): LngLat {
-    const s = Math.pow(2, z)
-    const lng = x / s * 360 - 180;
-    const n = Math.PI - 2 * Math.PI * y / s;
-    const lat = (180 / Math.PI * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n))));
-    return new LngLat(lng, lat)
-}
+// export function tileIndexToLngLat(x: number, y: number, z: number): LngLat {
+//     const s = Math.pow(2, z)
+//     const lng = x / s * 360 - 180;
+//     const n = Math.PI - 2 * Math.PI * y / s;
+//     const lat = (180 / Math.PI * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n))));
+//     return new LngLat(lng, lat)
+// }
 
-export function getTileOffset(tr: Transform, canonical: CanonicalTileID, projection: ?string): Object<{x: number, y: number}> {
-    const wgs84Point = tr.locationPoint3D(tr.center, false);
-    const offset = {x: 0, y: 0};
-    // GCJ02偏移修复
-    if(projection === 'GCJ02'){
-        const gcj02Coords = wgs84togcj02(tr.center.lng, tr.center.lat);
-        const gcj02Point = tr.locationPoint3D(new LngLat(gcj02Coords[0], gcj02Coords[1]), false);
-        offset.x = wgs84Point.x - gcj02Point.x;
-        offset.y = wgs84Point.y - gcj02Point.y;
-    }
-    return offset;
-}
+// export function getTileOffset(tr: Transform, canonical: CanonicalTileID, projection: ?string): Object<{x: number, y: number}> {
+//     const wgs84Point = tr.locationPoint3D(tr.center, false);
+//     const offset = {x: 0, y: 0};
+//     // GCJ02偏移修复
+//     if(projection === 'GCJ02'){
+//         const gcj02Coords = wgs84togcj02(tr.center.lng, tr.center.lat);
+//         const gcj02Point = tr.locationPoint3D(new LngLat(gcj02Coords[0], gcj02Coords[1]), false);
+//         offset.x = wgs84Point.x - gcj02Point.x;
+//         offset.y = wgs84Point.y - gcj02Point.y;
+//     }
+//     return offset;
+// }

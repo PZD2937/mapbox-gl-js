@@ -148,16 +148,16 @@ function out_of_china(lng, lat) {
 }
 
 const transformFunList = {
-    'EPSG:3857': {
+    'GCJ02': {
         'EPSG:4326': gcj02towgs84,
         'baidu': gcj02tobd09
     },
     'EPSG:4326': {
-        'EPSG:3857': wgs84togcj02,
+        'GCJ02': wgs84togcj02,
         'baidu': wgs84tobd09
     },
     'baidu': {
-        'EPSG:3857': bd09togcj02,
+        'GCJ02': bd09togcj02,
         'EPSG:4326': bd09towgs84
     }
 }
@@ -172,10 +172,6 @@ const transformFunList = {
  */
 export function transformCoordinate(local, current, target, outType = 'array') {
     const res = JSON.parse(JSON.stringify(local));
-    if (!current) current = 'EPSG:3857';
-    if (!target) target = 'EPSG:3857';
-    current = current.replace(/EPSG:?/g, 'EPSG:');
-    target = target.replace(/EPSG:?/g, 'EPSG:');
     if (current === 'CGCS2000') current = 'EPSG:4326';
     if (target === 'CGCS2000') target = 'EPSG:4326';
     const x = res[0] || res.x || res.lng || res.lon || 0;
@@ -183,9 +179,39 @@ export function transformCoordinate(local, current, target, outType = 'array') {
     if (current === target) {
         return outType === 'array' ? [x, y] : {x, y};
     }
-    if (!transformFunList[current]) Error(`${current} to ${target} 未支持的坐标转换`);
+    if (!transformFunList[current]) throw Error(`${current} to ${target} 未支持的坐标转换`);
     const transformFn = transformFunList[current][target];
-    if (!transformFn) Error(`${current} to ${target} 未支持的坐标转换`);
+    if (!transformFn) throw Error(`${current} to ${target} 未支持的坐标转换`);
     const result = transformFn(x, y);
     return outType === 'array' ? result : {x: result[0], y: result[1]}
+}
+
+export function tileIndexToLngLat(x, y, z) {
+    const n = Math.pow(2, z);
+    const lng = x / n * 360 - 180;
+    const m = Math.PI - 2 * Math.PI * y / n;
+    const lat = (180 / Math.PI * Math.atan(0.5 * (Math.exp(m) - Math.exp(-m))));
+    return {lng , lat};
+}
+
+export function tileToBbox(x, y, z) {
+    const lt = tileIndexToLngLat(x, y, z);
+    const rb = tileIndexToLngLat(x + 1, y + 1, z);
+    return {
+        minx: lt.lng,
+        miny: rb.lat,
+        maxx: rb.lng,
+        maxy: lt.lat
+    }
+}
+
+export function lngLatToTileFromZ(lng, lat, z) {
+    let sin = Math.sin(lat * Math.PI / 180),
+        z2 = Math.pow(2, z),
+        x = z2 * (lng / 360 + 0.5),
+        y = z2 * (0.5 - 0.25 * Math.log((1 + sin) / (1 - sin)) / Math.PI);
+    // Wrap Tile X
+    x = x % z2;
+    if (x < 0) x = x + z2;
+    return {x: Math.floor(x), y: Math.floor(y), z}
 }

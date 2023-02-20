@@ -58,6 +58,7 @@ import type {QueryFeature} from '../util/vectortile_to_geojson.js';
 import type {Vec3} from 'gl-matrix';
 import type {TextureImage} from '../render/texture.js';
 import type {VectorTileLayer} from '@mapbox/vector-tile';
+import {lngLatToTileFromZ, tileToBbox, transformCoordinate} from "../geo/projection/coordinates_transform.js";
 
 const CLOCK_SKEW_RETRY_TIMEOUT = 30000;
 export type TileState =
@@ -835,6 +836,46 @@ class Tile {
         this._tileDebugTextBuffer = context.createVertexBuffer(vertices, posAttributes.members);
         this._globeTileDebugTextBuffer = context.createVertexBuffer(extraGlobe, posAttributesGlobeExt.members);
         this._tileDebugTextSegments = SegmentVector.simpleSegment(0, 0, totalVertices, totalTriangles);
+    }
+
+    getCoverTile(projection: string): Object<{offset: Object, bbox: Object, tiles: Array, needOffset: boolean}>{
+        const canonical = this.tileID.canonical;
+        const bbox = tileToBbox(canonical.x, canonical.y, canonical.z);
+        const tiles = [];
+        const offset = {x: 0, y: 0};
+        if(!projection){
+            return {
+                offset,
+                bbox,
+                tiles
+            }
+        }
+        const lt = transformCoordinate({x: bbox.minx, y: bbox.maxy}, 'EPSG:4326', projection);
+        const rb = transformCoordinate({x: bbox.maxx, y: bbox.miny}, 'EPSG:4326', projection);
+        offset.x = Math.abs(bbox.minx - lt[0]);
+        offset.y = Math.abs(bbox.maxy - lt[1]);
+        if(offset.x < 0.00001 && offset.y < 0.00001){
+            offset.x = 0;
+            offset.y = 0;
+            return {
+                offset,
+                bbox,
+                tiles
+            }
+        }
+        const minTile = lngLatToTileFromZ(lt[0], lt[1], canonical.z);
+        const maxTile = lngLatToTileFromZ(rb[0], rb[1], canonical.z);
+        for (let x = minTile.x; x <= maxTile.x ; x++) {
+            for (let y = minTile.y; y <= maxTile.y; y++) {
+                tiles.push({x, y, z: canonical.z, offsetX: (x - minTile.x), offsetY: (y - minTile.y)})
+            }
+        }
+        return {
+            offset,
+            bbox,
+            tiles,
+            needOffset: true
+        }
     }
 }
 

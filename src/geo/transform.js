@@ -11,7 +11,7 @@ import MercatorCoordinate, {
     circumferenceAtLatitude
 } from './mercator_coordinate.js';
 import {getProjection} from './projection/index.js';
-import {getTileOffset, tileAABB} from '../geo/projection/tile_transform.js';
+import {tileAABB} from '../geo/projection/tile_transform.js';
 import Point from '@mapbox/point-geometry';
 import {
     wrap,
@@ -1712,10 +1712,6 @@ class Transform {
 
         cache[projMatrixKey] = new Float32Array(posMatrix);
         return cache[projMatrixKey];
-    }
-
-    calculateTileOffset(unwrappedTileID: UnwrappedTileID){
-        return getTileOffset(this, unwrappedTileID.canonical, unwrappedTileID.projection)
     }
 
     calculatePixelsToTileUnitsMatrix(tile: Tile): Float32Array {
