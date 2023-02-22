@@ -43,17 +43,17 @@ export class ErrorEvent extends Event {
     }
 }
 
-const maptalksNeedCompatibleEvent = {
-    moving: 'move',
-    dragrotatestart: 'dragstart',
-    dragrotating: 'drag',
-    dragrotateend: 'dragend',
-    zooming: 'zoom'
-}
-
-function _compatibleMaptalksEvent(type) {
-    return maptalksNeedCompatibleEvent[type] || type;
-}
+// const maptalksNeedCompatibleEvent = {
+//     moving: 'move',
+//     dragrotatestart: 'dragstart',
+//     dragrotating: 'drag',
+//     dragrotateend: 'dragend',
+//     zooming: 'zoom'
+// }
+//
+// function _compatibleMaptalksEvent(type) {
+//     return maptalksNeedCompatibleEvent[type] || type;
+// }
 
 /**
  * `Evented` mixes methods into other classes for event capabilities.
@@ -80,7 +80,7 @@ export class Evented {
      * @returns {Object} Returns itself to allow for method chaining.
      */
     on(type: *, listener: Listener): this {
-        type = _compatibleMaptalksEvent(type);
+        // type = _compatibleMaptalksEvent(type);
         this._listeners = this._listeners || {};
         if (typeof type === 'string') {
             const types = type.trim().split(' ');
@@ -103,7 +103,7 @@ export class Evented {
      * @returns {Object} Returns itself to allow for method chaining.
      */
     off(type: *, listener: Listener): this {
-        type = _compatibleMaptalksEvent(type);
+        // type = _compatibleMaptalksEvent(type);
         if (typeof type === 'string') {
             const types = type.trim().split(' ');
             if (types.length > 1) {
@@ -129,7 +129,7 @@ export class Evented {
      * @returns {Object} Returns `this` | Promise.
      */
     once(type: *, listener?: Listener): this | Promise<Event> {
-        type = _compatibleMaptalksEvent(type);
+        // type = _compatibleMaptalksEvent(type);
         if (typeof type === 'string') {
             const types = type.trim().split(' ');
             if (types.length > 1) {
@@ -154,11 +154,11 @@ export class Evented {
         // See https://github.com/mapbox/mapbox-gl-js/issues/6522,
         //     https://github.com/mapbox/mapbox-gl-draw/issues/766
         if (typeof event === 'string') {
-            event = _compatibleMaptalksEvent(event);
+            // event = _compatibleMaptalksEvent(event);
             const events = event.trim().split(' ');
             if (events.length > 1) {
                 for (let i = 0; i < events.length; i++) {
-                    this.fire(events[i], properties);
+                    this.fire(new Event(events[i], properties || {}));
                 }
                 return this
             }
