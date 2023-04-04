@@ -19,7 +19,6 @@ import assert from 'assert';
 type Options = {
     element?: HTMLElement,
     offset?: PointLike,
-    customOpacity?: boolean,
     anchor?: Anchor,
     color?: string,
     scale?: number,
@@ -106,7 +105,6 @@ export default class Marker extends Evented {
             '_clearFadeTimer'
         ], this);
 
-        this._customOpacity = !!(options && options.customOpacity);
         this._anchor = (options && options.anchor) || 'center';
         this._color = (options && options.color) || '#3FB1CE';
         this._scale = (options && options.scale) || 1;
@@ -201,7 +199,9 @@ export default class Marker extends Evented {
         this._map = map;
         map.getCanvasContainer().appendChild(this._element);
         map.on('move', this._updateMoving);
+        // $FlowFixMe[method-unbinding]
         map.on('moveend', this._update);
+        // $FlowFixMe[method-unbinding]
         map.on('remove', this._clearFadeTimer);
         map._addMarker(this);
         this.setDraggable(this._draggable);
@@ -210,6 +210,7 @@ export default class Marker extends Evented {
         // If we attached the `click` listener to the marker element, the popup
         // would close once the event propogated to `map` due to the
         // `Popup#_onClickClose` listener.
+        // $FlowFixMe[method-unbinding]
         map.on('click', this._onMapClick);
 
         return this;
@@ -226,15 +227,24 @@ export default class Marker extends Evented {
     remove(): this {
         const map = this._map;
         if (map) {
+            // $FlowFixMe[method-unbinding]
             map.off('click', this._onMapClick);
             map.off('move', this._updateMoving);
+            // $FlowFixMe[method-unbinding]
             map.off('moveend', this._update);
+            // $FlowFixMe[method-unbinding]
             map.off('mousedown', this._addDragHandler);
+            // $FlowFixMe[method-unbinding]
             map.off('touchstart', this._addDragHandler);
+            // $FlowFixMe[method-unbinding]
             map.off('mouseup', this._onUp);
+            // $FlowFixMe[method-unbinding]
             map.off('touchend', this._onUp);
+            // $FlowFixMe[method-unbinding]
             map.off('mousemove', this._onMove);
+            // $FlowFixMe[method-unbinding]
             map.off('touchmove', this._onMove);
+            // $FlowFixMe[method-unbinding]
             map.off('remove', this._clearFadeTimer);
             map._removeMarker(this);
             this._map = undefined;
@@ -315,6 +325,7 @@ export default class Marker extends Evented {
             this._popup.remove();
             this._popup = null;
             this._element.removeAttribute('role');
+            // $FlowFixMe[method-unbinding]
             this._element.removeEventListener('keypress', this._onKeyPress);
 
             if (!this._originalTabIndex) {
@@ -347,6 +358,7 @@ export default class Marker extends Evented {
             if (!this._originalTabIndex) {
                 this._element.setAttribute('tabindex', '0');
             }
+            // $FlowFixMe[method-unbinding]
             this._element.addEventListener('keypress', this._onKeyPress);
             this._element.setAttribute('aria-expanded', 'false');
         }
@@ -579,7 +591,8 @@ export default class Marker extends Evented {
                 this._updateDOM();
             }
 
-            if (this._customOpacity && (map._showingGlobe() || map.getTerrain() || map.getFog()) && !this._fadeTimer) {
+            if ((map._showingGlobe() || map.getTerrain() || map.getFog()) && !this._fadeTimer) {
+                // $FlowFixMe[method-unbinding]
                 this._fadeTimer = setTimeout(this._evaluateOpacity.bind(this), 60);
             }
         });
@@ -669,7 +682,9 @@ export default class Marker extends Evented {
 
         const map = this._map;
         if (map) {
+            // $FlowFixMe[method-unbinding]
             map.off('mousemove', this._onMove);
+            // $FlowFixMe[method-unbinding]
             map.off('touchmove', this._onMove);
         }
 
@@ -708,9 +723,13 @@ export default class Marker extends Evented {
             this._pointerdownPos = e.point;
 
             this._state = 'pending';
+            // $FlowFixMe[method-unbinding]
             map.on('mousemove', this._onMove);
+            // $FlowFixMe[method-unbinding]
             map.on('touchmove', this._onMove);
+            // $FlowFixMe[method-unbinding]
             map.once('mouseup', this._onUp);
+            // $FlowFixMe[method-unbinding]
             map.once('touchend', this._onUp);
         }
     }
@@ -731,10 +750,14 @@ export default class Marker extends Evented {
         const map = this._map;
         if (map) {
             if (shouldBeDraggable) {
+                // $FlowFixMe[method-unbinding]
                 map.on('mousedown', this._addDragHandler);
+                // $FlowFixMe[method-unbinding]
                 map.on('touchstart', this._addDragHandler);
             } else {
+                // $FlowFixMe[method-unbinding]
                 map.off('mousedown', this._addDragHandler);
+                // $FlowFixMe[method-unbinding]
                 map.off('touchstart', this._addDragHandler);
             }
         }

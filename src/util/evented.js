@@ -1,9 +1,10 @@
 // @flow
 
 import {extend} from './util.js';
+import type {MapEvent} from '../ui/events.js';
 
 type Listener = (Object) => any;
-type Listeners = { [_: string]: Array<Listener> };
+type Listeners = {[_: string]: Array<Listener> };
 
 function _addEventListener(type: string, listener: Listener, listenerList: Listeners) {
     const listenerExists = listenerList[type] && listenerList[type].indexOf(listener) !== -1;
@@ -43,18 +44,6 @@ export class ErrorEvent extends Event {
     }
 }
 
-// const maptalksNeedCompatibleEvent = {
-//     moving: 'move',
-//     dragrotatestart: 'dragstart',
-//     dragrotating: 'drag',
-//     dragrotateend: 'dragend',
-//     zooming: 'zoom'
-// }
-//
-// function _compatibleMaptalksEvent(type) {
-//     return maptalksNeedCompatibleEvent[type] || type;
-// }
-
 /**
  * `Evented` mixes methods into other classes for event capabilities.
  *
@@ -79,19 +68,10 @@ export class Evented {
      *   extended with `target` and `type` properties.
      * @returns {Object} Returns itself to allow for method chaining.
      */
-    on(type: *, listener: Listener): this {
-        // type = _compatibleMaptalksEvent(type);
+    on(type: MapEvent, listener: Listener): this {
         this._listeners = this._listeners || {};
-        if (typeof type === 'string') {
-            const types = type.trim().split(' ');
-            if (types.length > 1) {
-                for (let i = 0; i < types.length; i++) {
-                    this.on(types[i], listener);
-                }
-                return this
-            }
-        }
         _addEventListener(type, listener, this._listeners);
+
         return this;
     }
 
@@ -102,19 +82,10 @@ export class Evented {
      * @param {Function} listener The listener function to remove.
      * @returns {Object} Returns itself to allow for method chaining.
      */
-    off(type: *, listener: Listener): this {
-        // type = _compatibleMaptalksEvent(type);
-        if (typeof type === 'string') {
-            const types = type.trim().split(' ');
-            if (types.length > 1) {
-                for (let i = 0; i < types.length; i++) {
-                    this.off(types[i], listener);
-                }
-                return this
-            }
-        }
+    off(type: MapEvent, listener: Listener): this {
         _removeEventListener(type, listener, this._listeners);
         _removeEventListener(type, listener, this._oneTimeListeners);
+
         return this;
     }
 
@@ -128,17 +99,7 @@ export class Evented {
      *   If not provided, returns a Promise that will be resolved when the event is fired once.
      * @returns {Object} Returns `this` | Promise.
      */
-    once(type: *, listener?: Listener): this | Promise<Event> {
-        // type = _compatibleMaptalksEvent(type);
-        if (typeof type === 'string') {
-            const types = type.trim().split(' ');
-            if (types.length > 1) {
-                for (let i = 0; i < types.length; i++) {
-                    this.once(types[i], listener);
-                }
-                return this
-            }
-        }
+    once(type: MapEvent, listener?: Listener): this | Promise<Event> {
         if (!listener) {
             return new Promise(resolve => this.once(type, resolve));
         }
@@ -154,15 +115,6 @@ export class Evented {
         // See https://github.com/mapbox/mapbox-gl-js/issues/6522,
         //     https://github.com/mapbox/mapbox-gl-draw/issues/766
         if (typeof event === 'string') {
-            // event = _compatibleMaptalksEvent(event);
-            const events = event.trim().split(' ');
-            if (events.length > 1) {
-                for (let i = 0; i < events.length; i++) {
-                    this.fire(new Event(events[i], properties || {}));
-                }
-                return this
-            }
-
             event = new Event(event, properties || {});
         }
 
@@ -193,8 +145,8 @@ export class Evented {
                 parent.fire(event);
             }
 
-            // To ensure that no error events are dropped, print them to the
-            // console if they have no listeners.
+        // To ensure that no error events are dropped, print them to the
+        // console if they have no listeners.
         } else if (event instanceof ErrorEvent) {
             console.error(event.error);
         }
