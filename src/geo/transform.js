@@ -806,8 +806,7 @@ class Transform {
             roundZoom?: boolean,
             reparseOverscaled?: boolean,
             renderWorldCopies?: boolean,
-            isTerrainDEM?: boolean,
-            projection?: string
+            isTerrainDEM?: boolean
         }
     ): Array<OverscaledTileID> {
         let z = this.coveringZoomLevel(options);
@@ -1053,7 +1052,7 @@ class Transform {
 
                 const dx = centerPoint[0] - ((0.5 + x + (it.wrap << it.zoom)) * (1 << (z - it.zoom)));
                 const dy = centerPoint[1] - 0.5 - y;
-                const id = it.tileID ? it.tileID : new OverscaledTileID(tileZoom, it.wrap, it.zoom, x, y, options.projection);
+                const id = it.tileID ? it.tileID : new OverscaledTileID(tileZoom, it.wrap, it.zoom, x, y);
 
                 result.push({tileID: id, distanceSq: dx * dx + dy * dy});
                 continue;
@@ -1077,7 +1076,7 @@ class Transform {
                     maxZ: it.maxZ
                 };
                 if (useElevationData && !isGlobe) {
-                    child.tileID = new OverscaledTileID(it.zoom + 1 === maxZoom ? overscaledZ : it.zoom + 1, it.wrap, it.zoom + 1, childX, childY, options.projection);
+                    child.tileID = new OverscaledTileID(it.zoom + 1 === maxZoom ? overscaledZ : it.zoom + 1, it.wrap, it.zoom + 1, childX, childY);
 
                     getAABBFromElevation(child);
                 }

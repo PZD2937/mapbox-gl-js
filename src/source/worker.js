@@ -28,6 +28,7 @@ import type {Callback} from '../types/callback.js';
 import type {LayerSpecification, ProjectionSpecification} from '../style-spec/types.js';
 import type {PluginState} from './rtl_text_plugin.js';
 import type Projection from '../geo/projection/projection.js';
+import RasterTileWorkerSource from "./raster_tile_worker_source.js";
 
 /**
  * @private
@@ -60,7 +61,8 @@ export default class Worker {
 
         this.workerSourceTypes = {
             vector: VectorTileWorkerSource,
-            geojson: GeoJSONWorkerSource
+            geojson: GeoJSONWorkerSource,
+            raster: RasterTileWorkerSource
         };
 
         // [mapId][sourceType][sourceName] => worker source instance

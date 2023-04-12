@@ -1,217 +1,115 @@
-// 定义一些常量
-const x_PI = 3.14159265358979324 * 3000.0 / 180.0;
-const PI = 3.1415926535897932384626;
-const a = 6378245.0;
-const ee = 0.00669342162296594323;
+// @flow
+import LngLat from "../lng_lat.js";
 
-/**
- * 百度坐标系 (BD-09) 与 火星坐标系 (GCJ-02) 的转换
- * 即 百度 转 谷歌、高德
- * @param bd_lng
- * @param bd_lat
- * @returns {*[]}
- */
-export function bd09togcj02(bd_lng, bd_lat) {
-    bd_lng = Number(bd_lng);
-    bd_lat = Number(bd_lat);
-    const x = bd_lng - 0.0065;
-    const y = bd_lat - 0.006;
-    const z = Math.sqrt(x * x + y * y) - 0.00002 * Math.sin(y * x_PI);
-    const theta = Math.atan2(y, x) - 0.000003 * Math.cos(x * x_PI);
-    const gg_lng = z * Math.cos(theta);
-    const gg_lat = z * Math.sin(theta);
-    return [gg_lng, gg_lat]
+/// Krasovsky 1940 ellipsoid
+/// @const
+const GCJ_A = 6378245
+const GCJ_EE = 0.00669342162296594323 // f = 1/298.3; e^2 = 2*f - f**2
+
+/// Epsilon to use for "exact" iterations.
+/// Wanna troll? Use Number.EPSILON. 1e-13 in 15 calls for gcj.
+/// @const
+const PRC_EPS = 1e-5
+
+/// Baidu's artificial deviations
+/// @const
+const BD_DLAT = 0.0060
+const BD_DLON = 0.0065
+
+/// Mean Earth Radius
+/// @const
+// const EARTH_R = 6371000
+function pointInChina(lngLat: LngLat) {
+    return lngLat.lat >= 0.8293 && lngLat.lat <= 55.8271 &&
+        lngLat.lng >= 72.004 && lngLat.lng <= 137.8347
+}
+
+function coordDiff(a: LngLat, b: LngLat): LngLat {
+    return new LngLat(a.lng - b.lng, a.lat - b.lat)
+}
+
+function factory(input, verify) {
+
 }
 
 /**
- * 火星坐标系 (GCJ-02) 与百度坐标系 (BD-09) 的转换
- * 即 谷歌、高德 转 百度
- * @param lng
- * @param lat
- * @returns {number[]}
+ * 计算wgs84到gcj02 的偏移量，单位m
+ * @param {LngLat} lngLat
+ * @return {number[]}
  */
-export function gcj02tobd09(lng, lat) {
-    lat = Number(lat);
-    lng = Number(lng);
-    let z = Math.sqrt(lng * lng + lat * lat) + 0.00002 * Math.sin(lat * x_PI);
-    let theta = Math.atan2(lat, lng) + 0.000003 * Math.cos(lng * x_PI);
-    let bd_lng = z * Math.cos(theta) + 0.0065;
-    let bd_lat = z * Math.sin(theta) + 0.006;
-    return [bd_lng, bd_lat]
+function calculateWGSToGCJOffset(lngLat: LngLat) {
+    if (!pointInChina(lngLat)) return [0, 0];
+    const x = lngLat.lng - 105, y = lngLat.lat - 35;
+    const dLat_m = -100 + 2 * x + 3 * y + 0.2 * y * y + 0.1 * x * y +
+        0.2 * Math.sqrt(Math.abs(x)) + (
+            2 * Math.sin(x * 6 * Math.PI) + 2 * Math.sin(x * 2 * Math.PI) +
+            2 * Math.sin(y * Math.PI) + 4 * Math.sin(y / 3 * Math.PI) +
+            16 * Math.sin(y / 12 * Math.PI) + 32 * Math.sin(y / 30 * Math.PI)
+        ) * 20 / 3
+
+    const dLon_m = 300 + x + 2 * y + 0.1 * x * x + 0.1 * x * y +
+        0.1 * Math.sqrt(Math.abs(x)) + (
+            2 * Math.sin(x * 6 * Math.PI) + 2 * Math.sin(x * 2 * Math.PI) +
+            2 * Math.sin(x * Math.PI) + 4 * Math.sin(x / 3 * Math.PI) +
+            15 * Math.sin(x / 12 * Math.PI) + 30 * Math.sin(x / 30 * Math.PI)
+        ) * 20 / 3
+    return [dLon_m, dLat_m]
 }
 
-/**
- * WGS-84 转 GCJ-02
- * @param lng
- * @param lat
- * @returns {number[]}
- */
-export function wgs84togcj02(lng, lat) {
-    lat = Number(lat);
-    lng = Number(lng);
-    if (out_of_china(lng, lat)) {
-        return [lng, lat]
-    } else {
-        let dlat = transformlat(lng - 105.0, lat - 35.0);
-        let dlng = transformlng(lng - 105.0, lat - 35.0);
-        const radlat = lat / 180.0 * PI;
-        let magic = Math.sin(radlat);
-        magic = 1 - ee * magic * magic;
-        let sqrtmagic = Math.sqrt(magic);
-        dlat = (dlat * 180.0) / ((a * (1 - ee)) / (magic * sqrtmagic) * PI);
-        dlng = (dlng * 180.0) / (a / sqrtmagic * Math.cos(radlat) * PI);
-        let mglat = lat + dlat;
-        let mglng = lng + dlng;
-        return [mglng, mglat]
+
+function wgsToGcj(lngLat: LngLat, offset?: number[]): LngLat {
+    offset = offset || calculateWGSToGCJOffset(lngLat);
+    if (offset[0] === 0 && offset[1] === 0) return lngLat;
+    const radLat = lngLat.lat / 180 * Math.PI;
+    const magic = 1 - GCJ_EE * Math.pow(Math.sin(radLat), 2) // just a common expr
+    const lat_deg_arclen = (Math.PI / 180) * (GCJ_A * (1 - GCJ_EE)) / Math.pow(magic, 1.5);
+    const lon_deg_arclen = (Math.PI / 180) * (GCJ_A * Math.cos(radLat) / Math.sqrt(magic));
+    const lng = lngLat.lng + (offset[0] / lon_deg_arclen);
+    const lat = lngLat.lat + (offset[1] / lat_deg_arclen)
+    return new LngLat(lng, lat);
+}
+
+export function gcjToWgs(lngLat: LngLat): LngLat {
+    return coordDiff(lngLat, coordDiff(wgsToGcj(lngLat), lngLat))
+}
+
+function gcjToBd(lngLat: LngLat): LngLat {
+    const x = lngLat.lng, y = lngLat.lat;
+    const r = Math.sqrt(x * x + y * y) + 0.00002 * Math.sin(y * Math.PI * 3000 / 180)
+    const θ = Math.atan2(y, x) + 0.000003 * Math.cos(x * Math.PI * 3000 / 180);
+    return new LngLat(r * Math.cos(θ) + BD_DLON, r * Math.sin(θ) + BD_DLAT)
+}
+
+function bdToGcj(lngLat: LngLat): LngLat {
+    const x = lngLat.lng - BD_DLON, y = lngLat.lat - BD_DLAT;
+    const r = Math.sqrt(x * x + y * y) - 0.00002 * Math.sin(y * Math.PI * 3000 / 180);
+    const θ = Math.atan2(y, x) - 0.000003 * Math.cos(x * Math.PI * 3000 / 180);
+    return new LngLat(r * Math.cos(θ), r * Math.sin(θ))
+}
+
+
+function wgsToBd(lngLat: LngLat): LngLat {
+    return gcjToBd(wgsToGcj(lngLat))
+}
+
+function bdToWgs(lngLat: LngLat): LngLat {
+    return gcjToWgs(bdToGcj(lngLat))
+}
+
+const base = {
+    'wgs84->gcj02': wgsToGcj,
+    'gcj02->wgs84': gcjToWgs,
+    'wgs84->baidu': wgsToBd,
+    'baidu->wgs84': bdToWgs,
+    'gcj02->baidu': gcjToBd,
+    'baidu->gcj02': bdToGcj
+}
+
+export default function transformLngLat(lngLat: LngLat, current: string, target: string): LngLat {
+    const key = `${current.toLowerCase()}->${target.toLowerCase()}`;
+    const transform = base[key];
+    if(!transform){
+        throw new Error(`未实现${key}的转换`)
     }
-}
-
-/**
- * GCJ-02 转换为 WGS-84
- * @param lng
- * @param lat
- * @returns {number[]}
- */
-export function gcj02towgs84(lng, lat) {
-    lat = Number(lat);
-    lng = Number(lng);
-    if (out_of_china(lng, lat)) {
-        return [lng, lat]
-    } else {
-        let dlat = transformlat(lng - 105.0, lat - 35.0);
-        let dlng = transformlng(lng - 105.0, lat - 35.0);
-        const radlat = lat / 180.0 * PI;
-        let magic = Math.sin(radlat);
-        magic = 1 - ee * magic * magic;
-        let sqrtmagic = Math.sqrt(magic);
-        dlat = (dlat * 180.0) / ((a * (1 - ee)) / (magic * sqrtmagic) * PI);
-        dlng = (dlng * 180.0) / (a / sqrtmagic * Math.cos(radlat) * PI);
-        const mglat = lat + dlat;
-        const mglng = lng + dlng;
-        return [lng * 2 - mglng, lat * 2 - mglat]
-    }
-}
-
-/**
- * 墨卡托投影（4326） 转 百度坐标系 (BD-09)
- * @param lng
- * @param lat
- * @returns {number[]}
- */
-export function wgs84tobd09(lng, lat) {
-    let res = wgs84togcj02(lng, lat)
-    return gcj02tobd09(res[0], res[1])
-}
-
-/**
- * 百度坐标系 (BD-09) 转 墨卡托投影（4326）
- * @param bd_lon
- * @param bd_lat
- * @returns {(number)[]}
- */
-export function bd09towgs84(bd_lon, bd_lat) {
-    let res = bd09togcj02(bd_lon, bd_lat)
-    return gcj02towgs84(res[0], res[1])
-}
-
-export function transformlat(lng, lat) {
-    lat = Number(lat);
-    lng = Number(lng);
-    let ret = -100.0 + 2.0 * lng + 3.0 * lat + 0.2 * lat * lat + 0.1 * lng * lat + 0.2 * Math.sqrt(Math.abs(lng));
-    ret += (20.0 * Math.sin(6.0 * lng * PI) + 20.0 * Math.sin(2.0 * lng * PI)) * 2.0 / 3.0;
-    ret += (20.0 * Math.sin(lat * PI) + 40.0 * Math.sin(lat / 3.0 * PI)) * 2.0 / 3.0;
-    ret += (160.0 * Math.sin(lat / 12.0 * PI) + 320 * Math.sin(lat * PI / 30.0)) * 2.0 / 3.0;
-    return ret
-}
-
-export function transformlng(lng, lat) {
-    lat = Number(lat);
-    lng = Number(lng);
-    let ret = 300.0 + lng + 2.0 * lat + 0.1 * lng * lng + 0.1 * lng * lat + 0.1 * Math.sqrt(Math.abs(lng));
-    ret += (20.0 * Math.sin(6.0 * lng * PI) + 20.0 * Math.sin(2.0 * lng * PI)) * 2.0 / 3.0;
-    ret += (20.0 * Math.sin(lng * PI) + 40.0 * Math.sin(lng / 3.0 * PI)) * 2.0 / 3.0;
-    ret += (150.0 * Math.sin(lng / 12.0 * PI) + 300.0 * Math.sin(lng / 30.0 * PI)) * 2.0 / 3.0;
-    return ret
-}
-
-/**
- * 判断是否在国内，不在国内则不做偏移
- * @param lng
- * @param lat
- * @returns {boolean}
- */
-function out_of_china(lng, lat) {
-    lat = Number(lat);
-    lng = Number(lng);
-    // 纬度 3.86~53.55, 经度 73.66~135.05
-    return !(lng > 73.66 && lng < 135.05 && lat > 3.86 && lat < 53.55);
-}
-
-const transformFunList = {
-    'GCJ02': {
-        'EPSG:4326': gcj02towgs84,
-        'baidu': gcj02tobd09
-    },
-    'EPSG:4326': {
-        'GCJ02': wgs84togcj02,
-        'baidu': wgs84tobd09
-    },
-    'baidu': {
-        'GCJ02': bd09togcj02,
-        'EPSG:4326': bd09towgs84
-    }
-}
-
-/**
- * 坐标转换
- * @param local {coordinate} 坐标
- * @param current {string} 当前坐标系
- * @param target {string} 目标坐标系
- * @param outType {'array' | 'object'} 输出类型
- * @return {(number)[]|{x: number, y: number}}
- */
-export function transformCoordinate(local, current, target, outType = 'array') {
-    const res = JSON.parse(JSON.stringify(local));
-    if (current === 'CGCS2000') current = 'EPSG:4326';
-    if (target === 'CGCS2000') target = 'EPSG:4326';
-    const x = res[0] || res.x || res.lng || res.lon || 0;
-    const y = res[1] || res.y || res.lat || 0;
-    if (current === target) {
-        return outType === 'array' ? [x, y] : {x, y};
-    }
-    if (!transformFunList[current]) throw Error(`${current} to ${target} 未支持的坐标转换`);
-    const transformFn = transformFunList[current][target];
-    if (!transformFn) throw Error(`${current} to ${target} 未支持的坐标转换`);
-    const result = transformFn(x, y);
-    return outType === 'array' ? result : {x: result[0], y: result[1]}
-}
-
-export function tileIndexToLngLat(x, y, z) {
-    const n = Math.pow(2, z);
-    const lng = x / n * 360 - 180;
-    const m = Math.PI - 2 * Math.PI * y / n;
-    const lat = (180 / Math.PI * Math.atan(0.5 * (Math.exp(m) - Math.exp(-m))));
-    return {lng , lat};
-}
-
-export function tileToBbox(x, y, z) {
-    const lt = tileIndexToLngLat(x, y, z);
-    const rb = tileIndexToLngLat(x + 1, y + 1, z);
-    return {
-        minx: lt.lng,
-        miny: rb.lat,
-        maxx: rb.lng,
-        maxy: lt.lat
-    }
-}
-
-export function lngLatToTileFromZ(lng, lat, z) {
-    let sin = Math.sin(lat * Math.PI / 180),
-        z2 = Math.pow(2, z),
-        x = z2 * (lng / 360 + 0.5),
-        y = z2 * (0.5 - 0.25 * Math.log((1 + sin) / (1 - sin)) / Math.PI);
-    // Wrap Tile X
-    x = x % z2;
-    if (x < 0) x = x + z2;
-    return {x: Math.floor(x), y: Math.floor(y), z}
+    return transform(lngLat)
 }

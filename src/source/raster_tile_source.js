@@ -24,8 +24,9 @@ import type {
     RasterSourceSpecification,
     RasterDEMSourceSpecification
 } from '../style-spec/types.js';
-import {mergerAndCutFromTextureImage} from "../util/canvas.js";
 import {CanonicalTileID} from "./tile_id.js";
+import type Actor from '../util/actor.js';
+import mergerTextureImage from "../util/merger_image.js";
 
 /**
  * A source containing raster tiles.
@@ -65,6 +66,7 @@ class RasterTileSource extends Evented implements Source {
     dispatcher: Dispatcher;
     map: Map;
     tiles: Array<string>;
+    actor: Actor
 
     _loaded: boolean;
     _options: RasterSourceSpecification | RasterDEMSourceSpecification;
@@ -193,83 +195,95 @@ class RasterTileSource extends Evented implements Source {
         return !this.tileBounds || this.tileBounds.contains(tileID.canonical);
     }
 
+    needRevise() {
+        return this.projection && this.projection !== 'WGS84'
+    }
+
     loadTile(tile: Tile, callback: Callback<void>) {
         const use2x = browser.devicePixelRatio >= 2;
-        const url = this.map._requestManager.normalizeTileURL(tile.tileID.canonical.url(this.tiles, this.scheme), use2x, this.tileSize);
-        const {x, y, z} = tile.tileID.canonical;
-        const tiles = tile.getCoverTile(tile.tileID.projection);
-        if(z > 9 && tiles.needOffset && tiles.tiles.length){
-            const cancels = [];
-            asyncAll(tiles.tiles, (item, cb) => {
-                const url = this.map._requestManager.normalizeTileURL(new CanonicalTileID(item.z, item.x, item.y).url(this.tiles, this.scheme), use2x, this.tileSize);
-                const cancel = getImage(this.map._requestManager.transformRequest(url, ResourceType.Tile, this.customTags, item), (error, data, cacheControl, expires) => {
-                    cb(error, {
-                        x: item.x,
-                        y: item.y,
-                        z: item.z,
-                        offsetX: item.offsetX,
-                        offsetY: item.offsetY,
-                        data,
-                    });
-                })
-                cancels.push(cancel);
-            }, (error, results) => {
-                if (tile.aborted) {
-                    tile.state = 'unloaded';
-                    return callback(null);
-                }
-                if(error){
-                    tile.state = 'errored';
-                    return callback(error)
-                }
+        const imageLoaded = (error, data, cacheControl, expires) => {
+            delete tile.request;
 
-                const imageSize = results[0].data.width;
-                // const worldSize = Math.pow(2, z) * imageSize;
-                const bbox = tiles.bbox;
-
-                const lngResolution = imageSize / (bbox.maxx - bbox.minx);
-                const latResolution = imageSize / (bbox.maxy - bbox.miny);
-
-                const tileOffset = tiles.offset;
-                const mergerOpt = {offsetX: -(tileOffset.x * lngResolution) % imageSize, offsetY: -(tileOffset.y * latResolution) % imageSize, imageSize};
-
-                mergerAndCutFromTextureImage(results[0].data, results, mergerOpt, textureImage => {
-                    tile.setTexture(textureImage, this.map.painter);
-                    tile.state = 'loaded';
-                    cacheEntryPossiblyAdded(this.dispatcher);
-                    callback(null);
-                });
-            })
-            tile.request = {
-                cancel: function () {
-                    cancels.forEach(c => c.cancel())
-                    cancels.length = 0;
-                }
+            if (tile.aborted) {
+                tile.state = 'unloaded';
+                return callback(null);
             }
-        }else {
-            tile.request = getImage(this.map._requestManager.transformRequest(url, ResourceType.Tile, this.customTags, {x, y, z}), (error, data, cacheControl, expires) => {
-                delete tile.request;
 
-                if (tile.aborted) {
-                    tile.state = 'unloaded';
-                    return callback(null);
-                }
+            if (error) {
+                tile.state = 'errored';
+                return callback(error);
+            }
 
-                if (error) {
-                    tile.state = 'errored';
-                    return callback(error);
-                }
+            if (!data) return callback(null);
 
-                if (!data) return callback(null);
+            if (this.map._refreshExpiredTiles) tile.setExpiryData({cacheControl, expires});
+            tile.setTexture(data, this.map.painter);
+            tile.state = 'loaded';
 
-                if (this.map._refreshExpiredTiles) tile.setExpiryData({cacheControl, expires});
-                tile.setTexture(data, this.map.painter);
-                tile.state = 'loaded';
-
-                cacheEntryPossiblyAdded(this.dispatcher);
-                callback(null);
-            });
+            cacheEntryPossiblyAdded(this.dispatcher);
+            tile._loadTime = Date.now() - tile._beiginTime;
+            delete tile._beiginTime;
+            // console.log(tile._loadTime)
+            callback(null);
         }
+
+        tile._beiginTime = Date.now();
+        if (tile.tileZoom > 9 && this.needRevise() && !tile._wasRevise) {
+            this.loadOtherProjectionTile(tile, imageLoaded);
+        } else {
+            const url = this.map._requestManager.normalizeTileURL(tile.tileID.canonical.url(this.tiles, this.scheme), use2x, this.tileSize);
+            tile.request = getImage(this.map._requestManager.transformRequest(url, ResourceType.Tile, this.customTags, tile.tileID.canonical), imageLoaded);
+        }
+    }
+
+    loadOtherProjectionTile(tile: Tile, callback: Callback) {
+        const use2x = browser.devicePixelRatio >= 2;
+        if (!tile.actor) {
+            tile.actor = this.dispatcher.getActor();
+        }
+        // 计算覆盖的瓦片
+        tile.request = tile.actor.send(`${this.type}.getCoverTiles`, {
+            tile: tile.tileID.canonical,
+            projection: this.projection,
+            source: this.id,
+            type: this.type
+        }, (err, data) => {
+            if (!err && !data) {
+                tile._wasRevise = true;
+                this.loadTile(tile, callback);
+                return;
+            }
+            const coverTiles = data.coverTiles;
+            const requests = coverTiles.map(item => {
+                const ti = new CanonicalTileID(item.z, item.x, item.y);
+                const url = this.map._requestManager.normalizeTileURL(ti.url(this.tiles, this.scheme), use2x, this.tileSize);
+                return {
+                    request: this.map._requestManager.transformRequest(url, ResourceType.Tile, this.customTags, ti),
+                    tile: ti,
+                    x: item.dx,
+                    y: item.dy
+                };
+            });
+            tile.request = tile.actor.send(`loadTile`, {
+                requests,
+                offset: data.offset,
+                extent: data.extent,
+                tileID: tile.tileID.canonical,
+                source: this.id,
+                type: this.type
+            }, (error, result: { textureImage: TextureImage, textureImageList: [] }) => {
+                if (!result) return callback(error);
+                if (result.textureImageList) {
+                    mergerTextureImage(imageObject.images, imageObject.imageSize, imageObject.dx, imageObject.dy, (err, imageBitmap) => {
+                        // loadSuccess(imageBitmap);
+                        callback(error, imageBitmap);
+                    });
+                } else {
+                    callback(error, result.textureImage);
+                }
+            });
+
+        })
     }
 
     static loadTileData(tile: Tile, data: TextureImage, painter: Painter) {
@@ -288,12 +302,18 @@ class RasterTileSource extends Evented implements Source {
             tile.request.cancel();
             delete tile.request;
         }
+        if (tile.actor) {
+            tile.actor.send('abortTile', {uid: tile.uid, tileID: tile.tileID.canonical, type: this.type, source: this.id});
+        }
         callback();
     }
 
     // $FlowFixMe[method-unbinding]
     unloadTile(tile: Tile, callback: Callback<void>) {
         if (tile.texture) this.map.painter.saveTileTexture(tile.texture);
+        if (tile.actor) {
+            tile.actor.send('removeTile', {uid: tile.uid, tileID: tile.tileID.canonical, type: this.type, source: this.id});
+        }
         callback();
     }
 

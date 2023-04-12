@@ -12,7 +12,9 @@ import type {Vec3} from 'gl-matrix';
 import type Projection from './projection.js';
 import type Transform from '../transform.js';
 import LngLat from "../lng_lat.js";
-import {wgs84togcj02} from "./coordinates_transform.js";
+import LngLatBounds from "../lng_lat_bounds.js";
+import {lngLatToTile} from "./tile_projection.js";
+// import {wgs84togcj02} from "./coordinates_transform.js";
 
 export type TileTransform = {
     scale: number,
@@ -128,23 +130,23 @@ export function getTileVec3(tileTransform: TileTransform, coord: MercatorCoordin
     return vec3.fromValues(x, y, altitudeFromMercatorZ(coord.z, coord.y));
 }
 
-// export function tileIndexToLngLat(x: number, y: number, z: number): LngLat {
-//     const s = Math.pow(2, z)
-//     const lng = x / s * 360 - 180;
-//     const n = Math.PI - 2 * Math.PI * y / s;
-//     const lat = (180 / Math.PI * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n))));
-//     return new LngLat(lng, lat)
-// }
+export function getTileNorthwestLngLat(x: number, y: number, z: number): LngLat {
+    const n = Math.pow(2, z);
+    const lng = x / n * 360 - 180;
+    const m = Math.PI - 2 * Math.PI * y / n;
+    const lat = (180 / Math.PI * Math.atan(0.5 * (Math.exp(m) - Math.exp(-m))));
+    return new LngLat(lng, lat);
+}
 
-// export function getTileOffset(tr: Transform, canonical: CanonicalTileID, projection: ?string): Object<{x: number, y: number}> {
-//     const wgs84Point = tr.locationPoint3D(tr.center, false);
-//     const offset = {x: 0, y: 0};
-//     // GCJ02偏移修复
-//     if(projection === 'GCJ02'){
-//         const gcj02Coords = wgs84togcj02(tr.center.lng, tr.center.lat);
-//         const gcj02Point = tr.locationPoint3D(new LngLat(gcj02Coords[0], gcj02Coords[1]), false);
-//         offset.x = wgs84Point.x - gcj02Point.x;
-//         offset.y = wgs84Point.y - gcj02Point.y;
-//     }
-//     return offset;
-// }
+export function lngLatToTileFromZ(lngLat: LngLat, z: number, projection: string): CanonicalTileID {
+    return lngLatToTile(lngLat, z, projection);
+}
+
+export function getTileBounds(x: number, y: number, z: number): LngLatBounds {
+    const northwest = getTileNorthwestLngLat(x, y, z);
+    const southeast = getTileNorthwestLngLat(x + 1, y + 1, z);
+    return new LngLatBounds([northwest.lng, southeast.lat], [southeast.lng, northwest.lat]);
+}
+
+
+

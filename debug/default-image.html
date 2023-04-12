@@ -28,6 +28,13 @@ var map = window.map = new mapboxgl.Map({
 
 map.on('load', function () {
     map.addLayer({
+        id: 'background',
+        type: 'background',
+        paint: {
+            "background-color": '#00ff00'
+        }
+    })
+    map.addLayer({
         "id": "points",
         "type": "symbol",
         "source": {
@@ -66,7 +73,7 @@ map.on('load', function () {
             }
         },
         "layout": {
-            "icon-image": ["coalesce", ["image", "foo"], ["image", "bar"], ["image", ["concat", ["get", "icon"], "-15"]], ["image", "baz"]],
+            "icon-image": 'test', //["coalesce", ["image", "foo"], ["image", "bar"], ["image", ["concat", ["get", "icon"], "-15"]], ["image", "baz"]],
             "text-field": "{title}",
             "text-font": [
                 "Open Sans Semibold",
@@ -77,8 +84,16 @@ map.on('load', function () {
                 0.6
             ],
             "text-anchor": "top"
+        },
+        paint: {
+            "icon-color": '#000'
         }
     });
+
+    map.loadImage('data:image/png;base64,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', (err, image) => {
+        console.log(image)
+        map.addImage('test', image, {sdf: true})
+    })
 });
 </script>
 </body>

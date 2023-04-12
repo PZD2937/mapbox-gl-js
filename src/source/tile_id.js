@@ -9,21 +9,19 @@ export class CanonicalTileID {
     x: number;
     y: number;
     key: number;
-    projection: ?string;
 
-    constructor(z: number, x: number, y: number, projection: ?string) {
+    constructor(z: number, x: number, y: number) {
         assert(z >= 0 && z <= 25);
         assert(x >= 0 && x < Math.pow(2, z));
         assert(y >= 0 && y < Math.pow(2, z));
         this.z = z;
         this.x = x;
         this.y = y;
-        this.projection = projection;
         this.key = calculateKey(0, z, z, x, y);
     }
 
     equals(id: CanonicalTileID): boolean {
-        return this.z === id.z && this.x === id.x && this.y === id.y && this.projection === id.projection;
+        return this.z === id.z && this.x === id.x && this.y === id.y;
     }
 
     // given a list of urls, choose a url template and return a tile URL
@@ -49,12 +47,10 @@ export class UnwrappedTileID {
     wrap: number;
     canonical: CanonicalTileID;
     key: number;
-    projection: ?string;
 
-    constructor(wrap: number, canonical: CanonicalTileID, projection: ?string) {
+    constructor(wrap: number, canonical: CanonicalTileID) {
         this.wrap = wrap;
         this.canonical = canonical;
-        this.projection = projection;
         this.key = calculateKey(wrap, canonical.z, canonical.z, canonical.x, canonical.y);
     }
 }
@@ -65,15 +61,13 @@ export class OverscaledTileID {
     canonical: CanonicalTileID;
     key: number;
     projMatrix: Float32Array;
-    projection: ?string;
 
-    constructor(overscaledZ: number, wrap: number, z: number, x: number, y: number, projection: ?string) {
+    constructor(overscaledZ: number, wrap: number, z: number, x: number, y: number) {
         assert(overscaledZ >= z);
         this.overscaledZ = overscaledZ;
         this.wrap = wrap;
-        this.canonical = new CanonicalTileID(z, +x, +y, projection);
+        this.canonical = new CanonicalTileID(z, +x, +y);
         this.key = wrap === 0 && overscaledZ === z ? this.canonical.key : calculateKey(wrap, overscaledZ, z, x, y);
-        this.projection = projection;
     }
 
     equals(id: OverscaledTileID): boolean {
@@ -84,9 +78,9 @@ export class OverscaledTileID {
         assert(targetZ <= this.overscaledZ);
         const zDifference = this.canonical.z - targetZ;
         if (targetZ > this.canonical.z) {
-            return new OverscaledTileID(targetZ, this.wrap, this.canonical.z, this.canonical.x, this.canonical.y, this.projection);
+            return new OverscaledTileID(targetZ, this.wrap, this.canonical.z, this.canonical.x, this.canonical.y);
         } else {
-            return new OverscaledTileID(targetZ, this.wrap, targetZ, this.canonical.x >> zDifference, this.canonical.y >> zDifference, this.projection);
+            return new OverscaledTileID(targetZ, this.wrap, targetZ, this.canonical.x >> zDifference, this.canonical.y >> zDifference);
         }
     }
 
@@ -121,17 +115,17 @@ export class OverscaledTileID {
     children(sourceMaxZoom: number): Array<OverscaledTileID> {
         if (this.overscaledZ >= sourceMaxZoom) {
             // return a single tile coord representing a an overscaled tile
-            return [new OverscaledTileID(this.overscaledZ + 1, this.wrap, this.canonical.z, this.canonical.x, this.canonical.y, this.projection)];
+            return [new OverscaledTileID(this.overscaledZ + 1, this.wrap, this.canonical.z, this.canonical.x, this.canonical.y)];
         }
 
         const z = this.canonical.z + 1;
         const x = this.canonical.x * 2;
         const y = this.canonical.y * 2;
         return [
-            new OverscaledTileID(z, this.wrap, z, x, y, this.projection),
-            new OverscaledTileID(z, this.wrap, z, x + 1, y, this.projection),
-            new OverscaledTileID(z, this.wrap, z, x, y + 1, this.projection),
-            new OverscaledTileID(z, this.wrap, z, x + 1, y + 1, this.projection)
+            new OverscaledTileID(z, this.wrap, z, x, y),
+            new OverscaledTileID(z, this.wrap, z, x + 1, y),
+            new OverscaledTileID(z, this.wrap, z, x, y + 1),
+            new OverscaledTileID(z, this.wrap, z, x + 1, y + 1)
         ];
     }
 
@@ -150,11 +144,11 @@ export class OverscaledTileID {
     }
 
     wrapped(): OverscaledTileID {
-        return new OverscaledTileID(this.overscaledZ, 0, this.canonical.z, this.canonical.x, this.canonical.y, this.projection);
+        return new OverscaledTileID(this.overscaledZ, 0, this.canonical.z, this.canonical.x, this.canonical.y);
     }
 
     unwrapTo(wrap: number): OverscaledTileID {
-        return new OverscaledTileID(this.overscaledZ, wrap, this.canonical.z, this.canonical.x, this.canonical.y, this.projection);
+        return new OverscaledTileID(this.overscaledZ, wrap, this.canonical.z, this.canonical.x, this.canonical.y);
     }
 
     overscaleFactor(): number {
@@ -162,7 +156,7 @@ export class OverscaledTileID {
     }
 
     toUnwrapped(): UnwrappedTileID {
-        return new UnwrappedTileID(this.wrap, this.canonical, this.projection);
+        return new UnwrappedTileID(this.wrap, this.canonical);
     }
 
     toString(): string {
