@@ -17,14 +17,15 @@
 <script src='../dist/mapbox-gl-dev.js'></script>
 <script src='../debug/access_token_generated.js'></script>
 <script>
-
+    mapboxgl.accessToken = "pk.eyJ1IjoibW91cm5lciIsImEiOiJWWnRiWG1VIn0.j6eccFHpE3Q04XPLI7JxbA"
 var map = window.map = new mapboxgl.Map({
     container: 'map',
     zoom: 12.5,
     center: [-122.4194, 37.7749],
     style: 'mapbox://styles/mapbox/streets-v11',
     hash: true,
-    projection: 'globe'
+    projection: 'globe',
+    language: 'zh_CN'
 });
 
 </script>

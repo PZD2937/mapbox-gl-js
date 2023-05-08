@@ -278,7 +278,7 @@ function sameOrigin(url) {
 
 const transparentPngUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQYV2NgAAIAAAUAAarVyFEAAAAASUVORK5CYII=';
 
-function arrayBufferToImage(data: ArrayBuffer, callback: Callback<HTMLImageElement>) {
+export function arrayBufferToImage(data: ArrayBuffer, callback: Callback<HTMLImageElement>) {
     const img: HTMLImageElement = new window.Image();
     const URL = window.URL;
     img.onload = () => {
@@ -358,10 +358,12 @@ export const getImage = function(requestParameters: RequestParameters, callback:
         if (err) {
             callback(err);
         } else if (data) {
-            if (window.createImageBitmap) {
+            if (window.createImageBitmap && !requestParameters.debug) {
                 arrayBufferToImageBitmap(data, (err, imgBitmap) => callback(err, imgBitmap, cacheControl, expires));
-            } else {
+            } else if(window.Image && !requestParameters.returnArraybuffer){
                 arrayBufferToImage(data, (err, img) => callback(err, img, cacheControl, expires));
+            }else {
+                callback(err, data, cacheControl, expires)
             }
         }
     });

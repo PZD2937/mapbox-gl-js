@@ -27,6 +27,9 @@ import type {
 import {CanonicalTileID} from "./tile_id.js";
 import type Actor from '../util/actor.js';
 import mergerTextureImage from "../util/merger_image.js";
+import offscreenCanvasSupported from "../util/offscreen_canvas_supported.js";
+import {DedupedRequest} from "./vector_tile_worker_source.js";
+import {loadRasterTile} from "./raster_tile_worker_source.js";
 
 /**
  * A source containing raster tiles.
@@ -66,7 +69,9 @@ class RasterTileSource extends Evented implements Source {
     dispatcher: Dispatcher;
     map: Map;
     tiles: Array<string>;
-    actor: Actor
+    actor: Actor;
+
+    showDebugTileLoadTime: ?boolean;
 
     _loaded: boolean;
     _options: RasterSourceSpecification | RasterDEMSourceSpecification;
@@ -86,8 +91,11 @@ class RasterTileSource extends Evented implements Source {
         this.tileSize = 512;
         this._loaded = false;
 
+        this.deduped = new DedupedRequest();
+        this.subLoading = {};
+
         this._options = extend({type: 'raster'}, options);
-        extend(this, pick(options, ['url', 'scheme', 'tileSize', 'projection', 'customTags']));
+        extend(this, pick(options, ['url', 'scheme', 'tileSize', 'projection', 'customTags', 'showDebugTileLoadTime']));
     }
 
     load(callback?: Callback<void>) {
@@ -211,6 +219,7 @@ class RasterTileSource extends Evented implements Source {
 
             if (error) {
                 tile.state = 'errored';
+                this.fire(new Event('tileloaderror', {sourceId: this.id}))
                 return callback(error);
             }
 
@@ -223,7 +232,9 @@ class RasterTileSource extends Evented implements Source {
             cacheEntryPossiblyAdded(this.dispatcher);
             tile._loadTime = Date.now() - tile._beiginTime;
             delete tile._beiginTime;
-            // console.log(tile._loadTime)
+            if (this.showDebugTileLoadTime) {
+                console.log(tile._loadTime, this.id)
+            }
             callback(null);
         }
 
@@ -248,6 +259,7 @@ class RasterTileSource extends Evented implements Source {
             source: this.id,
             type: this.type
         }, (err, data) => {
+            if (tile.state === 'unloaded') return callback(null);
             if (!err && !data) {
                 tile._wasRevise = true;
                 this.loadTile(tile, callback);
@@ -264,26 +276,33 @@ class RasterTileSource extends Evented implements Source {
                     y: item.dy
                 };
             });
-            tile.request = tile.actor.send(`loadTile`, {
-                requests,
-                offset: data.offset,
-                extent: data.extent,
-                tileID: tile.tileID.canonical,
-                source: this.id,
-                type: this.type
-            }, (error, result: { textureImage: TextureImage, textureImageList: [] }) => {
-                if (!result) return callback(error);
-                if (result.textureImageList) {
-                    mergerTextureImage(imageObject.images, imageObject.imageSize, imageObject.dx, imageObject.dy, (err, imageBitmap) => {
-                        // loadSuccess(imageBitmap);
-                        callback(error, imageBitmap);
-                    });
-                } else {
-                    callback(error, result.textureImage);
-                }
-            });
+            if (offscreenCanvasSupported()) {
+                tile.request = tile.actor.send('loadTile', {
+                    requests,
+                    offset: data.offset,
+                    tileID: tile.tileID.canonical,
+                    source: this.id,
+                    type: this.type
+                }, callback);
+            } else {
+                tile.request = loadRasterTile.call(this, {requests, offset: data.offset}, (err, result) => {
+                    const offset = data.offset;
+                    if (tile.status === 'unloaded') return callback(null);
+                    callback(err, result)
+                });
+                this.limitedStorage();
+            }
+        });
+    }
 
-        })
+    limitedStorage() {
+        const subLoading = Object.keys(this.subLoading);
+        if (subLoading.length > 200) {
+            // 中间的复用率较低
+            for (let i = 8; i < subLoading.length - 8; i++) {
+                delete this.subLoading[subLoading[i]];
+            }
+        }
     }
 
     static loadTileData(tile: Tile, data: TextureImage, painter: Painter) {
@@ -298,21 +317,35 @@ class RasterTileSource extends Evented implements Source {
 
     // $FlowFixMe[method-unbinding]
     abortTile(tile: Tile, callback: Callback<void>) {
+        tile.aborted = true;
+        tile.state = 'unloaded';
         if (tile.request) {
             tile.request.cancel();
             delete tile.request;
         }
         if (tile.actor) {
-            tile.actor.send('abortTile', {uid: tile.uid, tileID: tile.tileID.canonical, type: this.type, source: this.id});
+            tile.actor.send('abortTile', {
+                uid: tile.uid,
+                tileID: tile.tileID.canonical,
+                type: this.type,
+                source: this.id
+            });
         }
         callback();
     }
 
     // $FlowFixMe[method-unbinding]
     unloadTile(tile: Tile, callback: Callback<void>) {
+        tile.aborted = true;
+        tile.state = 'unloaded';
         if (tile.texture) this.map.painter.saveTileTexture(tile.texture);
         if (tile.actor) {
-            tile.actor.send('removeTile', {uid: tile.uid, tileID: tile.tileID.canonical, type: this.type, source: this.id});
+            tile.actor.send('removeTile', {
+                uid: tile.uid,
+                tileID: tile.tileID.canonical,
+                type: this.type,
+                source: this.id
+            });
         }
         callback();
     }

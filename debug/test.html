@@ -8,6 +8,8 @@
     <meta charset='utf-8'>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <link rel='stylesheet' href='../dist/mapbox-gl.css'/>
+    <link rel='stylesheet' href='https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.1/mapbox-gl-draw.css'
+          type='text/css'/>
     <style>
         body {
             margin: 0;
@@ -83,6 +85,8 @@
                     <option value="bing_satellite" selected>必应卫星</option>
                     <option value="amap_satellite">高德卫星</option>
                     <option value="bmap_satellite">百度卫星</option>
+                    <option value="google_satellite">谷歌卫星</option>
+                    <option value="tmap_satellite">腾讯卫星</option>
                 </select>
             </fieldset>
             <fieldset>
@@ -131,6 +135,7 @@
                     <label>showPadding <input id="showPadding" type="checkbox"></label>
                     <label>showCollisionBoxes <input id="showCollisionBoxes" type="checkbox"></label>
                     <label>showOverdraw <input id="showOverdraw" type="checkbox"></label>
+                    <label>showDebugTileLoadTime<input id="showDebugTileLoadTime" type="checkbox"></label>
                 </div>
             </fieldset>
         </div>
@@ -139,6 +144,10 @@
 
 <script src='../dist/mapbox-gl-dev.js'></script>
 <script src='../debug/access_token_generated.js'></script>
+<script src='https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.1/mapbox-gl-draw.js'></script>
+<script src='./analysis/tin.js'></script>
+<script src='./analysis/Delatin.js'></script>
+
 
 <script>
     function bingQuadKey(data, x, y, z) {
@@ -152,6 +161,24 @@
             y >>= 1;
         }
         return quadKey
+    }
+
+    function getTXDy(data, x, y, z) {
+        y = y || data.y;
+        z = z || data.z;
+        return Math.pow(2, z) - 1 - y;
+    }
+
+    function getTXX16(data, x, y, z) {
+        x = x || data.x
+        return Math.floor(x / 16)
+    }
+
+    function getTXY16(data, x, y, z) {
+        y = y || data.y;
+        z = z || data.z;
+        const dy = Math.pow(2, z) - 1 - y;
+        return Math.floor(dy / 16);
     }
 
     const map = new mapboxgl.Map({
@@ -183,8 +210,6 @@
                     maxzoom: 14,
                     minzoom: 5,
                     tiles: ['https://api.mapbox.com/raster/v1/mapbox.mapbox-terrain-dem-v1/{z}/{x}/{y}.webp?access_token=pk.eyJ1IjoiYWRzMjkzNDk3MDc3OSIsImEiOiJjbDZuZnp6angwMGkwM2pzM2tueXN1NGl0In0.0l_OvoBv3UqIuDuWmbW-sw'],
-                    // tiles: ['https://map.xinzhi.space/terrain/srtmv4/{z}/{x}/{y}.png'],
-                    // bounds: [71.25, 18, 135.5, 54]
                 },
                 'xinzhi-dem': {
                     type: 'raster-dem',
@@ -198,7 +223,7 @@
                     type: 'raster',
                     tileSize: 512,
                     tiles: ['https://webst01.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}'],
-                    projection: 'GCJ02',
+                    projection: 'GCJ02'
                 },
                 'bing_satellite': {
                     type: 'raster',
@@ -206,7 +231,7 @@
                     tiles: ['https://t.ssl.ak.tiles.virtualearth.net/tiles/a{quad}.jpeg?g=12946&n=z&prx=1'],
                     customTags: {
                         quad: bingQuadKey
-                    }
+                    },
                 },
                 'amap_satellite': {
                     type: 'raster',
@@ -230,6 +255,23 @@
                     tileSize: 512,
                     projection: 'BAIDU',
                     tiles: [0, 1, 2, 3].map(s => `https://gss${s}.bdstatic.com/5bwHcj7lABFT8t_jkk_Z1zRvfdw6buu/it/u=x={x};y={y};z={z};v=009;type=sate&fm=46`)//['https://gss{s}.bdstatic.com/5bwHcj7lABFT8t_jkk_Z1zRvfdw6buu/it/u=x={x};y={y};z={z};v=009;type=sate&fm=46', 'https://mapsv1.bdimg.com/tile/?udt=20200825&qt=tile&styles=pl&x={x}&y={y}&z={z}']
+                },
+                'google_satellite': {
+                    type: 'raster',
+                    tileSize: 512,
+                    projection: 'GCJ02',
+                    tiles: ['https://www.google.com/maps/vt?lyrs=s&gl=cn&x={x}&y={y}&z={z}&scale=2']
+                },
+                'tmap_satellite': {
+                    type: 'raster',
+                    tileSize: 512,
+                    projection: 'GCJ02',
+                    tiles: [1, 2, 3].map(s => `https://p${s}.map.gtimg.com/sateTiles/{z}/{x16}/{y16}/{x}_{dy}.jpg`),
+                    customTags: {
+                        dy: getTXDy,
+                        x16: getTXX16,
+                        y16: getTXY16
+                    }
                 }
             },
             layers: [{
@@ -253,6 +295,18 @@
                 }
             }, {
                 id: 'bmap_satellite', type: 'raster', source: 'bmap_satellite',
+                layout: {
+                    visibility: 'none'
+                }
+            }, {
+                id: 'google_satellite',
+                type: 'raster',
+                source: 'google_satellite',
+                layout: {
+                    visibility: 'none'
+                }
+            }, {
+                id: 'tmap_satellite', type: 'raster', source: 'tmap_satellite',
                 layout: {
                     visibility: 'none'
                 }
@@ -327,6 +381,115 @@
             map[e.target.id] = e.target.checked
         }
     });
+
+    const geojson = [];
+    const data = {
+        type: 'FeatureCollection',
+        features: geojson
+    }
+
+    map.on('load', () => {
+        map.addSource('geojson', {
+            type: 'geojson',
+            data: data
+        });
+        map.addLayer({
+            id: 'geojson',
+            type: 'line',
+            source: 'geojson',
+            paint: {
+                'line-color': '#ff0000'
+            }
+        });
+        map.addLayer({
+            id: 'tin-vertex',
+            type: 'circle',
+            source: 'geojson',
+            paint: {
+                'circle-radius': 5,
+                'circle-color': '#ffa654'
+            }
+        })
+        const draw = new MapboxDraw();
+
+        map.addControl(draw, 'top-right');
+        map.on('draw.selectionchange', (e) => {
+            const feature = e.features[0]
+            if (!feature) return;
+            console.log(e)
+            generateTinFromPolygon(feature.geometry.coordinates[0], result => {
+                console.log(result)
+                const {highestAltitude, minimumAltitude, triangulation} = result;
+                triangulation.forEach(t => {
+                    const c = t.slice(0, Infinity);
+                    c.push(c[0])
+                    geojson.push({
+                        "type": "Feature",
+                        "geometry": {
+                            "type": "LineString",
+                            "coordinates": c
+                        },
+                    })
+                });
+                map.getSource('geojson').setData(data);
+                const n = calculate(triangulation, (highestAltitude + minimumAltitude) / 2);
+                console.log(n)
+            });
+
+            // calculate(tin, 200)
+
+        });
+        console.log(map)
+    });
+
+    const g = [], h = {}, j = [];
+    for (let i = 0; i < 100000; i++) {
+        const c = []//new Array(1000).fill([102, 39])
+        g[i] = {id: i, coordinates: c};
+        h[i] = {
+            coordinates: c
+        };
+        j[i] = i
+    }
+
+    // setTimeout(() => {
+    //     console.time('array find')
+    //     const a = g.find(n => n.id === 69535);
+    //     console.timeEnd('array find')
+    //     console.time('array find all number')
+    //     const b = j.find(i => i === 69535);
+    //     console.timeEnd('array find all number')
+    //     console.time('array find all number includes')
+    //     const c = j.includes(69535);
+    //     console.timeEnd('array find all number includes')
+    // }, 500)
+    //
+    // setTimeout(() => {
+    //     console.time('object find');
+    //     h[69535];
+    //     // console.log(h[69535])
+    //     console.timeEnd('object find')
+    //
+    //     console.time('object get values');
+    //     Object.values(h)
+    //     // console.log(h[69535])
+    //     console.timeEnd('object get values')
+    //
+    //     console.time('object to url');
+    //     // console.log(h)
+    //     // URL.createObjectURL(new Blob(JSON.stringify(h), {type : 'application/json'}))
+    //     // Object.values(h)
+    //     // console.log(h[69535])
+    //     console.timeEnd('object to url');
+    //
+    //
+    // }, 500)
+    // const xml = new XMLHttpRequest();
+    // xml.open('GET', './test.json');
+    // xml.onload = () => {
+    //     console.log(xml.response);
+    // }
+    // xml.send()
 
 </script>
 

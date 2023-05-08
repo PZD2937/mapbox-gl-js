@@ -2,7 +2,7 @@
 import LngLat from "../lng_lat.js";
 import {ProjectedPoint} from "./projection.js";
 import {CanonicalTileID} from "../../source/tile_id.js";
-import transformLngLat from "./coordinates_transform.js";
+// import transformLngLat from "./coordinates_transform.js";
 
 // const delta = 1E-7;
 // web-Mercator 投影切片使用的地球半径为6378137
@@ -27,7 +27,7 @@ function getResolution(zoom: number, projection: string): number {
 const Common = {}
 
 const EPSG3857 = {
-    direction: {x: 1, y: -1},
+    direction: {x: 1, y: 1},
     lngLatToTile(lngLat: LngLat, z: number): CanonicalTileID {
         let sin = Math.sin(lngLat.lat * Math.PI / 180),
             z2 = Math.pow(2, z),
@@ -41,7 +41,7 @@ const EPSG3857 = {
 }
 
 const EPSG4326 = {
-    direction: {x: 1, y: -1},
+    direction: {x: 1, y: 1},
     lngLatToTile(lngLat: LngLat, z: number): CanonicalTileID {
         const delta = 1E-7;
         const resolution = 180 / (Math.pow(2, z) * 128);
@@ -54,7 +54,7 @@ const EPSG4326 = {
 
 
 const BAIDU = {
-    direction: {x: 1, y: 1},
+    direction: {x: 1, y: -1},
     EARTHRADIUS: 6370996.81,
     MCBAND: [12890594.86, 8362377.87, 5591021, 3481989.83, 1678043.12, 0],
     LLBAND: [75, 60, 45, 30, 15, 0],
@@ -154,52 +154,81 @@ const BAIDU = {
         return num;
     },
 
+    getResolution(zoom) {
+        return Math.pow(2, zoom - 18)
+    },
 
-    lngLatToTile(lngLat: LngLat, z: number): CanonicalTileID {
+    lngLatToTile(lngLat: LngLat, zoom: number): CanonicalTileID {
         const point = this.project(lngLat.lng, lngLat.lat);
-        const resolution = Math.pow(2, z - 18);
-        const s = resolution / 256;
-        const x = Math.floor(point.x * s);
-        const y = Math.floor(point.y * s);
+        const resolution = this.getResolution(zoom);
+        // const s = resolution / 256;
+        const x = Math.floor(point.x * resolution / 256);
+        const y = Math.floor(point.y * resolution / 256);
         // console.log({x, y})
-        return new CanonicalTileID(z, x, y)
+        return new CanonicalTileID(zoom, x, y)
+    },
+
+    tileToLngLat(tileID: CanonicalTileID): LngLat {
+        const resolution = this.getResolution(tileID.z);
+        const x = tileID.x / resolution;
+        const y = tileID.y / resolution;
+        return this.unproject(x, y)
+    },
+
+    lngLatToPixel(lngLat: LngLat, zoom: number): { x: number, y: number } {
+        const resolution = this.getResolution(zoom);
+        const tile = lngLatToTile(lngLat, zoom);
+        const point = this.project(lngLat.lng, lngLat.lat);
+        const x = Math.floor(point.x * resolution - tile.x * 256);
+        const y = Math.floor(point.y * resolution - tile.y * 256);
+        return {x, y}
     }
+
+}
+// self.BAIDU = BAIDU
+
+export function getSpatialReference(projection: string) {
+    projection = typeof projection === 'string' ? projection.toUpperCase() : '';
+    let spatialReference;
+    switch (projection) {
+        case 'EPSG:4326':
+            spatialReference = EPSG4326;
+            break;
+        case 'BAIDU':
+            spatialReference = BAIDU;
+            break;
+        default:
+            spatialReference = EPSG3857
+    }
+    return spatialReference
 }
 
 
 export function getTileSystem(projection) {
-    projection = projection.toUpperCase();
-    let direction, fullExtent;
-    switch (projection) {
-        case 'EPSG:4326':
-            direction = EPSG4326.direction;
-            fullExtent = EPSG4326.fullExtent;
-            break;
-        case 'BAIDU':
-            direction = BAIDU.direction;
-            fullExtent = BAIDU.fullExtent;
-            break;
-        default:
-            direction = EPSG3857.direction
-            fullExtent = EPSG3857.fullExtent;
-    }
-    return {direction, fullExtent}
+    const sr = getSpatialReference(projection);
+    return {direction: sr.direction, fullExtent: sr.fullExtent}
 }
 
 export function lngLatToTile(lngLat: LngLat, z: number, projection: string): CanonicalTileID {
-    let tile;
-    projection = typeof projection === 'string' ? projection.toUpperCase() : '';
-    switch (projection) {
-        case 'EPSG:4326':
-            tile = EPSG4326.lngLatToTile(lngLat, z)
-            break;
-        case 'BAIDU':
-            tile = BAIDU.lngLatToTile(lngLat, z)
-            break;
-        default:
-            tile = EPSG3857.lngLatToTile(lngLat, z)
+    const sr = getSpatialReference(projection);
+    return sr.lngLatToTile(lngLat, z)
+}
+
+export function lngLatToPixel(lngLat: LngLat, zoom: number, imgSize: number): { x: number, y: number } {
+    if (!imgSize) imgSize = 256;
+    const wordSize = 1 << zoom;
+    let sinLat = Math.sin(lngLat.lat * Math.PI / 180);
+
+    // Truncating to 0.9999 effectively limits latitude to 89.189. This is
+    // about a third of a tile past the edge of the world tile.
+    sinLat = Math.min(Math.max(sinLat, -0.9999), 0.9999);
+
+    const x = imgSize * ((lngLat.lng + 180) / 360) * wordSize;
+    const y = imgSize * (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * wordSize;
+    return {
+        x: Math.floor(x) % imgSize,
+        y: Math.floor(y) % imgSize
     }
-    return tile
 }
 
 // console.log(lngLatToTile({lng: 106.505334, lat: 29.618177}, 17))

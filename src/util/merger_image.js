@@ -3,6 +3,7 @@ import window from './window.js';
 import offscreenCanvasSupported from "./offscreen_canvas_supported.js";
 import {TextureImage} from "../render/texture.js";
 import type {Callback} from "../types/callback.js";
+let supportImageBitmap = typeof self.createImageBitmap === 'function'
 
 type MergerImageObject = {
     x: number,
@@ -20,12 +21,12 @@ export default function mergerTextureImage(mergers: Array<MergerImageObject>, im
         if(!data) continue;
         ctx.drawImage(data, x * imageSize + dx, y * imageSize + dy, data.width, data.height);
     }
-    if (offscreenCanvasSupported()) {
+    if (supportImageBitmap) {
         window.createImageBitmap(canvas).then(imageBitmap => {
             callback(null, imageBitmap)
         });
     } else {
-        callback(canvas);
+        callback(null, canvas);
     }
 }
 
