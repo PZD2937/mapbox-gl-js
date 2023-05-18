@@ -9,6 +9,7 @@ import minifyStyleSpec from './rollup_plugin_minify_style_spec.js';
 import {createFilter} from '@rollup/pluginutils';
 import strip from '@rollup/plugin-strip';
 import replace from '@rollup/plugin-replace';
+import alias from '@rollup/plugin-alias';
 
 // Common set of plugins/transformations shared across different rollup
 // builds (main mapboxgl bundle, style-spec package, benchmarks bundle)
@@ -45,6 +46,11 @@ export const plugins = ({minified, production, test, bench, keepClassNames}) => 
         // global keyword handling causes Webpack compatibility issues, so we disabled it:
         // https://github.com/mapbox/mapbox-gl-js/pull/6956
         ignoreGlobal: true
+    }),
+    alias({
+        entries: {
+            '@mapbox/vector-tile': './lib/index.js'
+        }
     })
 ].filter(Boolean);
 

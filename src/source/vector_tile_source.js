@@ -58,6 +58,7 @@ class VectorTileSource extends Evented implements Source {
     scheme: string;
     tileSize: number;
     promoteId: ?PromoteIdSpecification;
+    vtOptions: ?Object
 
     _options: VectorSourceSpecification;
     _collectResourceTiming: boolean;
@@ -87,7 +88,7 @@ class VectorTileSource extends Evented implements Source {
         this.isTileClipped = true;
         this._loaded = false;
 
-        extend(this, pick(options, ['url', 'scheme', 'tileSize', 'promoteId']));
+        extend(this, pick(options, ['url', 'scheme', 'tileSize', 'promoteId', 'vtOptions']));
         this._options = extend({type: 'vector'}, options);
 
         this._collectResourceTiming = options.collectResourceTiming;
@@ -215,7 +216,6 @@ class VectorTileSource extends Evented implements Source {
 
     loadTile(tile: Tile, callback: Callback<void>) {
         const url = this.map._requestManager.normalizeTileURL(tile.tileID.canonical.url(this.tiles, this.scheme));
-        const {x, y, z} = tile.tileID.canonical;
         const request = this.map._requestManager.transformRequest(url, ResourceType.Tile, this.customTags, tile.tileID.canonical);
 
         const params = {
@@ -231,10 +231,11 @@ class VectorTileSource extends Evented implements Source {
             pixelRatio: browser.devicePixelRatio,
             showCollisionBoxes: this.map.showCollisionBoxes,
             promoteId: this.promoteId,
-            isSymbolTile: tile.isSymbolTile
+            isSymbolTile: tile.isSymbolTile,
+            vtOptions: this.vtOptions
         };
         params.request.collectResourceTiming = this._collectResourceTiming;
-
+        // console.log(params)
         if (!tile.actor || tile.state === 'expired') {
             tile.actor = this._tileWorkers[url] = this._tileWorkers[url] || this.dispatcher.getActor();
 

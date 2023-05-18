@@ -79,6 +79,7 @@ class WorkerTile {
         this.isSymbolTile = params.isSymbolTile;
         this.tileTransform = tileTransform(params.tileID.canonical, params.projection);
         this.projection = params.projection;
+        this.encrypt = params.vtOptions ? params.vtOptions.encrypt : undefined;
     }
 
     parse(data: IVectorTile, layerIndex: StyleLayerIndex, availableImages: Array<string>, actor: Actor, callback: WorkerTileCallback) {
@@ -89,7 +90,7 @@ class WorkerTile {
         this.collisionBoxArray = new CollisionBoxArray();
         const sourceLayerCoder = new DictionaryCoder(Object.keys(data.layers).sort());
 
-        const featureIndex = new FeatureIndex(this.tileID, this.promoteId);
+        const featureIndex = new FeatureIndex(this.tileID, this.promoteId, this.encrypt);
         featureIndex.bucketLayerIDs = [];
 
         const buckets: {[_: string]: Bucket} = {};

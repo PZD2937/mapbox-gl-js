@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+    <title>Title</title>
+    <script src="https://unpkg.com/pbf@3.0.5/dist/pbf.js"></script>
+    <script src="./vectortile.js"></script>
+    <script src="./vectortilelayer.js"></script>
+    <script src="./vectortilefeature.js"></script>
+<body>
+<input type="file" onchange="file(event)">
+</body>
+<script>
+
+    function decrypt(int8Array) {
+        const key = [1, 2, 3, 4, 99];
+        for (let i = 0; i < key.length; i++) {
+            let l = key[i];
+            if (l < int8Array.length) {
+                int8Array[l] = ~int8Array[l]
+            }
+        }
+        return int8Array.buffer;
+    }
+
+    function file(e) {
+        // console.log(e.target.files);
+        const fileReader = new FileReader();
+        fileReader.onload = function () {
+            const data = fileReader.result;
+            const tile = new VectorTile(new Pbf(data));
+            // console.log(data);
+            // const bf = new Pbf(decrypt(new Int8Array(data)));
+            // console.log(bf)
+            // const tile = new VectorTile(bf, null, {
+            //     encrypt: '1'
+            // })
+            console.log(tile);
+        }
+        fileReader.readAsArrayBuffer(e.target.files[0])
+
+    }
+
+
+</script>
+</html>

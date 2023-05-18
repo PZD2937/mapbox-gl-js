@@ -68,7 +68,7 @@ class FeatureIndex {
     vtFeatures: {[_: string]: IVectorTileFeature[]};
     sourceLayerCoder: DictionaryCoder;
 
-    constructor(tileID: OverscaledTileID, promoteId?: ?PromoteIdSpecification) {
+    constructor(tileID: OverscaledTileID, promoteId?: ?PromoteIdSpecification, encrypt) {
         this.tileID = tileID;
         this.x = tileID.canonical.x;
         this.y = tileID.canonical.y;
@@ -76,6 +76,7 @@ class FeatureIndex {
         this.grid = new Grid(EXTENT, 16, 0);
         this.featureIndexArray = new FeatureIndexArray();
         this.promoteId = promoteId;
+        this.encrypt = encrypt;
     }
 
     insert(feature: IVectorTileFeature, geometry: Array<Array<Point>>, featureIndex: number, sourceLayerIndex: number, bucketIndex: number, layoutVertexArrayOffset: number = 0) {
@@ -107,7 +108,7 @@ class FeatureIndex {
 
     loadVTLayers(): {[_: string]: IVectorTileLayer} {
         if (!this.vtLayers) {
-            this.vtLayers = new VectorTile(new Protobuf(this.rawTileData)).layers;
+            this.vtLayers = new VectorTile(new Protobuf(this.rawTileData, undefined, {encrypt: this.encrypt})).layers;
             this.sourceLayerCoder = new DictionaryCoder(this.vtLayers ? Object.keys(this.vtLayers).sort() : ['_geojsonTileLayer']);
             this.vtFeatures = {};
             for (const layer in this.vtLayers) {

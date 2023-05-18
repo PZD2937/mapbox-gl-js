@@ -42,6 +42,18 @@ export type LoadVectorDataCallback = Callback<?LoadVectorTileResult>;
 
 export type AbortVectorData = () => void;
 export type LoadVectorData = (params: RequestedTileParameters, callback: LoadVectorDataCallback) => ?AbortVectorData;
+
+function decrypt(uint8Array: Uint8Array): ArrayBuffer {
+    const key = [1, 2, 3, 4, 99];
+    for (let i = 0; i < key.length; i++) {
+        let l = key[i];
+        if (l < uint8Array.length) {
+            uint8Array[l] = ~uint8Array[l]
+        }
+    }
+    return uint8Array.buffer;
+}
+
 export class DedupedRequest {
     entries: { [string]: Object };
     scheduler: ?Scheduler;
@@ -99,6 +111,7 @@ export class DedupedRequest {
  * @private
  */
 export function loadVectorTile(params: RequestedTileParameters, callback: LoadVectorDataCallback, skipParse?: boolean): (() => void) {
+    // console.log(params)
     const key = JSON.stringify(params.request);
 
     const makeRequest = (callback) => {
@@ -106,8 +119,11 @@ export function loadVectorTile(params: RequestedTileParameters, callback: LoadVe
             if (err) {
                 callback(err);
             } else if (data) {
+                if (params.vtOptions && params.vtOptions.encrypt === '1') {
+                    data = decrypt(new Uint8Array(data));
+                }
                 callback(null, {
-                    vectorTile: skipParse ? undefined : new VectorTile(new Protobuf(data)),
+                    vectorTile: skipParse ? undefined : new VectorTile(new Protobuf(data), undefined, params.vtOptions),
                     rawData: data,
                     cacheControl,
                     expires
@@ -143,8 +159,8 @@ class VectorTileWorkerSource extends Evented implements WorkerSource {
     layerIndex: StyleLayerIndex;
     availableImages: Array<string>;
     loadVectorData: LoadVectorData;
-    loading: {[_: number]: WorkerTile };
-    loaded: {[_: number]: WorkerTile };
+    loading: { [_: number]: WorkerTile };
+    loaded: { [_: number]: WorkerTile };
     deduped: DedupedRequest;
     isSpriteLoaded: boolean;
     scheduler: ?Scheduler;
@@ -201,7 +217,7 @@ class VectorTileWorkerSource extends Evented implements WorkerSource {
 
             // response.vectorTile will be present in the GeoJSON worker case (which inherits from this class)
             // because we stub the vector tile interface around JSON data instead of parsing it directly
-            workerTile.vectorTile = response.vectorTile || new VectorTile(new Protobuf(rawTileData));
+            workerTile.vectorTile = response.vectorTile || new VectorTile(new Protobuf(rawTileData), undefined, params.vtOptions);
             const parseTile = () => {
                 workerTile.parse(workerTile.vectorTile, this.layerIndex, this.availableImages, this.actor, (err, result) => {
                     if (err || !result) return callback(err);

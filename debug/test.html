@@ -272,7 +272,10 @@
                         x16: getTXX16,
                         y16: getTXY16
                     }
-                }
+                },
+                // 'tian_vt': {
+                //     type: 'vector'
+                // }
             },
             layers: [{
                 id: "background", type: "background", "layout": {}, paint: {
@@ -441,55 +444,6 @@
         });
         console.log(map)
     });
-
-    const g = [], h = {}, j = [];
-    for (let i = 0; i < 100000; i++) {
-        const c = []//new Array(1000).fill([102, 39])
-        g[i] = {id: i, coordinates: c};
-        h[i] = {
-            coordinates: c
-        };
-        j[i] = i
-    }
-
-    // setTimeout(() => {
-    //     console.time('array find')
-    //     const a = g.find(n => n.id === 69535);
-    //     console.timeEnd('array find')
-    //     console.time('array find all number')
-    //     const b = j.find(i => i === 69535);
-    //     console.timeEnd('array find all number')
-    //     console.time('array find all number includes')
-    //     const c = j.includes(69535);
-    //     console.timeEnd('array find all number includes')
-    // }, 500)
-    //
-    // setTimeout(() => {
-    //     console.time('object find');
-    //     h[69535];
-    //     // console.log(h[69535])
-    //     console.timeEnd('object find')
-    //
-    //     console.time('object get values');
-    //     Object.values(h)
-    //     // console.log(h[69535])
-    //     console.timeEnd('object get values')
-    //
-    //     console.time('object to url');
-    //     // console.log(h)
-    //     // URL.createObjectURL(new Blob(JSON.stringify(h), {type : 'application/json'}))
-    //     // Object.values(h)
-    //     // console.log(h[69535])
-    //     console.timeEnd('object to url');
-    //
-    //
-    // }, 500)
-    // const xml = new XMLHttpRequest();
-    // xml.open('GET', './test.json');
-    // xml.onload = () => {
-    //     console.log(xml.response);
-    // }
-    // xml.send()
 
 </script>
 

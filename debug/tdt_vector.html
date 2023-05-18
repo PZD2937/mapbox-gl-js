@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mapbox GL JS debug page</title>
+    <meta charset='utf-8'>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <link rel='stylesheet' href='../dist/mapbox-gl.css'/>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        html, body, #map {
+            height: 100%;
+        }
+        .map-overlay {
+            font: 12px/20px 'Helvetica Neue', Arial, Helvetica, sans-serif;
+            position: absolute;
+            width: 200px;
+            top: 0;
+            left: 0;
+            padding: 10px;
+        }
+    </style>
+</head>
+
+<body>
+<div id='map'></div>
+<div class="map-overlay">
+    <details open>
+        <summary>控制台</summary>
+        <div>
+
+        </div>
+    </details>
+</div>
+</body>
+<script src='../dist/mapbox-gl-dev.js'></script>
+<!--<script src="./tian_pbf/tdtStyle.json"></script>-->
+<script>
+    // console.log(tdtStyle)
+    // mapboxgl.accessToken = "pk.eyJ1IjoibW91cm5lciIsImEiOiJWWnRiWG1VIn0.j6eccFHpE3Q04XPLI7JxbA"
+    const xhr = new XMLHttpRequest();
+    xhr.responseType = 'json'
+    xhr.open('get', './tian_pbf/tdtStyle.json')
+    xhr.onload = load
+    xhr.send();
+
+    function load() {
+        const data = xhr.response;
+        console.log(data);
+    }
+
+    var map = window.map = new mapboxgl.Map({
+        container: 'map',
+        zoom: 12.5,
+        center: [106, 29.7749],
+        style: './tian_pbf/tdtStyle.json',
+        hash: true,
+        projection: 'globe',
+        language: 'zh_CN'
+    });
+
+
+</script>
+</html>
