@@ -29,7 +29,6 @@ import {
     create as createSource,
     getType as getSourceType,
     setType as setSourceType,
-    type SourceClass
 } from '../source/source.js';
 import {queryRenderedFeatures, queryRenderedSymbols, querySourceFeatures} from '../source/query_features.js';
 import SourceCache from '../source/source_cache.js';
@@ -83,7 +82,7 @@ import type {QueryResult} from '../data/feature_index.js';
 import type {QueryFeature} from '../util/vectortile_to_geojson.js';
 import type {FeatureStates} from '../source/source_state.js';
 import type {PointLike} from '@mapbox/point-geometry';
-import type {Source} from '../source/source.js';
+import type {Source, SourceClass} from '../source/source.js';
 import type {TransitionParameters} from './properties.js';
 
 const supportedDiffOperations = pick(diffOperations, [
@@ -492,7 +491,7 @@ class Style extends Evented {
         return drapedLayers[layer.type];
     }
 
-    _checkLoaded() {
+    _checkLoaded(): void {
         if (!this._loaded) {
             throw new Error('Style is not done loading');
         }
@@ -711,7 +710,7 @@ class Style extends Evented {
         return this._availableImages.slice();
     }
 
-    addSource(id: string, source: SourceSpecification, options: StyleSetterOptions = {}) {
+    addSource(id: string, source: SourceSpecification, options: StyleSetterOptions = {}): void {
         this._checkLoaded();
 
         if (this.getSource(id) !== undefined) {
@@ -736,7 +735,7 @@ class Style extends Evented {
             sourceId: id
         }));
 
-        const addSourceCache = (onlySymbols) => {
+        const addSourceCache = (onlySymbols: boolean) => {
             const sourceCacheId = (onlySymbols ? 'symbol:' : 'other:') + id;
             const sourceCache = this._sourceCaches[sourceCacheId] = new SourceCache(sourceCacheId, sourceInstance, onlySymbols);
             (onlySymbols ? this._symbolSourceCaches : this._otherSourceCaches)[id] = sourceCache;
@@ -1285,7 +1284,7 @@ class Style extends Evented {
         //      This means that that the line_layer feature is above the extrusion_layer_b feature despite
         //      it being in an earlier layer.
 
-        const isLayer3D = layerId => this._layers[layerId].type === 'fill-extrusion';
+        const isLayer3D = (layerId: string) => this._layers[layerId].type === 'fill-extrusion';
 
         const layerIndex = {};
         const features3D = [];
@@ -1507,6 +1506,7 @@ class Style extends Evented {
             for (const name of Object.keys(styleSpec.terrain)) {
                 // Fallback to use default style specification when the properties wasn't set
                 if (!options.hasOwnProperty(name) && !!styleSpec.terrain[name].default) {
+                    // $FlowFixMe[prop-missing]
                     options[name] = styleSpec.terrain[name].default;
                 }
             }

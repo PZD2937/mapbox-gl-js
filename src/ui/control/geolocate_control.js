@@ -163,7 +163,7 @@ class GeolocateControl extends Evented {
     }
 
     _checkGeolocationSupport(callback: boolean => void) {
-        const updateSupport = (supported = !!this.options.geolocation) => {
+        const updateSupport = (supported: boolean = !!this.options.geolocation) => {
             this._supportsGeolocation = supported;
             callback(supported);
         };
@@ -736,7 +736,6 @@ export default GeolocateControl;
  * geolocate.on('geolocate', () => {
  *     console.log('A geolocate event has occurred.');
  * });
- *
  */
 
 /**
@@ -761,7 +760,6 @@ export default GeolocateControl;
  * geolocate.on('error', () => {
  *     console.log('An error event has occurred.');
  * });
- *
  */
 
 /**
@@ -786,7 +784,6 @@ export default GeolocateControl;
  * geolocate.on('outofmaxbounds', () => {
  *     console.log('An outofmaxbounds event has occurred.');
  * });
- *
  */
 
 /**
@@ -810,7 +807,6 @@ export default GeolocateControl;
  * geolocate.on('trackuserlocationstart', () => {
  *     console.log('A trackuserlocationstart event has occurred.');
  * });
- *
  */
 
 /**
@@ -834,5 +830,4 @@ export default GeolocateControl;
  * geolocate.on('trackuserlocationend', () => {
  *     console.log('A trackuserlocationend event has occurred.');
  * });
- *
  */

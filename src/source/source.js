@@ -62,6 +62,7 @@ export interface Source {
 
     fire(event: Event): mixed;
     on(type: MapEvent, listener: (Object) => any): Evented;
+    off(type: MapEvent, listener: (Object) => any): Evented;
     setEventedParent(parent: ?Evented, data?: Object | () => Object): Evented;
 
     +onAdd?: (map: Map) => void;
@@ -108,7 +109,7 @@ import custom from '../source/custom_source.js';
 
 import type {SourceSpecification} from '../style-spec/types.js';
 
-const sourceTypes = {
+const sourceTypes: {[string]: Class<Source>} = {
     vector,
     raster,
     'raster-dem': rasterDem,
@@ -130,6 +131,7 @@ const sourceTypes = {
  * @returns {Source}
  */
 export const create = function(id: string, specification: SourceSpecification, dispatcher: Dispatcher, eventedParent: Evented): Source {
+    // $FlowFixMe[prop-missing]
     const source = new sourceTypes[specification.type](id, (specification: any), dispatcher, eventedParent);
 
     if (source.id !== id) {

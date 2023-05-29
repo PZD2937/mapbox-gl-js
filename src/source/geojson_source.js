@@ -246,7 +246,6 @@ class GeoJSONSource extends Evented implements Source {
      *         }
      *     });
      * });
-     *
      */
     getClusterChildren(clusterId: number, callback: Callback<Array<GeoJSONFeature>>): this {
         this.actor.send('geojson.getClusterChildren', {clusterId, source: this.id}, callback);
