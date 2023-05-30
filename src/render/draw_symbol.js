@@ -276,7 +276,7 @@ function drawLayerSymbols(painter: Painter, sourceCache: SourceCache, layer: Sym
 
     const rotateWithMap = rotationAlignment === 'map';
     const pitchWithMap = pitchAlignment === 'map';
-    const alongLine = rotateWithMap && layer.layout.get('symbol-placement') !== 'point';
+    const alongLine = rotateWithMap && layer.layout.get('symbol-placement').includes('line');
 
     // Line label rotation happens in `updateLineLabels`
     // Pitched point labels are automatically rotated by the labelPlaneMatrix projection

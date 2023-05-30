@@ -22,7 +22,7 @@ import {
 } from '../../style-spec/expression/types.js';
 
 export type LayoutProps = {|
-    "symbol-placement": DataConstantProperty<"point" | "line" | "line-center">,
+    "symbol-placement": DataConstantProperty<"point" | "line" | "line-center" | "vertex" | "first-vertex" | "last-vertex" | "first-last-vertex" | "middle-vertex">,
     "symbol-spacing": DataConstantProperty<number>,
     "symbol-avoid-edges": DataConstantProperty<boolean>,
     "symbol-sort-key": DataDrivenProperty<number>,

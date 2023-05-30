@@ -185,7 +185,7 @@ export function performSymbolLayout(bucket: SymbolBucket,
     sizes.layoutIconSize = unevaluatedLayoutValues['icon-size'].possiblyEvaluate(new EvaluationParameters(tileZoom + 1), canonical);
     sizes.textMaxSize = unevaluatedLayoutValues['text-size'].possiblyEvaluate(new EvaluationParameters(18), canonical);
 
-    const textAlongLine = layout.get('text-rotation-alignment') === 'map' && layout.get('symbol-placement') !== 'point';
+    const textAlongLine = layout.get('text-rotation-alignment') === 'map' && layout.get('symbol-placement').includes('line');  //!== 'point';
     const textSize = layout.get('text-size');
 
     for (const feature of bucket.features) {
@@ -391,8 +391,8 @@ function addFeature(bucket: SymbolBucket,
         textPadding = layout.get('text-padding') * bucket.tilePixelRatio,
         iconPadding = layout.get('icon-padding') * bucket.tilePixelRatio,
         textMaxAngle = degToRad(layout.get('text-max-angle')),
-        textAlongLine = layout.get('text-rotation-alignment') === 'map' && layout.get('symbol-placement') !== 'point',
-        iconAlongLine = layout.get('icon-rotation-alignment') === 'map' && layout.get('symbol-placement') !== 'point',
+        textAlongLine = layout.get('text-rotation-alignment') === 'map' && layout.get('symbol-placement').includes('line'),
+        iconAlongLine = layout.get('icon-rotation-alignment') === 'map' && layout.get('symbol-placement').includes('line'),
         symbolPlacement = layout.get('symbol-placement'),
         textRepeatDistance = symbolMinDistance / 2;
 
@@ -435,6 +435,36 @@ function addFeature(bucket: SymbolBucket,
             feature, sizes, isSDFIcon, availableImages, canonical);
     };
 
+    const addSymbolAtAnchorFromLine = (line: Point[]) => {
+        const l = line.length;
+        if (symbolPlacement === 'vertex') {
+            for (let i = 0; i < l; i++) {
+                addSymbolAtAnchor(line, new Anchor(line[i].x, line[i].y, 0, 0, undefined), canonical);
+            }
+        } else if (symbolPlacement === 'first-vertex') {
+            addSymbolAtAnchor(line, new Anchor(line[0].x, line[0].y, 0, 0, undefined), canonical);
+        } else if (symbolPlacement === 'last-vertex' && l > 1) {
+            addSymbolAtAnchor(line, new Anchor(line[l - 1].x, line[l - 1].y, 0, 0, undefined), canonical);
+        } else if (symbolPlacement === 'first-last-vertex') {
+            addSymbolAtAnchor(line, new Anchor(line[0].x, line[0].y, 0, 0, undefined), canonical);
+            l > 1 && addSymbolAtAnchor(line, new Anchor(line[l - 1].x, line[l - 1].y, 0, 0, undefined), canonical);
+        } else if (symbolPlacement === 'except-first-vertex' && l > 1) {
+            for (let i = 1; i < l; i++) {
+                addSymbolAtAnchor(line, new Anchor(line[i].x, line[i].y, 0, 0, undefined), canonical);
+            }
+        } else if (symbolPlacement === 'except-last-vertex' && l > 1) {
+            for (let i = 0; i < l - 1; i++) {
+                addSymbolAtAnchor(line, new Anchor(line[i].x, line[i].y, 0, 0, undefined), canonical);
+            }
+        } else if (symbolPlacement === 'middle-vertex' && l > 2) {
+            for (let i = 1; i < l - 1; i++) {
+                addSymbolAtAnchor(line, new Anchor(line[i].x, line[i].y, 0, 0, undefined), canonical);
+            }
+        } else {
+            addSymbolAtAnchor(line, new Anchor(line[0].x, line[0].y, 0, 0, undefined), canonical);
+        }
+    }
+
     if (symbolPlacement === 'line') {
         for (const line of clipLine(feature.geometry, 0, 0, EXTENT, EXTENT)) {
             const anchors = getAnchors(
@@ -475,13 +505,17 @@ function addFeature(bucket: SymbolBucket,
     } else if (feature.type === 'Polygon') {
         for (const polygon of classifyRings(feature.geometry, 0)) {
             // 16 here represents 2 pixels
-            const poi = findPoleOfInaccessibility(polygon, 16);
-            addSymbolAtAnchor(polygon[0], new Anchor(poi.x, poi.y, 0, 0, undefined), canonical);
+            if (symbolPlacement === 'point') {
+                const poi = findPoleOfInaccessibility(polygon, 16);
+                addSymbolAtAnchor(polygon[0], new Anchor(poi.x, poi.y, 0, 0, undefined), canonical);
+            } else {
+                addSymbolAtAnchorFromLine(polygon[0])
+            }
         }
     } else if (feature.type === 'LineString') {
         // https://github.com/mapbox/mapbox-gl-js/issues/3808
         for (const line of feature.geometry) {
-            addSymbolAtAnchor(line, new Anchor(line[0].x, line[0].y, 0, 0, undefined), canonical);
+            addSymbolAtAnchorFromLine(line);
         }
     } else if (feature.type === 'Point') {
         for (const points of feature.geometry) {

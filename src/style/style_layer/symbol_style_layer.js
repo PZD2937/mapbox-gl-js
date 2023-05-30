@@ -54,9 +54,8 @@ class SymbolStyleLayer extends StyleLayer {
 
     recalculate(parameters: EvaluationParameters, availableImages: Array<string>) {
         super.recalculate(parameters, availableImages);
-
         if (this.layout.get('icon-rotation-alignment') === 'auto') {
-            if (this.layout.get('symbol-placement') !== 'point') {
+            if (this.layout.get('symbol-placement').includes('line')) {
                 this.layout._values['icon-rotation-alignment'] = 'map';
             } else {
                 this.layout._values['icon-rotation-alignment'] = 'viewport';
@@ -64,7 +63,7 @@ class SymbolStyleLayer extends StyleLayer {
         }
 
         if (this.layout.get('text-rotation-alignment') === 'auto') {
-            if (this.layout.get('symbol-placement') !== 'point') {
+            if (this.layout.get('symbol-placement').includes('line')) {
                 this.layout._values['text-rotation-alignment'] = 'map';
             } else {
                 this.layout._values['text-rotation-alignment'] = 'viewport';
@@ -138,14 +137,14 @@ class SymbolStyleLayer extends StyleLayer {
             } else {
                 // $FlowFixMe[method-unbinding]
                 expression = (new ZoomDependentExpression('composite',
-                                                          styleExpression,
-                                                          overriden.value.zoomStops,
-                                                          overriden.value._interpolationType): CompositeExpression);
+                    styleExpression,
+                    overriden.value.zoomStops,
+                    overriden.value._interpolationType): CompositeExpression);
             }
             // $FlowFixMe[prop-missing]
             this.paint._values[overridable] = new PossiblyEvaluatedPropertyValue(overriden.property,
-                                                                                 expression,
-                                                                                 overriden.parameters);
+                expression,
+                overriden.parameters);
         }
     }
 

@@ -1080,6 +1080,27 @@
         },
         "line-center": {
           "doc": "The label is placed at the center of the line of the geometry. Can only be used on `LineString` and `Polygon` geometries. Note that a single feature in a vector tile may contain multiple line geometries."
+        },
+        "vertex": {
+          "doc": "The label is placed at the vertex of the line of the geometry. Can only be used on `LineString` and `Polygon` geometries."
+        },
+        "first-vertex": {
+          "doc": "The label is placed at the first vertex of the line of the geometry. Can only be used on `LineString` and `Polygon` geometries."
+        },
+        "except-first-vertex": {
+          "doc": "The label is placed at the except first vertex of the line of the geometry. Can only be used on `LineString` and `Polygon` geometries."
+        },
+        "last-vertex": {
+          "doc": "The label is placed at the last vertex of the line of the geometry. Can only be used on `LineString` and `Polygon` geometries."
+        },
+        "except-last-vertex": {
+          "doc": "The label is placed at the except last vertex of the line of the geometry. Can only be used on `LineString` and `Polygon` geometries."
+        },
+        "first-last-vertex": {
+          "doc": "The label is placed at the first and last vertex of the line of the geometry. Can only be used on `LineString` and `Polygon` geometries."
+        },
+        "middle-vertex": {
+          "doc": "The label is placed at the except first and last vertex of the line of the geometry. Can only be used on `LineString` and `Polygon` geometries."
         }
       },
       "default": "point",

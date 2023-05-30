@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mapbox GL JS debug page</title>
+    <meta charset='utf-8'>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <link rel='stylesheet' href='../dist/mapbox-gl.css'/>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        html, body, #map {
+            height: 100%;
+        }
+    </style>
+</head>
+
+<body>
+<div id='map'></div>
+
+<script src='../dist/mapbox-gl-dev.js'></script>
+<script src='../debug/access_token_generated.js'></script>
+<script>
+    mapboxgl.accessToken = "pk.eyJ1IjoibW91cm5lciIsImEiOiJWWnRiWG1VIn0.j6eccFHpE3Q04XPLI7JxbA"
+    var map = window.map = new mapboxgl.Map({
+        container: 'map',
+        zoom: 12.5,
+        center: [106, 39],
+        style: 'mapbox://styles/mapbox/streets-v11',
+        // style: {
+        //     glyphs: "mapbox://fonts/mapbox/{fontstack}/{range}.pbf",
+        //     sprite: "mapbox://sprites/mapbox/streets-v11",
+        //     version: 8,
+        //     sources: {
+        //         line: {
+        //             type: "geojson",
+        //             data: {
+        //                 type: 'Feature',
+        //                 id: 123,
+        //                 geometry: {
+        //                     type: 'LineString',
+        //                     coordinates: [[106, 39], [106.00012, 39.0015], [106.0014, 39.0014], [106.001589, 39.0014789], [106.001699, 39.0015789]]
+        //                 }
+        //             }
+        //         }
+        //     },
+        //     layers: []
+        // },
+        hash: true,
+        projection: 'globe',
+        language: 'zh_CN'
+    });
+    map.on('load', () => {
+        map.addSource('line', {
+            type: "geojson",
+            data: {
+                type: 'Feature',
+                id: 123,
+                geometry: {
+                    type: 'LineString',
+                    coordinates: [[106, 39], [106.00012, 39.0015], [106.0014, 39.0014], [106.001589, 39.0014789], [106.001699, 39.0015789]]
+                }
+            }
+        })
+
+        map.addLayer({
+            id: 'line',
+            source: 'line',
+            type: 'line',
+            layout: {},
+            paint: {
+                'line-color': '#ff0000',
+                'line-width': 5,
+            }
+        })
+        //
+        // map.addLayer({
+        //     id: 'symbol-placement-line',
+        //     source: 'line',
+        //     type: 'symbol',
+        //     layout: {
+        //         'symbol-placement': 'point',
+        //         'icon-image': 'dot-10',
+        //         'icon-size': 5,
+        //         'text-field': '测试'
+        //     }
+        // })
+
+        map.addLayer({
+            id: 'symbol-placement-line-vertex',
+            source: 'line',
+            type: 'symbol',
+            layout: {
+                'symbol-placement': 'except-first-vertex',
+                'icon-image': 'dot-10',
+                'icon-size': 5,
+                'text-field': 'vertex',
+                'icon-allow-overlap': true,
+                'text-allow-overlap': true,
+                // 'icon-pitch-alignment': 'viewport',
+                // 'icon-rotation-alignment': 'viewport',
+                // 'text-pitch-alignment': 'viewport',
+                // 'text-rotation-alignment': 'viewport'
+            }
+        })
+
+
+        map.addLayer({
+            id: 'symbol-placement-line-first-vertex',
+            source: 'line',
+            type: 'symbol',
+            layout: {
+                'symbol-placement': 'first-vertex',
+                'icon-image': 'airport-11',
+                // 'icon-size': 5,
+                'text-field': 'first',
+            }
+        })
+    })
+
+</script>
+</body>
+</html>

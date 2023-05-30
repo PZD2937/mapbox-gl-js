@@ -256,7 +256,7 @@ export type SymbolLayerSpecification = {|
     "filter"?: FilterSpecification,
     "zIndex"?: number,
     "layout"?: {|
-        "symbol-placement"?: PropertyValueSpecification<"point" | "line" | "line-center">,
+        "symbol-placement"?: PropertyValueSpecification<"point" | "line" | "line-center" | "vertex" | "first-vertex" | "except-first-vertex" | "last-vertex" | "except-last-vertex" | "first-last-vertex" | "middle-vertex">,
         "symbol-spacing"?: PropertyValueSpecification<number>,
         "symbol-avoid-edges"?: PropertyValueSpecification<boolean>,
         "symbol-sort-key"?: DataDrivenPropertyValueSpecification<number>,
