@@ -219,7 +219,6 @@ class RasterTileSource extends Evented implements Source {
 
             if (error) {
                 tile.state = 'errored';
-                this.fire(new Event('tileloaderror', {sourceId: this.id}))
                 return callback(error);
             }
 
@@ -279,7 +278,8 @@ class RasterTileSource extends Evented implements Source {
             if (offscreenCanvasSupported()) {
                 tile.request = tile.actor.send('loadTile', {
                     requests,
-                    offset: data.offset,
+                    ltPixel: data.ltPixel,
+                    rbPixel: data.rbPixel,
                     tileID: tile.tileID.canonical,
                     source: this.id,
                     type: this.type

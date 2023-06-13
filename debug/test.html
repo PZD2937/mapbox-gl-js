@@ -242,7 +242,7 @@
                 'tian_road': {
                     type: 'raster',
                     tileSize: 512,
-                    tiles: ['https://t0.tianditu.gov.cn/cia_w/wmts?service=WMTS&version=1.0.0&request=GetTile&tilematrix={z}&layer=cia&style=default&tilerow={y}&tilecol={x}&tilematrixset=w&format=tiles&tk=e67b6383a8f8d5826792cdb19f302c71'],
+                    tiles: ['https://t0.tianditu.gov.cn/cia_w/wmts?service=WMTS&version=1.0.0&request=GetTile&tilematrix={z}&layer=cia&style=default&tilerow={y}&tilecol={x}&tilematrixset=w&format=tiles&tk=e67b6383a8f8d5826792cdb19f302c71_'],
                 },
                 'amap_road': {
                     type: 'raster',
@@ -328,7 +328,7 @@
         projection: 'mercator',
         zoom: 17,
         center: [106.494548, 29.580586],
-        pitch: 75
+        pitch: 0
     });
 
     const layerInput = document.getElementById('layer');
@@ -442,6 +442,10 @@
             // calculate(tin, 200)
 
         });
+        map.getSource('tian_road').on('error', (e) => {
+            // console.log(e)
+            // e.target.setTiles(['https://t0.tianditu.gov.cn/cia_w/wmts?service=WMTS&version=1.0.0&request=GetTile&tilematrix={z}&layer=cia&style=default&tilerow={y}&tilecol={x}&tilematrixset=w&format=tiles&tk=e67b6383a8f8d5826792cdb19f302c71'])
+        })
         console.log(map)
     });
 

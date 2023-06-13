@@ -154,17 +154,21 @@ const BAIDU = {
         return num;
     },
 
-    getResolution(zoom) {
-        return Math.pow(2, zoom - 18)
+    // 图层分辨率  m/pixel
+    getResolution(zoom): number {
+        return Math.pow(2, 18 - zoom)
+    },
+
+    // 像素密度 pixel/m
+    getPixelDensity(zoom, lat): number{
+        return Math.pow(2, zoom - 18) // * Math.cos(lat)
     },
 
     lngLatToTile(lngLat: LngLat, zoom: number): CanonicalTileID {
         const point = this.project(lngLat.lng, lngLat.lat);
-        const resolution = this.getResolution(zoom);
-        // const s = resolution / 256;
+        const resolution = this.getPixelDensity(zoom, lngLat.lat);
         const x = Math.floor(point.x * resolution / 256);
         const y = Math.floor(point.y * resolution / 256);
-        // console.log({x, y})
         return new CanonicalTileID(zoom, x, y)
     },
 
@@ -176,15 +180,15 @@ const BAIDU = {
     },
 
     lngLatToPixel(lngLat: LngLat, zoom: number): { x: number, y: number } {
-        const resolution = this.getResolution(zoom);
-        const tile = lngLatToTile(lngLat, zoom);
+        const s = this.getPixelDensity(zoom, lngLat.lat);
         const point = this.project(lngLat.lng, lngLat.lat);
-        const x = Math.floor(point.x * resolution - tile.x * 256);
-        const y = Math.floor(point.y * resolution - tile.y * 256);
+        const x = Math.ceil((point.x * s) % 256);
+        const y = Math.floor(256 - (point.y * s) % 256);
         return {x, y}
     }
 
 }
+
 // self.BAIDU = BAIDU
 
 export function getSpatialReference(projection: string) {
@@ -214,8 +218,12 @@ export function lngLatToTile(lngLat: LngLat, z: number, projection: string): Can
     return sr.lngLatToTile(lngLat, z)
 }
 
-export function lngLatToPixel(lngLat: LngLat, zoom: number, imgSize: number): { x: number, y: number } {
-    if (!imgSize) imgSize = 256;
+export function lngLatToPixel(lngLat: LngLat, zoom: number, projection: string): { x: number, y: number } {
+    const spatialReference = getSpatialReference(projection);
+    if (spatialReference && spatialReference.lngLatToPixel) {
+        let {x, y} = spatialReference.lngLatToPixel(lngLat, zoom);
+        return {x, y}
+    }
     const wordSize = 1 << zoom;
     let sinLat = Math.sin(lngLat.lat * Math.PI / 180);
 
@@ -223,13 +231,16 @@ export function lngLatToPixel(lngLat: LngLat, zoom: number, imgSize: number): { 
     // about a third of a tile past the edge of the world tile.
     sinLat = Math.min(Math.max(sinLat, -0.9999), 0.9999);
 
-    const x = imgSize * ((lngLat.lng + 180) / 360) * wordSize;
-    const y = imgSize * (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * wordSize;
+    const x = 256 * ((lngLat.lng + 180) / 360) * wordSize;
+    const y = 256 * (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * wordSize;
     return {
-        x: Math.floor(x) % imgSize,
-        y: Math.floor(y) % imgSize
+        x: Math.floor(x) % 256,
+        y: Math.floor(y) % 256
     }
 }
 
+// self.lngLatToTile = lngLatToTile
+// console.log(lngLatToTile({lng: 106.502626, lat: 53.33}, 18, 'BAIDU'));
+// console.log(lngLatToTile({lng: 135.05, lat: 3.51}, 18, 'BAIDU'));
 // console.log(lngLatToTile({lng: 106.505334, lat: 29.618177}, 17))
 // console.log(lngLatToTile(transformLngLat({lng: 106.505334, lat: 29.618177}, 'WGS84', 'BAIDU'), 17, 'BAIDU'))

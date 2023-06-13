@@ -394,29 +394,29 @@ class TelemetryEvent {
     */
     postEvent(timestamp: number, additionalPayload: {[_: string]: any}, callback: EventCallback, customAccessToken?: ?string) {
         if (!config.EVENTS_URL) return;
-        const eventsUrlObject: UrlObject = parseUrl(config.EVENTS_URL);
-        eventsUrlObject.params.push(`access_token=${customAccessToken || config.ACCESS_TOKEN || ''}`);
-
-        const payload: Object = {
-            event: this.type,
-            created: new Date(timestamp).toISOString()
-        };
-
-        const finalPayload = additionalPayload ? extend(payload, additionalPayload) : payload;
-        const request: RequestParameters = {
-            url: formatUrl(eventsUrlObject),
-            headers: {
-                'Content-Type': 'text/plain' //Skip the pre-flight OPTIONS request
-            },
-            body: JSON.stringify([finalPayload])
-        };
-
-        this.pendingRequest = postData(request, (error) => {
-            this.pendingRequest = null;
-            callback(error);
-            this.saveEventData();
-            this.processRequests(customAccessToken);
-        });
+        // const eventsUrlObject: UrlObject = parseUrl(config.EVENTS_URL);
+        // eventsUrlObject.params.push(`access_token=${customAccessToken || config.ACCESS_TOKEN || ''}`);
+        //
+        // const payload: Object = {
+        //     event: this.type,
+        //     created: new Date(timestamp).toISOString()
+        // };
+        //
+        // const finalPayload = additionalPayload ? extend(payload, additionalPayload) : payload;
+        // const request: RequestParameters = {
+        //     url: formatUrl(eventsUrlObject),
+        //     headers: {
+        //         'Content-Type': 'text/plain' //Skip the pre-flight OPTIONS request
+        //     },
+        //     body: JSON.stringify([finalPayload])
+        // };
+        //
+        // this.pendingRequest = postData(request, (error) => {
+        //     this.pendingRequest = null;
+        //     callback(error);
+        //     this.saveEventData();
+        //     this.processRequests(customAccessToken);
+        // });
     }
 
     queueRequest(event: any, customAccessToken?: ?string) {

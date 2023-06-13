@@ -113,3 +113,5 @@ export default function transformLngLat(lngLat: LngLat, current: string, target:
     }
     return transform(lngLat)
 }
+
+// self.transformLngLat = transformLngLat;

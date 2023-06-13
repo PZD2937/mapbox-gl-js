@@ -96,11 +96,6 @@ function drawRaster(painter: Painter, sourceCache: SourceCache, layer: RasterSty
                 painter.quadTriangleIndexBuffer, source.boundsSegments);
         } else {
             const {tileBoundsBuffer, tileBoundsIndexBuffer, tileBoundsSegments} = painter.getTileBoundsBuffers(tile);
-            // if(source.projection){
-            //     console.log(uniformValues, tileBoundsBuffer, tileBoundsIndexBuffer, tileBoundsSegments, source.projection)
-            //     console.log(depthMode, stencilMode, colorMode)
-            // }
-
             program.draw(context, gl.TRIANGLES, depthMode, stencilMode, colorMode, CullFaceMode.disabled,
                 uniformValues, layer.id, tileBoundsBuffer,
                 tileBoundsIndexBuffer, tileBoundsSegments);

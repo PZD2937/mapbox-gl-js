@@ -75,18 +75,6 @@
                 'line-width': 5,
             }
         })
-        //
-        // map.addLayer({
-        //     id: 'symbol-placement-line',
-        //     source: 'line',
-        //     type: 'symbol',
-        //     layout: {
-        //         'symbol-placement': 'point',
-        //         'icon-image': 'dot-10',
-        //         'icon-size': 5,
-        //         'text-field': '测试'
-        //     }
-        // })
 
         map.addLayer({
             id: 'symbol-placement-line-vertex',
@@ -98,11 +86,7 @@
                 'icon-size': 5,
                 'text-field': 'vertex',
                 'icon-allow-overlap': true,
-                'text-allow-overlap': true,
-                // 'icon-pitch-alignment': 'viewport',
-                // 'icon-rotation-alignment': 'viewport',
-                // 'text-pitch-alignment': 'viewport',
-                // 'text-rotation-alignment': 'viewport'
+                'text-allow-overlap': true
             }
         })
 
@@ -116,6 +100,16 @@
                 'icon-image': 'airport-11',
                 // 'icon-size': 5,
                 'text-field': 'first',
+            }
+        })
+
+
+        map.on('click', e => {
+            const buffer = 10;
+            const {x, y} = e.point;
+            const features = map.queryRenderedFeatures([[x - buffer, y - buffer], [x + buffer, y + buffer]]);
+            if (features[0]) {
+                console.log(features[0]);
             }
         })
     })

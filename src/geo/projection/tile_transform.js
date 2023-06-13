@@ -147,6 +147,6 @@ export function getTileBounds(x: number, y: number, z: number): LngLatBounds {
     const southeast = getTileNorthwestLngLat(x + 1, y + 1, z);
     return new LngLatBounds([northwest.lng, southeast.lat], [southeast.lng, northwest.lat]);
 }
-// self.getTileBounds = getTileBounds
+self.getTileBounds = getTileBounds
 
 

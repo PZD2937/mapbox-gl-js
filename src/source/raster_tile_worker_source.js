@@ -56,7 +56,8 @@ function canvasToImage(canvas: HTMLCanvasElement | OffscreenCanvas, callback: Ca
 
 
 export function loadRasterTile(params: WorkerTileParameters, callback: Callback): Cancelable {
-    const {requests, offset} = params;
+    const {requests, ltPixel, rbPixel} = params;
+    // console.log(ltPixel, rbPixel)
     const makeRequest = (requestParam: RequestParameters, cb: Callback) => {
         requestParam.returnArraybuffer = true;
         const request = getImage(requestParam, cb);
@@ -75,8 +76,8 @@ export function loadRasterTile(params: WorkerTileParameters, callback: Callback)
             canvas.height = imageSize;
             ctx = canvas.getContext('2d', {willReadFrequently: true});
             const scale = imageSize / 256;
-            dx = -offset[0] * scale;
-            dy = -offset[1] * scale;
+            dx = -ltPixel.x * scale;
+            dy = -ltPixel.y * scale;
             tileSize = imageSize;
         }
     }
@@ -146,25 +147,29 @@ export default class RasterTileWorkerSource {
         const bound = getTileBounds(tile.x, tile.y, tile.z);
         const trNorthwestCoords = transformLngLat(bound.getNorthWest(), 'WGS84', projection);
         const {direction} = getTileSystem(projection);
-        const trPixel = lngLatToPixel(trNorthwestCoords, tile.z);
-        const offset = [trPixel.x, trPixel.y * direction.y];
-        if (offset[0] && offset[1]) {
+        // 左上角像素坐标
+        const ltPixel = lngLatToPixel(trNorthwestCoords, tile.z, projection);
+        if (ltPixel.x && ltPixel.y) {
             const trSoutheastCoords = transformLngLat(bound.getSouthEast(), 'WGS84', projection);
-            // console.log(trNorthwestCoords, trSoutheastCoords, tile)
+            const rbPoint = lngLatToPixel(trSoutheastCoords, tile.z, projection);
             const northwestTile = lngLatToTileFromZ(trNorthwestCoords, tile.z, projection);
             const southeastTile = lngLatToTileFromZ(trSoutheastCoords, tile.z, projection);
             const xMin = Math.min(northwestTile.x, southeastTile.x);
             const xMax = Math.max(northwestTile.x, southeastTile.x);
             const yMin = Math.min(northwestTile.y, southeastTile.y);
             const yMax = Math.max(northwestTile.y, southeastTile.y);
+            const xRange = xMax - xMin, yRange = yMax - yMin;
             for (let x = xMin; x <= xMax; x++) {
                 for (let y = yMin; y <= yMax; y++) {
-                    coverTiles.push({x, y, z: tile.z, dx: (x - xMin), dy: (y - yMin) * direction.y});
+                    const dx = (x - xMin) * direction.x + (direction.x < 0 ? xRange : 0);
+                    const dy = (y - yMin) * direction.y + (direction.y < 0 ? yRange : 0);
+                    coverTiles.push({x, y, z: tile.z, dx, dy});
                 }
             }
             callback(null, {
                 coverTiles,
-                offset
+                ltPixel,
+                rbPixel: {x: rbPoint.x + 256 * xRange, y: rbPoint.y + 256 * yRange}
             })
         } else {
             callback(null, null)
@@ -186,8 +191,8 @@ export default class RasterTileWorkerSource {
     limitedStorage() {
         const subLoading = Object.keys(this.subLoading);
         if (subLoading.length > 200) {
-            // 中间的复用率较低
-            for (let i = 8; i < subLoading.length - 8; i++) {
+            // 删除复用率较低的
+            for (let i = 0; i < subLoading.length - 50; i++) {
                 delete this.subLoading[subLoading[i]];
             }
         }
