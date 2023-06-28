@@ -238,7 +238,7 @@ class RasterTileSource extends Evented implements Source {
         }
 
         tile._beiginTime = Date.now();
-        if (tile.tileZoom > 9 && this.needRevise() && !tile._wasRevise) {
+        if (this.needRevise()) {
             this.loadOtherProjectionTile(tile, imageLoaded);
         } else {
             const url = this.map._requestManager.normalizeTileURL(tile.tileID.canonical.url(this.tiles, this.scheme), use2x, this.tileSize);
@@ -259,11 +259,7 @@ class RasterTileSource extends Evented implements Source {
             type: this.type
         }, (err, data) => {
             if (tile.state === 'unloaded') return callback(null);
-            if (!err && !data) {
-                tile._wasRevise = true;
-                this.loadTile(tile, callback);
-                return;
-            }
+            if (!data) return callback(err);
             const coverTiles = data.coverTiles;
             const requests = coverTiles.map(item => {
                 const ti = new CanonicalTileID(item.z, item.x, item.y);

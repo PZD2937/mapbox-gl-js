@@ -36,6 +36,15 @@ type LoadingTile = {
     request: Cancelable
 }
 
+type CreateImageBitmapParameters = {
+    image: ImageBitmapSource,
+    sx: number,
+    sy: number,
+    sw: number,
+    sh: number,
+    options?: ImageBitmapOptions
+}
+
 function dataToTextureImage(data, cb: Callback) {
     if (data instanceof window.ArrayBuffer) {
         arrayBufferToImage(data, cb)
@@ -44,8 +53,9 @@ function dataToTextureImage(data, cb: Callback) {
     }
 }
 
-function canvasToImage(canvas: HTMLCanvasElement | OffscreenCanvas, callback: Callback): ImageBitmap | HTMLCanvasElement {
+function canvasToImage(canvas: HTMLCanvasElement | OffscreenCanvas, callback: Callback<ImageBitmap | HTMLCanvasElement>) {
     if (supportImageBitmap) {
+        // console.log(canvas.toDataURL())
         window.createImageBitmap(canvas).then(imageBitmap => {
             callback(null, imageBitmap)
         });
@@ -57,7 +67,7 @@ function canvasToImage(canvas: HTMLCanvasElement | OffscreenCanvas, callback: Ca
 
 export function loadRasterTile(params: WorkerTileParameters, callback: Callback): Cancelable {
     const {requests, ltPixel, rbPixel} = params;
-    // console.log(ltPixel, rbPixel)
+
     const makeRequest = (requestParam: RequestParameters, cb: Callback) => {
         requestParam.returnArraybuffer = true;
         const request = getImage(requestParam, cb);
@@ -72,13 +82,16 @@ export function loadRasterTile(params: WorkerTileParameters, callback: Callback)
         if (!canvas) {
             canvas = offscreenCanvasSupported() ? new window.OffscreenCanvas(imageSize, imageSize) : (isWorker() ? null : document.createElement('canvas'));
             if (!canvas) return;
-            canvas.width = imageSize;
-            canvas.height = imageSize;
-            ctx = canvas.getContext('2d', {willReadFrequently: true});
+            // 计算都是基于256像素计算，所以使用的所有坐标要乘以 实际图片像素/256
             const scale = imageSize / 256;
             dx = -ltPixel.x * scale;
             dy = -ltPixel.y * scale;
             tileSize = imageSize;
+            // 实际需要的瓦片像素范围，不是正方形mapbox渲染有问题
+            const size = (rbPixel.x - ltPixel.x + rbPixel.y - ltPixel.y) * scale / 2;
+            canvas.width = size;
+            canvas.height = size;
+            ctx = canvas.getContext('2d', {willReadFrequently: true});
         }
     }
     const draw = (data, x: number, y: number) => {
@@ -149,31 +162,28 @@ export default class RasterTileWorkerSource {
         const {direction} = getTileSystem(projection);
         // 左上角像素坐标
         const ltPixel = lngLatToPixel(trNorthwestCoords, tile.z, projection);
-        if (ltPixel.x && ltPixel.y) {
-            const trSoutheastCoords = transformLngLat(bound.getSouthEast(), 'WGS84', projection);
-            const rbPoint = lngLatToPixel(trSoutheastCoords, tile.z, projection);
-            const northwestTile = lngLatToTileFromZ(trNorthwestCoords, tile.z, projection);
-            const southeastTile = lngLatToTileFromZ(trSoutheastCoords, tile.z, projection);
-            const xMin = Math.min(northwestTile.x, southeastTile.x);
-            const xMax = Math.max(northwestTile.x, southeastTile.x);
-            const yMin = Math.min(northwestTile.y, southeastTile.y);
-            const yMax = Math.max(northwestTile.y, southeastTile.y);
-            const xRange = xMax - xMin, yRange = yMax - yMin;
-            for (let x = xMin; x <= xMax; x++) {
-                for (let y = yMin; y <= yMax; y++) {
-                    const dx = (x - xMin) * direction.x + (direction.x < 0 ? xRange : 0);
-                    const dy = (y - yMin) * direction.y + (direction.y < 0 ? yRange : 0);
-                    coverTiles.push({x, y, z: tile.z, dx, dy});
-                }
+        const trSoutheastCoords = transformLngLat(bound.getSouthEast(), 'WGS84', projection);
+        const rbPoint = lngLatToPixel(trSoutheastCoords, tile.z, projection);
+        // console.log(rbPoint);
+        const northwestTile = lngLatToTileFromZ(trNorthwestCoords, tile.z, projection);
+        const southeastTile = lngLatToTileFromZ(trSoutheastCoords, tile.z, projection);
+        const xMin = Math.min(northwestTile.x, southeastTile.x);
+        const xMax = Math.max(northwestTile.x, southeastTile.x);
+        const yMin = Math.min(northwestTile.y, southeastTile.y);
+        const yMax = Math.max(northwestTile.y, southeastTile.y);
+        const xRange = xMax - xMin, yRange = yMax - yMin;
+        for (let x = xMin; x <= xMax; x++) {
+            for (let y = yMin; y <= yMax; y++) {
+                const dx = (x - xMin) * direction.x + (direction.x < 0 ? xRange : 0);
+                const dy = (y - yMin) * direction.y + (direction.y < 0 ? yRange : 0);
+                coverTiles.push({x, y, z: tile.z, dx, dy});
             }
-            callback(null, {
-                coverTiles,
-                ltPixel,
-                rbPixel: {x: rbPoint.x + 256 * xRange, y: rbPoint.y + 256 * yRange}
-            })
-        } else {
-            callback(null, null)
         }
+        callback(null, {
+            coverTiles,
+            ltPixel,
+            rbPixel: {x: rbPoint.x + 256 * xRange, y: rbPoint.y + 256 * yRange}
+        })
     }
 
     loadTile(params: WorkerTileParameters, callback: Callback) {

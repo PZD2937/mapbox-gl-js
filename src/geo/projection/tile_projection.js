@@ -189,8 +189,6 @@ const BAIDU = {
 
 }
 
-// self.BAIDU = BAIDU
-
 export function getSpatialReference(projection: string) {
     projection = typeof projection === 'string' ? projection.toUpperCase() : '';
     let spatialReference;
@@ -207,7 +205,6 @@ export function getSpatialReference(projection: string) {
     return spatialReference
 }
 
-
 export function getTileSystem(projection) {
     const sr = getSpatialReference(projection);
     return {direction: sr.direction, fullExtent: sr.fullExtent}
@@ -218,6 +215,13 @@ export function lngLatToTile(lngLat: LngLat, z: number, projection: string): Can
     return sr.lngLatToTile(lngLat, z)
 }
 
+/**
+ * 计算经纬度在z层级瓦片上的坐标
+ * @param {LngLat} lngLat
+ * @param {number} zoom
+ * @param {string} projection
+ * @return {{x: number, y: number}}
+ */
 export function lngLatToPixel(lngLat: LngLat, zoom: number, projection: string): { x: number, y: number } {
     const spatialReference = getSpatialReference(projection);
     if (spatialReference && spatialReference.lngLatToPixel) {
@@ -239,8 +243,5 @@ export function lngLatToPixel(lngLat: LngLat, zoom: number, projection: string):
     }
 }
 
+// self.BAIDU = BAIDU
 // self.lngLatToTile = lngLatToTile
-// console.log(lngLatToTile({lng: 106.502626, lat: 53.33}, 18, 'BAIDU'));
-// console.log(lngLatToTile({lng: 135.05, lat: 3.51}, 18, 'BAIDU'));
-// console.log(lngLatToTile({lng: 106.505334, lat: 29.618177}, 17))
-// console.log(lngLatToTile(transformLngLat({lng: 106.505334, lat: 29.618177}, 'WGS84', 'BAIDU'), 17, 'BAIDU'))

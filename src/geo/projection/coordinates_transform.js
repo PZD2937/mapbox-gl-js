@@ -69,7 +69,7 @@ function wgsToGcj(lngLat: LngLat, offset?: number[]): LngLat {
     return new LngLat(lng, lat);
 }
 
-export function gcjToWgs(lngLat: LngLat): LngLat {
+function gcjToWgs(lngLat: LngLat): LngLat {
     return coordDiff(lngLat, coordDiff(wgsToGcj(lngLat), lngLat))
 }
 
