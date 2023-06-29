@@ -36,15 +36,6 @@ type LoadingTile = {
     request: Cancelable
 }
 
-type CreateImageBitmapParameters = {
-    image: ImageBitmapSource,
-    sx: number,
-    sy: number,
-    sw: number,
-    sh: number,
-    options?: ImageBitmapOptions
-}
-
 function dataToTextureImage(data, cb: Callback) {
     if (data instanceof window.ArrayBuffer) {
         arrayBufferToImage(data, cb)
