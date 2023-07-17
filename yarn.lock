@@ -7180,9 +7180,9 @@ rollup-plugin-unassert@^0.6.0:
     unassert "^2.0.0"
 
 rollup@^3.23.0:
-  version "3.25.2"
-  resolved "https://registry.yarnpkg.com/rollup/-/rollup-3.25.2.tgz#3479d72955a83da9019f926d4ba285d630b7656b"
-  integrity sha512-VLnkxZMDr3jpxgtmS8pQZ0UvhslmF4ADq/9w4erkctbgjCqLW9oa89fJuXEs4ZmgyoF7Dm8rMDKSS5b5u2hHUg==
+  version "3.26.3"
+  resolved "https://registry.yarnpkg.com/rollup/-/rollup-3.26.3.tgz#bbc8818cadd0aebca348dbb3d68d296d220967b8"
+  integrity sha512-7Tin0C8l86TkpcMtXvQu6saWH93nhG3dGQ1/+l5V2TDMceTxO7kDiK6GzbfLWNNxqJXm591PcEZUozZm51ogwQ==
   optionalDependencies:
     fsevents "~2.3.2"
 
