@@ -192,9 +192,9 @@ export default class RasterTileWorkerSource {
 
     limitedStorage() {
         const subLoading = Object.keys(this.subLoading);
-        if (subLoading.length > 200) {
+        if (subLoading.length > 300) {
             // 删除复用率较低的
-            for (let i = 0; i < subLoading.length - 50; i++) {
+            for (let i = 0; i < subLoading.length - 80; i++) {
                 delete this.subLoading[subLoading[i]];
             }
         }

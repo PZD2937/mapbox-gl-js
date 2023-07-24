@@ -293,9 +293,9 @@ class RasterTileSource extends Evented implements Source {
 
     limitedStorage() {
         const subLoading = Object.keys(this.subLoading);
-        if (subLoading.length > 200) {
+        if (subLoading.length > 300) {
             // 中间的复用率较低
-            for (let i = 8; i < subLoading.length - 8; i++) {
+            for (let i = 0; i < subLoading.length - 80; i++) {
                 delete this.subLoading[subLoading[i]];
             }
         }
