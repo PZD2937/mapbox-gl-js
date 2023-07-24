@@ -243,5 +243,3 @@ export function lngLatToPixel(lngLat: LngLat, zoom: number, projection: string):
     }
 }
 
-// self.BAIDU = BAIDU
-// self.lngLatToTile = lngLatToTile

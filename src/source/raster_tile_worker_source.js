@@ -1,6 +1,6 @@
 // @flow
 import transformLngLat from "../geo/projection/coordinates_transform.js";
-import {getTileBounds, lngLatToTileFromZ} from "../geo/projection/tile_transform.js";
+import {lngLatToTileFromZ} from "../geo/projection/tile_transform.js";
 import {arrayBufferToImage, getImage} from "../util/ajax.js";
 import {asyncAll, isWorker} from "../util/util.js";
 import {CanonicalTileID} from "./tile_id.js";
@@ -148,12 +148,13 @@ export default class RasterTileWorkerSource {
     getCoverTiles(params: { projection: string, tile: CanonicalTileID }, callback: Callback) {
         const {tile, projection} = params;
         const coverTiles = [];
-        const bound = getTileBounds(tile.x, tile.y, tile.z);
+        const bound = tile.toLngLatBounds();
         const trNorthwestCoords = transformLngLat(bound.getNorthWest(), 'WGS84', projection);
         const {direction} = getTileSystem(projection);
         // 左上角像素坐标
         const ltPixel = lngLatToPixel(trNorthwestCoords, tile.z, projection);
         const trSoutheastCoords = transformLngLat(bound.getSouthEast(), 'WGS84', projection);
+        // 右下脚像素坐标
         const rbPoint = lngLatToPixel(trSoutheastCoords, tile.z, projection);
         // console.log(rbPoint);
         const northwestTile = lngLatToTileFromZ(trNorthwestCoords, tile.z, projection);

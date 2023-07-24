@@ -151,18 +151,6 @@
 
 
 <script>
-    function bingQuadKey(data, x, y, z) {
-        x = x || data.x;
-        y = y || data.y;
-        z = z || data.z;
-        let quadKey = '';
-        for (let i = 0; i < z; i++) {
-            quadKey = ((x & 1) + 2 * (y & 1)).toString() + quadKey;
-            x >>= 1;
-            y >>= 1;
-        }
-        return quadKey
-    }
 
     function getTXDy(data, x, y, z) {
         y = y || data.y;
@@ -229,10 +217,7 @@
                 'bing_satellite': {
                     type: 'raster',
                     tileSize: 256,
-                    tiles: ['https://t.ssl.ak.tiles.virtualearth.net/tiles/a{quad}.jpeg?g=12946&n=z&prx=1'],
-                    customTags: {
-                        quad: bingQuadKey
-                    },
+                    tiles: ['https://t.ssl.ak.tiles.virtualearth.net/tiles/a{quadkey}.jpeg?g=12946&n=z&prx=1'],
                 },
                 'amap_satellite': {
                     type: 'raster',
@@ -245,7 +230,7 @@
                     type: 'raster',
                     tileSize: 128,
                     maxzoom: 18,
-                    tiles: ['https://t0.tianditu.gov.cn/cia_w/wmts?service=WMTS&version=1.0.0&request=GetTile&tilematrix={z}&layer=cia&style=default&tilerow={y}&tilecol={x}&tilematrixset=w&format=tiles&tk=e67b6383a8f8d5826792cdb19f302c71_'],
+                    tiles: ['https://t0.tianditu.gov.cn/cia_w/wmts?service=WMTS&version=1.0.0&request=GetTile&tilematrix={z}&layer=cia&style=default&tilerow={y}&tilecol={x}&tilematrixset=w&format=tiles&tk=e67b6383a8f8d5826792cdb19f302c71'],
                 },
                 'amap_road': {
                     type: 'raster',
@@ -259,6 +244,7 @@
                     tileSize: 128,
                     maxzoom: 18,
                     projection: 'BAIDU',
+                    // showDebugTileLoadTime: true,
                     tiles: [0, 1, 2, 3].map(s => `https://gss${s}.bdstatic.com/5bwHcj7lABFT8t_jkk_Z1zRvfdw6buu/it/u=x={x};y={y};z={z};v=009;type=sate&fm=46`)//['https://gss{s}.bdstatic.com/5bwHcj7lABFT8t_jkk_Z1zRvfdw6buu/it/u=x={x};y={y};z={z};v=009;type=sate&fm=46', 'https://mapsv1.bdimg.com/tile/?udt=20200825&qt=tile&styles=pl&x={x}&y={y}&z={z}']
                 },
                 'google_satellite': {
@@ -272,8 +258,9 @@
                     type: 'raster',
                     tileSize: 128,
                     projection: 'GCJ02',
+                    scheme: 'tms',
                     maxzoom: 18,
-                    tiles: [1, 2, 3].map(s => `https://p${s}.map.gtimg.com/sateTiles/{z}/{x16}/{y16}/{x}_{dy}.jpg`),
+                    tiles: [1, 2, 3].map(s => `https://p${s}.map.gtimg.com/sateTiles/{z}/{x16}/{y16}/{x}_{y}.jpg`),
                     customTags: {
                         dy: getTXDy,
                         x16: getTXX16,
@@ -462,7 +449,7 @@
 
         });
         map.getSource('tian_road').on('error', (e) => {
-            // console.log(e)
+            console.log(e)
             // e.target.setTiles(['https://t0.tianditu.gov.cn/cia_w/wmts?service=WMTS&version=1.0.0&request=GetTile&tilematrix={z}&layer=cia&style=default&tilerow={y}&tilecol={x}&tilematrixset=w&format=tiles&tk=e67b6383a8f8d5826792cdb19f302c71'])
         })
         console.log(map)

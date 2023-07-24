@@ -3,6 +3,8 @@
 import {getTileBBox} from '@mapbox/whoots-js';
 import assert from 'assert';
 import {register} from '../util/web_worker_transfer.js';
+import LngLat from "../geo/lng_lat.js";
+import LngLatBounds from "../geo/lng_lat_bounds.js";
 
 export class CanonicalTileID {
     z: number;
@@ -36,6 +38,16 @@ export class CanonicalTileID {
             .replace(/{y}/g, String(scheme === 'tms' ? (Math.pow(2, this.z) - this.y - 1) : this.y))
             .replace('{quadkey}', quadkey)
             .replace('{bbox-epsg-3857}', bbox);
+    }
+
+    toLngLat(): LngLat {
+        return tileToLngLat(this.x, this.y, this.z)
+    }
+
+    toLngLatBounds(): LngLatBounds {
+        const sw = tileToLngLat(this.x + 1, this.y, this.z);
+        const ne = tileToLngLat(this.x, this.y + 1, this.z);
+        return new LngLatBounds(sw, ne);
     }
 
     toString(): string {
@@ -108,8 +120,8 @@ export class OverscaledTileID {
         // We're first testing for z == 0, to avoid a 32 bit shift, which is undefined.
         return parent.overscaledZ === 0 || (
             parent.overscaledZ < this.overscaledZ &&
-                parent.canonical.x === (this.canonical.x >> zDifference) &&
-                parent.canonical.y === (this.canonical.y >> zDifference));
+            parent.canonical.x === (this.canonical.x >> zDifference) &&
+            parent.canonical.y === (this.canonical.y >> zDifference));
     }
 
     children(sourceMaxZoom: number): Array<OverscaledTileID> {
@@ -182,13 +194,21 @@ function calculateKey(wrap: number, overscaledZ: number, z: number, x: number, y
     return key;
 }
 
-function getQuadkey(z: number, x: number, y: number) {
+function getQuadkey(z: number, x: number, y: number): string {
     let quadkey = '', mask;
     for (let i = z; i > 0; i--) {
         mask = 1 << (i - 1);
         quadkey += ((x & mask ? 1 : 0) + (y & mask ? 2 : 0));
     }
     return quadkey;
+}
+
+function tileToLngLat(x: number, y: number, z: number): LngLat {
+    const wordSize = Math.pow(2, z);
+    const lng = x / wordSize * 360 - 180;
+    const m = Math.PI - 2 * Math.PI * y / wordSize;
+    const lat = (180 / Math.PI * Math.atan(0.5 * (Math.exp(m) - Math.exp(-m))));
+    return new LngLat(lng, lat);
 }
 
 register(CanonicalTileID, 'CanonicalTileID');

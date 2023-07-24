@@ -130,23 +130,6 @@ export function getTileVec3(tileTransform: TileTransform, coord: MercatorCoordin
     return vec3.fromValues(x, y, altitudeFromMercatorZ(coord.z, coord.y));
 }
 
-export function getTileNorthwestLngLat(x: number, y: number, z: number): LngLat {
-    const n = Math.pow(2, z);
-    const lng = x / n * 360 - 180;
-    const m = Math.PI - 2 * Math.PI * y / n;
-    const lat = (180 / Math.PI * Math.atan(0.5 * (Math.exp(m) - Math.exp(-m))));
-    return new LngLat(lng, lat);
-}
-
 export function lngLatToTileFromZ(lngLat: LngLat, z: number, projection: string): CanonicalTileID {
     return lngLatToTile(lngLat, z, projection);
 }
-
-export function getTileBounds(x: number, y: number, z: number): LngLatBounds {
-    const northwest = getTileNorthwestLngLat(x, y, z);
-    const southeast = getTileNorthwestLngLat(x + 1, y + 1, z);
-    return new LngLatBounds([northwest.lng, southeast.lat], [southeast.lng, northwest.lat]);
-}
-self.getTileBounds = getTileBounds
-
-
