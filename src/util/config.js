@@ -15,7 +15,9 @@ type Config = {|
   TILE_URL_VERSION: string,
   RASTER_URL_PREFIX: string,
   ACCESS_TOKEN: ?string,
-  MAX_PARALLEL_IMAGE_REQUESTS: number
+  MAX_PARALLEL_IMAGE_REQUESTS: number,
+  LOADERS_URL: string,
+  DEFAULT_STYLE: string,
 |};
 
 let mapboxHTTPURLRegex;
@@ -74,7 +76,9 @@ const config: Config = {
     RASTER_URL_PREFIX: 'raster/v1',
     REQUIRE_ACCESS_TOKEN: true,
     ACCESS_TOKEN: null,
-    MAX_PARALLEL_IMAGE_REQUESTS: 16
+    DEFAULT_STYLE: 'mapbox://styles/mapbox/standard-beta',
+    MAX_PARALLEL_IMAGE_REQUESTS: 16,
+    LOADERS_URL: 'https://api.mapbox.com/mapbox-gl-js/v3.0.0/mapbox-gl-loaders.js'
 };
 
 export default config;

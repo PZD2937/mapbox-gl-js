@@ -29,6 +29,7 @@ import {prewarm, clearPrewarmedResources} from './util/global_worker_pool.js';
 import {clearTileCache} from './util/tile_request_cache.js';
 import {WorkerPerformanceUtils} from './util/worker_performance_utils.js';
 import {FreeCameraOptions} from './ui/free_camera.js';
+import {getLoadersUrl, setLoadersUrl} from '../3d-style/util/loaders.js';
 import browser from './util/browser.js';
 
 const exported = {
@@ -211,6 +212,31 @@ const exported = {
      * mapboxgl.workerClass = MapboxGLWorker;
      */
     workerClass: null,
+
+    /**
+     * Provides an interface for loading mapbox-gl's loaders bundle from a self-hosted URL.
+     * This needs to be set only once, and before any call to `new mapboxgl.Map(..)` takes place.
+     * This is useful if your site needs to operate in a strict CSP (Content Security Policy) environment
+     * wherein you are not allowed to load JavaScript code from a [`Blob` URL](https://developer.mozilla.org/en-US/docs/Web/API/URL/createObjectURL), which is default behavior.
+     *
+     * See our documentation on [CSP Directives](https://docs.mapbox.com/mapbox-gl-js/api/#csp-directives) for more details.
+     *
+     * @var {string} loadersUrl
+     * @returns {string} A URL hosting a JavaScript mapbox-gl's loaders bundle.
+     * @example
+     * <script src='https://api.mapbox.com/mapbox-gl-js/v3.0.0/mapbox-gl.js'></script>
+     * <script>
+     * mapboxgl.loadersUrl = "https://api.mapbox.com/mapbox-gl-js/v3.0.0/mapbox-gl-loaders.js";
+     * ...
+     * </script>
+     */
+    get loadersUrl(): string {
+        return getLoadersUrl();
+    },
+
+    set loadersUrl(url: string) {
+        setLoadersUrl(url);
+    },
 
     /**
      * Sets the time used by Mapbox GL JS internally for all animations. Useful for generating videos from Mapbox GL JS.

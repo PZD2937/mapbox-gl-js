@@ -50,15 +50,23 @@ void main() {
     vec4 color = texture2D(u_image, pos);
 
 #ifdef LIGHTING_3D_MODE
-    color = apply_lighting(color);
+    color = apply_lighting_ground(color);
 #endif
 #ifdef FOG
     color = fog_dither(fog_apply_premultiplied(color, v_fog_pos));
 #endif
 
-    gl_FragColor = color * (alpha * opacity);
+    color *= (alpha * opacity);
+
+#ifdef INDICATOR_CUTOUT
+    color = applyCutout(color);
+#endif
+
+    gl_FragColor = color;
 
 #ifdef OVERDRAW_INSPECTOR
     gl_FragColor = vec4(1.0);
 #endif
+
+    HANDLE_WIREFRAME_DEBUG;
 }

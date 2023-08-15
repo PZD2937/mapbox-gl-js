@@ -5,13 +5,13 @@ import SourceCache from '../source/source_cache.js';
 import {OverscaledTileID} from '../source/tile_id.js';
 import Tile from '../source/tile.js';
 import posAttributes from '../data/pos_attributes.js';
-import {TriangleIndexArray, LineIndexArray, PosArray} from '../data/array_types.js';
+import {TriangleIndexArray, PosArray} from '../data/array_types.js';
 import SegmentVector from '../data/segment.js';
 import Texture from '../render/texture.js';
 import Program from '../render/program.js';
 import {Uniform1i, Uniform1f, Uniform2f, Uniform3f, Uniform4f, UniformMatrix4f} from '../render/uniform_binding.js';
 import {prepareDEMTexture} from '../render/draw_hillshade.js';
-import EXTENT from '../data/extent.js';
+import EXTENT from '../style-spec/data/extent.js';
 import {clamp, warnOnce} from '../util/util.js';
 import assert from 'assert';
 import {vec3, mat4, vec4} from 'gl-matrix';
@@ -200,8 +200,6 @@ export class Terrain extends Elevation {
     gridIndexBuffer: IndexBuffer;
     gridSegments: SegmentVector;
     gridNoSkirtSegments: SegmentVector;
-    wireframeSegments: SegmentVector;
-    wireframeIndexBuffer: IndexBuffer;
     proxiedCoords: {[string]: Array<ProxiedTileID>};
     proxyCoords: Array<OverscaledTileID>;
     proxyToSource: {[number]: {[string]: Array<ProxiedTileID>}};
@@ -233,12 +231,15 @@ export class Terrain extends Elevation {
     _findCoveringTileCache: {[string]: {[number]: ?number}};
 
     _tilesDirty: {[string]: {[number]: boolean}};
-    _invalidateRenderCache: boolean;
+    invalidateRenderCache: boolean;
 
     _emptyDepthBufferTexture: ?Texture;
     _emptyDEMTexture: ?Texture;
     _initializing: ?boolean;
     _emptyDEMTextureDirty: ?boolean;
+
+    _pendingGroundEffectLayers: Array<number>;
+    framebufferCopyTexture: ?Texture;
 
     constructor(painter: Painter, style: Style) {
         super();
@@ -276,6 +277,7 @@ export class Terrain extends Elevation {
         this._useVertexMorphing = true;
         this._exaggeration = 1;
         this._mockSourceCache = new MockSourceCache(style.map);
+        this._pendingGroundEffectLayers = [];
     }
 
     set style(style: Style) {
@@ -371,7 +373,7 @@ export class Terrain extends Elevation {
         if (event.coord && event.dataType === 'source') {
             this._clearRenderCacheForTile(event.sourceCacheId, event.coord);
         } else if (event.dataType === 'style') {
-            this._invalidateRenderCache = true;
+            this.invalidateRenderCache = true;
         }
     }
 
@@ -399,6 +401,7 @@ export class Terrain extends Elevation {
             this._depthFBO = undefined;
             this._depthTexture = undefined;
         }
+        if (this.framebufferCopyTexture) this.framebufferCopyTexture.destroy();
     }
 
     // Implements Elevation::_source.
@@ -633,9 +636,9 @@ export class Terrain extends Elevation {
         if (prevDemTile && demTile) {
             // Both DEM textures are expected to be correctly set if geomorphing is enabled
             context.activeTexture.set(gl.TEXTURE2);
-            (demTile.demTexture: any).bind(gl.NEAREST, gl.CLAMP_TO_EDGE, gl.NEAREST);
+            (demTile.demTexture: any).bind(gl.NEAREST, gl.CLAMP_TO_EDGE);
             context.activeTexture.set(gl.TEXTURE4);
-            (prevDemTile.demTexture: any).bind(gl.NEAREST, gl.CLAMP_TO_EDGE, gl.NEAREST);
+            (prevDemTile.demTexture: any).bind(gl.NEAREST, gl.CLAMP_TO_EDGE);
 
             uniforms["u_dem_lerp"] = morphingPhase;
         } else {
@@ -724,8 +727,9 @@ export class Terrain extends Elevation {
         const drapedLayerBatch = this._drapedRenderBatches.shift();
         assert(drapedLayerBatch.start === startLayerIndex);
 
-        const accumulatedDrapes = [];
         const layerIds = painter.style.order;
+
+        const accumulatedDrapes = [];
 
         let poolIndex = 0;
         for (const proxy of proxies) {
@@ -769,6 +773,26 @@ export class Terrain extends Elevation {
                     currentStencilSource = sourceCache ? sourceCache.id : null;
                 }
                 painter.renderLayer(painter, sourceCache, layer, coords);
+            }
+
+            const isLastBatch = this._drapedRenderBatches.length === 0;
+            if (isLastBatch) {
+                for (const id of this._pendingGroundEffectLayers) {
+                    const layer = painter.style._layers[layerIds[id]];
+                    if (layer.isHidden(painter.transform.zoom)) continue;
+
+                    const sourceCache = painter.style._getLayerSourceCache(layer);
+                    const proxiedCoords = sourceCache ? this.proxyToSource[proxy.key][sourceCache.id] : [proxy];
+                    if (!proxiedCoords) continue;
+
+                    const coords = ((proxiedCoords: any): Array<OverscaledTileID>);
+                    context.viewport.set([0, 0, fbo.fb.width, fbo.fb.height]);
+                    if (currentStencilSource !== (sourceCache ? sourceCache.id : null)) {
+                        this._setupStencil(fbo, proxiedCoords, layer, sourceCache);
+                        currentStencilSource = sourceCache ? sourceCache.id : null;
+                    }
+                    painter.renderLayer(painter, sourceCache, layer, coords);
+                }
             }
 
             if (this.renderedToTile) {
@@ -901,7 +925,7 @@ export class Terrain extends Elevation {
         context.activeTexture.set(gl.TEXTURE0);
         const tex = new Texture(context, {width: bufferSize[0], height: bufferSize[1], data: null}, gl.RGBA);
         tex.bind(gl.LINEAR, gl.CLAMP_TO_EDGE);
-        const fb = context.createFramebuffer(bufferSize[0], bufferSize[1], false);
+        const fb = context.createFramebuffer(bufferSize[0], bufferSize[1], true, null);
         fb.colorAttachment.set(tex.texture);
         fb.depthAttachment = new DepthStencilAttachment(context, fb.framebuffer);
 
@@ -1038,6 +1062,7 @@ export class Terrain extends Elevation {
         }
 
         const batches: Array<RenderBatch> = [];
+        this._pendingGroundEffectLayers = [];
 
         let currentLayer = 0;
         let layer = this._style._layers[layerIds[currentLayer]];
@@ -1052,6 +1077,9 @@ export class Terrain extends Elevation {
                 continue;
             }
             if (!this._style.isLayerDraped(layer)) {
+                if (layer.type === 'fill-extrusion') {
+                    this._pendingGroundEffectLayers.push(currentLayer);
+                }
                 if (batchStart !== undefined) {
                     batches.push({start: batchStart, end: currentLayer - 1});
                     batchStart = undefined;
@@ -1072,13 +1100,23 @@ export class Terrain extends Elevation {
             assert(batches.length === 1 || batches.length === 0);
         }
 
+        if (batches.length !== 0) {
+            const lastBatch = batches[batches.length - 1];
+            const groundEffectLayersComeLast = this._pendingGroundEffectLayers.every((id: number) => {
+                return id > lastBatch.end;
+            });
+            if (!groundEffectLayersComeLast) {
+                warnOnce('fill-extrusion with flood lighting and/or ground ambient occlusion should be moved to be on top of all draped layers.');
+            }
+        }
+
         this._drapedRenderBatches = batches;
     }
 
     _setupRenderCache(previousProxyToSource: {[number]: {[string]: Array<ProxiedTileID>}}) {
         const psc = this.proxySourceCache;
-        if (this._shouldDisableRenderCache() || this._invalidateRenderCache) {
-            this._invalidateRenderCache = false;
+        if (this._shouldDisableRenderCache() || this.invalidateRenderCache) {
+            this.invalidateRenderCache = false;
             if (psc.renderCache.length > psc.renderCachePool.length) {
                 const used = ((Object.values(psc.proxyCachedFBO): any): Array<{[string | number]: number}>);
                 psc.proxyCachedFBO = {};
@@ -1227,7 +1265,7 @@ export class Terrain extends Elevation {
 
         for (const tileID of proxiedCoords) {
             const id = painter._tileClippingMaskIDs[tileID.key] = --ref;
-            program.draw(context, gl.TRIANGLES, DepthMode.disabled,
+            program.draw(painter, gl.TRIANGLES, DepthMode.disabled,
                 // Tests will always pass, and ref value will be written to stencil buffer.
                 new StencilMode({func: gl.ALWAYS, mask: 0}, id, 0xFF, gl.KEEP, gl.KEEP, gl.REPLACE),
                 ColorMode.disabled, CullFaceMode.disabled, clippingMaskUniformValues(tileID.projMatrix),
@@ -1281,7 +1319,7 @@ export class Terrain extends Elevation {
         }
         if (!this._depthFBO) {
             const gl = context.gl;
-            const fbo = context.createFramebuffer(width, height, true);
+            const fbo = context.createFramebuffer(width, height, true, 'renderbuffer');
             context.activeTexture.set(gl.TEXTURE0);
             const texture = new Texture(context, {width, height, data: null}, gl.RGBA);
             texture.bind(gl.NEAREST, gl.CLAMP_TO_EDGE);
@@ -1496,20 +1534,6 @@ export class Terrain extends Elevation {
         if (!sourceTiles) sourceTiles = this._tilesDirty[source] = {};
         sourceTiles[coord.key] = true;
     }
-
-    /*
-     * Lazily instantiate the wireframe index buffer and segment vector so that we don't
-     * allocate the geometry for rendering a debug wireframe until it's needed.
-     */
-    getWirefameBuffer(): [IndexBuffer, SegmentVector] {
-        if (!this.wireframeSegments) {
-            const wireframeGridIndices = createWireframeGrid(GRID_DIM + 1);
-            this.wireframeIndexBuffer = this.painter.context.createIndexBuffer(wireframeGridIndices);
-            this.wireframeSegments = SegmentVector.simpleSegment(0, 0, this.gridBuffer.length, wireframeGridIndices.length);
-        }
-        return [this.wireframeIndexBuffer, this.wireframeSegments];
-    }
-
 }
 
 function sortByDistanceToCamera(tileIDs: Array<OverscaledTileID>, painter: Painter) {
@@ -1587,44 +1611,6 @@ function createGrid(count: number): [PosArray, TriangleIndexArray, number] {
         }
     });
     return [boundsArray, indexArray, skirtIndicesOffset];
-}
-
-/**
- * Creates a grid of indices corresponding to the grid constructed by createGrid
- * in order to render that grid as a wireframe rather than a solid  mesh. It does
- * not create a skirt and so only goes from 1 to count + 1, e.g. for count of 2:
- *  -------------
- *  |    /|    /|
- *  |  /  |  /  |
- *  |/    |/    |
- *  -------------
- *  |    /|    /|
- *  |  /  |  /  |
- *  |/    |/    |
- *  -------------
- * @param {number} count Count of rows and columns
- * @private
- */
-function createWireframeGrid(count: number): LineIndexArray {
-    let index = 0;
-    const indexArray = new LineIndexArray();
-    const size = count + 2;
-    // Draw two edges of a quad and its diagonal. The very last row and column have
-    // an additional line to close off the grid.
-    for (let j = 1; j < count; j++) {
-        for (let i = 1; i < count; i++) {
-            index = j * size + i;
-            indexArray.emplaceBack(index, index + 1);
-            indexArray.emplaceBack(index, index + size);
-            indexArray.emplaceBack(index + 1, index + size);
-
-            // Place an extra line at the end of each row
-            if (j === count - 1) indexArray.emplaceBack(index + size, index + size + 1);
-        }
-        // Place an extra line at the end of each col
-        indexArray.emplaceBack(index + 1, index + 1 + size);
-    }
-    return indexArray;
 }
 
 export type TerrainUniformsType = {|

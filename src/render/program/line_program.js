@@ -15,6 +15,7 @@ import type Transform from '../../geo/transform.js';
 import type Tile from '../../source/tile.js';
 import type LineStyleLayer from '../../style/style_layer/line_style_layer.js';
 import type Painter from '../painter.js';
+import Color from '../../style-spec/util/color.js';
 
 export type LineUniformsType = {|
     'u_matrix': UniformMatrix4f,
@@ -27,7 +28,8 @@ export type LineUniformsType = {|
     'u_texsize': Uniform2f,
     'u_tile_units_to_pixels': Uniform1f,
     'u_alpha_discard_threshold': Uniform1f,
-    'u_trim_offset': Uniform2f
+    'u_trim_offset': Uniform2f,
+    'u_emissive_strength': Uniform1f
 |};
 
 export type LinePatternUniformsType = {|
@@ -41,7 +43,7 @@ export type LinePatternUniformsType = {|
     'u_alpha_discard_threshold': Uniform1f
 |};
 
-export type LineDefinesType = 'RENDER_LINE_GRADIENT' | 'RENDER_LINE_DASH' | 'RENDER_LINE_ALPHA_DISCARD' | 'RENDER_LINE_TRIM_OFFSET';
+export type LineDefinesType = 'RENDER_LINE_GRADIENT' | 'RENDER_LINE_DASH' | 'RENDER_LINE_ALPHA_DISCARD' | 'RENDER_LINE_TRIM_OFFSET' | 'RENDER_LINE_BORDER' | 'RENDER_LINE_BORDER_AUTO';
 
 const lineUniforms = (context: Context): LineUniformsType => ({
     'u_matrix': new UniformMatrix4f(context),
@@ -54,7 +56,8 @@ const lineUniforms = (context: Context): LineUniformsType => ({
     'u_texsize': new Uniform2f(context),
     'u_tile_units_to_pixels': new Uniform1f(context),
     'u_alpha_discard_threshold': new Uniform1f(context),
-    'u_trim_offset': new Uniform2f(context)
+    'u_trim_offset': new Uniform2f(context),
+    'u_emissive_strength': new Uniform1f(context)
 });
 
 const linePatternUniforms = (context: Context): LinePatternUniformsType => ({
@@ -93,7 +96,8 @@ const lineUniformValues = (
         'u_texsize': hasDash(layer) ? tile.lineAtlasTexture.size : [0, 0],
         'u_tile_units_to_pixels': calculateTileRatio(tile, painter.transform),
         'u_alpha_discard_threshold': 0.0,
-        'u_trim_offset': trimOffset
+        'u_trim_offset': trimOffset,
+        'u_emissive_strength': layer.paint.get('line-emissive-strength')
     };
 };
 
@@ -149,6 +153,10 @@ const lineDefinesValues = (layer: LineStyleLayer): LineDefinesType[] => {
     if (!hasPattern && hasOpacity) {
         values.push('RENDER_LINE_ALPHA_DISCARD');
     }
+
+    const hasBorder = layer.paint.get('line-border-width').constantOr(0.0) > 0.0;
+    if (hasBorder) values.push('RENDER_LINE_BORDER');
+    if (layer.paint.get('line-border-color').constantOr(Color.transparent).a === 0.0) values.push('RENDER_LINE_BORDER_AUTO');
     return values;
 };
 

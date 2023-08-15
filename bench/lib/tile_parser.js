@@ -123,6 +123,7 @@ export default class TileParser {
             overscaling: 1,
             showCollisionBoxes: false,
             source: this.sourceID,
+            scope: '',
             uid: 0,
             maxZoom: 22,
             pixelRatio: 1,
@@ -134,19 +135,21 @@ export default class TileParser {
             returnDependencies,
             promoteId: undefined,
             isSymbolTile: false,
-            projection: getProjection({name: 'mercator'})
+            projection: getProjection({name: 'mercator'}),
+            brightness: 0
         });
 
         const vectorTile = new VectorTile(new Protobuf(tile.buffer));
 
         return new Promise((resolve, reject) => {
-            workerTile.parse(vectorTile, this.layerIndex, [], (this.actor: any), (err, result) => {
+            const callback = (err: ?Error, result: ?WorkerTileResult) => {
                 if (err) {
                     reject(err);
                 } else {
                     resolve(result);
                 }
-            });
+            };
+            workerTile.parse(vectorTile, this.layerIndex, [], (this.actor: any), callback);
         });
     }
 }

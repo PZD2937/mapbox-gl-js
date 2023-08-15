@@ -26,6 +26,16 @@ const todo = [
     // Needs port from Native
     // "https://github.com/mapbox/mapbox-gl-js/issues/10365"
     "render-tests/terrain/symbol-draping/style.json",
+
+    // Requires complete landmark rendering support such as shadows and materials
+    "render-tests/model-layer/landmark-conflation-buckingham",
+
+    // Flaky
+    // https://mapbox.atlassian.net/browse/MAPS3D-978
+    "render-tests/model-layer/landmark-mbx",
+    "render-tests/model-layer/model-runtime-api",
+    "render-tests/model-layer/style-model-api-add",
+    "render-tests/model-layer/style-model-api-update"
 ];
 
 const skip = [
@@ -104,12 +114,67 @@ const skip = [
     "render-tests/resize/mercator",
     "render-tests/resize/globe",
 
-    // Distance expression is not implemented, test times out
-    "render-tests/distance/layout-text-size",
-
     // Extremely flaky: https://github.com/mapbox/mapbox-gl-js/issues/11726
-    "query-tests/terrain/draped/lines/slope-occlusion"
+    "query-tests/terrain/draped/lines/slope-occlusion",
 
+    // Broken due to chrome update https://mapbox.atlassian.net/browse/GLJS-303
+    "query-tests/terrain/circle/map-aligned/overzoomed",
+    "render-tests/debug/collision-overscaled-fractional-zoom",
+    "render-tests/globe/globe-transforms/north-pole",
+    "render-tests/icon-image/stretchable-content",
+    "render-tests/icon-opacity/default",
+    "render-tests/icon-opacity/function",
+    "render-tests/icon-opacity/icon-only",
+    "render-tests/icon-opacity/literal",
+    "render-tests/icon-opacity/text-and-icon",
+    "render-tests/icon-translate-anchor/map",
+    "render-tests/icon-translate-anchor/viewport",
+    "render-tests/icon-translate/default",
+    "render-tests/icon-translate/function",
+    "render-tests/icon-translate/literal",
+    "render-tests/icon-visibility/visible",
+    "render-tests/raster-resampling/function",
+    "render-tests/raster-resampling/literal",
+    "render-tests/regressions/mapbox-gl-js#7172",
+    "render-tests/runtime-styling/set-style-sprite",
+    "render-tests/symbol-placement/point",
+    "render-tests/symbol-spacing/point-close",
+    "render-tests/symbol-spacing/point-far",
+    "render-tests/symbol-visibility/visible",
+    "render-tests/terrain/wireframe",
+
+    // Unimplemented in -js:
+    // https://mapbox.atlassian.net/browse/MAPS3D-671
+    "render-tests/lighting-3d-mode/shadow/fill-extrusion-flat-roof",
+
+    // fill-extrusion-rounded-roof not implemented in -js
+    "render-tests/lighting-3d-mode/fill-extrusion/rounded-flat-roof",
+
+    // alpha textures not supported in -js
+    "render-tests/model-layer/model-opacity-cutout-texture",
+    // GLTF interleaved arrays not supported in -js
+    "render-tests/model-layer/model-opacity-no-cutoff",
+
+    // terrain model tests are flaky in CI
+    "render-tests/model-layer/fill-extrusion--default-terrain-opacity",
+    "render-tests/model-layer/fill-extrusion--default-terrain",
+
+    // Conflation needs to be implemented first
+    "render-tests/model-layer/landmark-part-styling-munich-museum",
+
+    // Dithering of fog is always enabled in GL-JS
+    "render-tests/fog/dithering-runtime-off",
+
+    // Needs updated model fixtures
+    "render-tests/model-layer/landmark-conflation-border-overlapping-extrusion",
+    "render-tests/model-layer/landmark-conflation-borders",
+    "render-tests/model-layer/landmark-conflation-borders-add-layer",
+    "render-tests/model-layer/landmark-conflation-borders-terrain",
+    "render-tests/model-layer/landmark-conflation-multiple-model-layers",
+    "render-tests/model-layer/landmark-shadows-terrain",
+    "render-tests/model-layer/landmark-terrain",
+    "render-tests/model-layer/lighting-3d-mode/shadow",
+    "render-tests/model-layer/landmark-conflation-multiple-sources",
 ];
 
 export default {todo, skip};

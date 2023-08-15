@@ -45,8 +45,31 @@ export const operationHandlers = {
             throw new Error(`addImage opertation failed with src ${image.src}`);
         };
     },
+    addModel(map, params, doneCb) {
+        map.addModel(params[0], params[1]);
+        doneCb();
+    },
+    removeModel(map, params, doneCb) {
+        map.removeModel(params[0]);
+        doneCb();
+    },
     addLayer(map, params, doneCb) {
         map.addLayer(params[0], params[1]);
+        waitForRender(map, () => true, doneCb);
+    },
+    setLights(map, params, doneCb) {
+        map.setLights(params[0]);
+        waitForRender(map, () => true, doneCb);
+    },
+    setLight(map, params, doneCb) {
+        // Backward compatibility
+        map.setLights([
+            {
+                "id": "flat",
+                "type": "flat",
+                "properties": params[0]
+            }
+        ]);
         waitForRender(map, () => true, doneCb);
     },
     addCustomLayer(map, params, doneCb) {
@@ -116,6 +139,14 @@ export const operationHandlers = {
         map.setFreeCameraOptions(options);
         doneCb();
     },
+    setPitchBearing(map, params, doneCb) {
+        const options = map.getFreeCameraOptions();
+        const pitch = params[0][0];
+        const bearing = params[0][1];
+        options.setPitchBearing(pitch, bearing);
+        map.setFreeCameraOptions(options);
+        doneCb();
+    },
     updateImage(map, params, doneCb) {
         map.loadImage(params[1], (error, image) => {
             if (error) throw error;
@@ -125,6 +156,10 @@ export const operationHandlers = {
         });
     },
     forceRenderCached(map, params, doneCb) {
+        // No-op in gl-js
+        doneCb();
+    },
+    setRuntimeSettingBool(map, params, doneCb) {
         // No-op in gl-js
         doneCb();
     }

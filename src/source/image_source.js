@@ -3,7 +3,7 @@
 import {CanonicalTileID} from './tile_id.js';
 import {Event, ErrorEvent, Evented} from '../util/evented.js';
 import {getImage, ResourceType} from '../util/ajax.js';
-import EXTENT from '../data/extent.js';
+import EXTENT from '../style-spec/data/extent.js';
 import {RasterBoundsArray} from '../data/array_types.js';
 import boundsAttributes from '../data/bounds_attributes.js';
 import SegmentVector from '../data/segment.js';
@@ -95,6 +95,7 @@ function getPerspectiveTransform(w: number, h: number, x1: number, y1: number, x
 class ImageSource extends Evented implements Source {
     type: string;
     id: string;
+    scope: string;
     minzoom: number;
     maxzoom: number;
     tileSize: number;

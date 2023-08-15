@@ -9,6 +9,7 @@ import ColorMode from './color_mode.js';
 import CullFaceMode from './cull_face_mode.js';
 import {deepEqual} from '../util/util.js';
 import {ClearColor, ClearDepth, ClearStencil, ColorMask, DepthMask, StencilMask, StencilFunc, StencilOp, StencilTest, DepthRange, DepthTest, DepthFunc, Blend, BlendFunc, BlendColor, BlendEquation, CullFace, CullFaceSide, FrontFace, Program, ActiveTextureUnit, Viewport, BindFramebuffer, BindRenderbuffer, BindTexture, BindVertexBuffer, BindElementBuffer, BindVertexArrayOES, PixelStoreUnpack, PixelStoreUnpackPremultiplyAlpha, PixelStoreUnpackFlipY} from './value.js';
+import type {DepthBufferType, ColorMaskType} from './types.js';
 
 import type {TriangleIndexArray, LineIndexArray, LineStripIndexArray} from '../data/index_array_type.js';
 import type {
@@ -20,7 +21,8 @@ import type Color from '../style-spec/util/color.js';
 type ClearArgs = {
     color?: Color,
     depth?: number,
-    stencil?: number
+    stencil?: number,
+    colorMask?: ColorMaskType
 };
 
 class Context {
@@ -215,12 +217,12 @@ class Context {
         this.pixelStoreUnpackFlipY.dirty = true;
     }
 
-    createIndexBuffer(array: TriangleIndexArray | LineIndexArray | LineStripIndexArray, dynamicDraw?: boolean): IndexBuffer {
-        return new IndexBuffer(this, array, dynamicDraw);
+    createIndexBuffer(array: TriangleIndexArray | LineIndexArray | LineStripIndexArray, dynamicDraw?: boolean, noDestroy?: boolean): IndexBuffer {
+        return new IndexBuffer(this, array, dynamicDraw, noDestroy);
     }
 
-    createVertexBuffer(array: StructArray, attributes: $ReadOnlyArray<StructArrayMember>, dynamicDraw?: boolean): VertexBuffer {
-        return new VertexBuffer(this, array, attributes, dynamicDraw);
+    createVertexBuffer(array: StructArray, attributes: $ReadOnlyArray<StructArrayMember>, dynamicDraw?: boolean, noDestroy?: boolean): VertexBuffer {
+        return new VertexBuffer(this, array, attributes, dynamicDraw, noDestroy);
     }
 
     createRenderbuffer(storageFormat: number, width: number, height: number): ?WebGLRenderbuffer {
@@ -234,18 +236,22 @@ class Context {
         return rbo;
     }
 
-    createFramebuffer(width: number, height: number, hasDepth: boolean): Framebuffer {
-        return new Framebuffer(this, width, height, hasDepth);
+    createFramebuffer(width: number, height: number, hasColor: boolean, depthType: ?DepthBufferType): Framebuffer {
+        return new Framebuffer(this, width, height, hasColor, depthType);
     }
 
-    clear({color, depth, stencil}: ClearArgs) {
+    clear({color, depth, stencil, colorMask}: ClearArgs) {
         const gl = this.gl;
         let mask = 0;
 
         if (color) {
             mask |= gl.COLOR_BUFFER_BIT;
             this.clearColor.set(color);
-            this.colorMask.set([true, true, true, true]);
+            if (colorMask) {
+                this.colorMask.set(colorMask);
+            } else {
+                this.colorMask.set([true, true, true, true]);
+            }
         }
 
         if (typeof depth !== 'undefined') {
@@ -311,6 +317,11 @@ class Context {
             this.blend.set(true);
             this.blendFunc.set(colorMode.blendFunction);
             this.blendColor.set(colorMode.blendColor);
+            if (colorMode.blendEquation) {
+                this.blendEquation.set(colorMode.blendEquation);
+            } else {
+                this.blendEquation.setDefault();
+            }
         }
 
         this.colorMask.set(colorMode.mask);

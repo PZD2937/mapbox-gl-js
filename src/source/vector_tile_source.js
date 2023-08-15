@@ -52,6 +52,7 @@ import type {WorkerTileResult} from './worker_source.js';
 class VectorTileSource extends Evented implements Source {
     type: 'vector';
     id: string;
+    scope: string;
     minzoom: number;
     maxzoom: number;
     url: string;
@@ -92,7 +93,7 @@ class VectorTileSource extends Evented implements Source {
         extend(this, pick(options, ['url', 'scheme', 'tileSize', 'promoteId', 'vtOptions']));
         this._options = extend({type: 'vector'}, options);
 
-        this._collectResourceTiming = options.collectResourceTiming;
+        this._collectResourceTiming = !!options.collectResourceTiming;
         this.customTags = options.customTags;
 
         if (this.tileSize !== 512) {
@@ -217,7 +218,7 @@ class VectorTileSource extends Evented implements Source {
 
     loadTile(tile: Tile, callback: Callback<void>) {
         const url = this.map._requestManager.normalizeTileURL(tile.tileID.canonical.url(this.tiles, this.scheme));
-        const request = this.map._requestManager.transformRequest(url, ResourceType.Tile, this.customTags, tile.tileID.canonical);
+        const request = this.map._requestManager.transformRequest(url, ResourceType.Tile);
 
         const params = {
             request,
@@ -229,14 +230,16 @@ class VectorTileSource extends Evented implements Source {
             tileSize: this.tileSize * tile.tileID.overscaleFactor(),
             type: this.type,
             source: this.id,
+            scope: this.scope,
             pixelRatio: browser.devicePixelRatio,
             showCollisionBoxes: this.map.showCollisionBoxes,
             promoteId: this.promoteId,
             isSymbolTile: tile.isSymbolTile,
+            brightness: this.map.style ? (this.map.style.getBrightness() || 0.0) : 0.0
             vtOptions: this.vtOptions
         };
         params.request.collectResourceTiming = this._collectResourceTiming;
-        // console.log(params)
+
         if (!tile.actor || tile.state === 'expired') {
             tile.actor = this._tileWorkers[url] = this._tileWorkers[url] || this.dispatcher.getActor();
 
@@ -306,7 +309,7 @@ class VectorTileSource extends Evented implements Source {
             delete tile.request;
         }
         if (tile.actor) {
-            tile.actor.send('abortTile', {uid: tile.uid, type: this.type, source: this.id});
+            tile.actor.send('abortTile', {uid: tile.uid, type: this.type, source: this.id, scope: this.scope});
         }
     }
 
@@ -314,7 +317,7 @@ class VectorTileSource extends Evented implements Source {
     unloadTile(tile: Tile) {
         tile.unloadVectorData();
         if (tile.actor) {
-            tile.actor.send('removeTile', {uid: tile.uid, type: this.type, source: this.id});
+            tile.actor.send('removeTile', {uid: tile.uid, type: this.type, source: this.id, scope: this.scope});
         }
     }
 

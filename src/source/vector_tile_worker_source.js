@@ -17,7 +17,7 @@ import type {
     RequestedTileParameters,
     WorkerTileCallback,
     TileParameters
-} from '../source/worker_source.js';
+} from './worker_source.js';
 
 import type Actor from '../util/actor.js';
 import type StyleLayerIndex from '../style/style_layer_index.js';
@@ -166,6 +166,7 @@ class VectorTileWorkerSource extends Evented implements WorkerSource {
     deduped: DedupedRequest;
     isSpriteLoaded: boolean;
     scheduler: ?Scheduler;
+    brightness: ?number;
 
     /**
      * @param [loadVectorData] Optional method for custom loading of a VectorTile
@@ -174,7 +175,7 @@ class VectorTileWorkerSource extends Evented implements WorkerSource {
      * loads the pbf at `params.url`.
      * @private
      */
-    constructor(actor: Actor, layerIndex: StyleLayerIndex, availableImages: Array<string>, isSpriteLoaded: boolean, loadVectorData: ?LoadVectorData) {
+    constructor(actor: Actor, layerIndex: StyleLayerIndex, availableImages: Array<string>, isSpriteLoaded: boolean, loadVectorData: ?LoadVectorData, brightness: ?number) {
         super();
         this.actor = actor;
         this.layerIndex = layerIndex;
@@ -185,6 +186,7 @@ class VectorTileWorkerSource extends Evented implements WorkerSource {
         this.deduped = new DedupedRequest(actor.scheduler);
         this.isSpriteLoaded = isSpriteLoaded;
         this.scheduler = actor.scheduler;
+        this.brightness = brightness;
     }
 
     /**
@@ -221,7 +223,7 @@ class VectorTileWorkerSource extends Evented implements WorkerSource {
             // because we stub the vector tile interface around JSON data instead of parsing it directly
             workerTile.vectorTile = response.vectorTile || new VectorTile(new Protobuf(rawTileData), undefined, params.vtOptions);
             const parseTile = () => {
-                workerTile.parse(workerTile.vectorTile, this.layerIndex, this.availableImages, this.actor, (err, result) => {
+                const workerTileCallback = (err: ?Error, result: ?WorkerTileResult) => {
                     if (err || !result) return callback(err);
 
                     const resourceTiming = {};
@@ -235,7 +237,8 @@ class VectorTileWorkerSource extends Evented implements WorkerSource {
                         }
                     }
                     callback(null, extend({rawTileData: rawTileData.slice(0)}, result, cacheControl, resourceTiming));
-                });
+                };
+                workerTile.parse(workerTile.vectorTile, this.layerIndex, this.availableImages, this.actor, workerTileCallback);
             };
 
             if (this.isSpriteLoaded) {
@@ -269,6 +272,7 @@ class VectorTileWorkerSource extends Evented implements WorkerSource {
             workerTile.showCollisionBoxes = params.showCollisionBoxes;
             workerTile.enableTerrain = !!params.enableTerrain;
             workerTile.projection = params.projection;
+            workerTile.brightness = params.brightness;
             workerTile.tileTransform = tileTransform(params.tileID.canonical, params.projection);
 
             const done = (err: ?Error, data: ?WorkerTileResult) => {

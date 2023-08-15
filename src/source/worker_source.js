@@ -17,6 +17,7 @@ import type Projection from '../geo/projection/projection.js';
 
 export type TileParameters = {
     source: string,
+    scope: string;
     uid: number,
 };
 
@@ -38,7 +39,8 @@ export type WorkerTileParameters = RequestedTileParameters & {
     collectResourceTiming?: boolean,
     returnDependencies?: boolean,
     enableTerrain?: boolean,
-    projection: Projection
+    projection: Projection,
+    brightness: number
 };
 
 export type WorkerDEMTileParameters = TileParameters & {
@@ -58,6 +60,7 @@ export type WorkerTileResult = {
     collisionBoxArray: CollisionBoxArray,
     rawTileData?: ArrayBuffer,
     resourceTiming?: Array<PerformanceResourceTiming>,
+    brightness: number,
     // Only used for benchmarking:
     glyphMap?: {[_: string]: {glyphs: {[_: number]: ?StyleGlyph}, ascender?: number, descender?: number}} | null,
     iconMap?: {[_: string]: StyleImage} | null,

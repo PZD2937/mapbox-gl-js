@@ -1,8 +1,8 @@
 version: 2.1
 orbs:
   aws-cli: circleci/aws-cli@3.1.4
-  browser-tools: circleci/browser-tools@1.4.1
-  macos: circleci/macos@2.3.4
+  browser-tools: circleci/browser-tools@1.4.2
+  macos: circleci/macos@2.3.6
   win: circleci/windows@4.1.1
 
 workflows:
@@ -81,6 +81,12 @@ workflows:
             tags:
               only: /.*/
       - test-style-spec:
+          requires:
+            - prepare-linux
+          filters:
+            tags:
+              only: /.*/
+      - verify-codegen:
           requires:
             - prepare-linux
           filters:
@@ -220,6 +226,7 @@ jobs:
             - v0-linux-yarn-{{ .Branch }}-
             - v0-linux-yarn-
       - run: yarn --frozen-lockfile --cache-folder ~/.cache/yarn
+      - run: yarn run build-loaders
       - run: yarn run build-dev
       - save_cache:
           key: v0-linux-yarn-{{ .Branch }}-{{ checksum "yarn.lock" }}
@@ -307,7 +314,9 @@ jobs:
     steps:
       - attach_workspace:
           at: ~/
-      - run: yarn run test-unit
+      - run: 
+          command: yarn run test-unit
+          no_output_timeout: 5m
 
   test-query:
     <<: *linux-defaults
@@ -343,6 +352,17 @@ jobs:
           at: ~/
       - run: yarn run test-style-spec
 
+  verify-codegen:
+    <<: *linux-defaults
+    steps:
+      - attach_workspace:
+          at: ~/
+      - run:
+          name: Verify codegen output
+          command: |
+            yarn run codegen
+            git add -A && git diff --staged --exit-code | tee check.patch
+
   collect-stats:
     <<: *linux-defaults
     steps:
@@ -362,7 +382,8 @@ jobs:
     steps:
       - attach_workspace:
           at: ~/
-      - browser-tools/install-browser-tools
+      - browser-tools/install-browser-tools:
+          chrome-version: "114.0.5735.90"
       - run: yarn run build-token
       - run:
           name: Test Chrome
@@ -513,6 +534,7 @@ jobs:
           key: v0-mac-yarn-{{ .Branch }}-{{ checksum "yarn.lock" }}
           paths:
            - ~/.cache/yarn
+      - run: yarn run build-loaders
       - run: yarn run build-dev
       - persist_to_workspace:
           root: ~/
@@ -590,6 +612,7 @@ jobs:
             npm install -g yarn
             refreshenv
       - run: yarn --frozen-lockfile
+      - run: yarn run build-loaders
       - run: yarn run build-dev
       - run:
           name: Clean up workspace to persist faster

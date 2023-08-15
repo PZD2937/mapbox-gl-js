@@ -49,7 +49,7 @@ export class RequestManager {
     _customAccessToken: ?string;
     _silenceAuthErrors: boolean;
 
-    constructor(transformRequestFn?: RequestTransformFunction, customAccessToken?: string, silenceAuthErrors: ?boolean) {
+    constructor(transformRequestFn?: ?RequestTransformFunction, customAccessToken?: ?string, silenceAuthErrors: ?boolean) {
         this._transformRequestFn = transformRequestFn;
         this._customAccessToken = customAccessToken;
         this._silenceAuthErrors = !!silenceAuthErrors;
@@ -96,6 +96,13 @@ export class RequestManager {
         if (!isMapboxURL(url)) return url;
         const urlObject = parseUrl(url);
         urlObject.path = `/fonts/v1${urlObject.path}`;
+        return this._makeAPIURL(urlObject, this._customAccessToken || accessToken);
+    }
+
+    normalizeModelURL(url: string, accessToken?: string): string {
+        if (!isMapboxURL(url)) return url;
+        const urlObject = parseUrl(url);
+        urlObject.path = `/models/v1${urlObject.path}`;
         return this._makeAPIURL(urlObject, this._customAccessToken || accessToken);
     }
 

@@ -43,6 +43,7 @@ class WorkerTile {
     pixelRatio: number;
     tileSize: number;
     source: string;
+    scope: string;
     promoteId: ?PromoteIdSpecification;
     overscaling: number;
     showCollisionBoxes: boolean;
@@ -52,6 +53,7 @@ class WorkerTile {
     isSymbolTile: ?boolean;
     projection: Projection;
     tileTransform: TileTransform;
+    brightness: number;
 
     status: 'parsing' | 'done';
     data: IVectorTile;
@@ -70,6 +72,7 @@ class WorkerTile {
         this.pixelRatio = params.pixelRatio;
         this.tileSize = params.tileSize;
         this.source = params.source;
+        this.scope = params.scope;
         this.overscaling = this.tileID.overscaleFactor();
         this.showCollisionBoxes = params.showCollisionBoxes;
         this.collectResourceTiming = !!params.collectResourceTiming;
@@ -79,6 +82,7 @@ class WorkerTile {
         this.isSymbolTile = params.isSymbolTile;
         this.tileTransform = tileTransform(params.tileID.canonical, params.projection);
         this.projection = params.projection;
+        this.brightness = params.brightness;
         this.encrypt = params.vtOptions ? params.vtOptions.encrypt : undefined;
     }
 
@@ -104,7 +108,8 @@ class WorkerTile {
             patternDependencies: {},
             glyphDependencies: {},
             lineAtlas,
-            availableImages
+            availableImages,
+            brightness: this.brightness
         };
 
         const layerFamilies = layerIndex.familiesBySource[this.source];
@@ -152,7 +157,7 @@ class WorkerTile {
                 if (layer.maxzoom && this.zoom >= layer.maxzoom) continue;
                 if (layer.visibility === 'none') continue;
 
-                recalculateLayers(family, this.zoom, availableImages);
+                recalculateLayers(family, this.zoom, options.brightness, availableImages);
 
                 const bucket = buckets[layer.id] = layer.createBucket({
                     index: featureIndex.bucketLayerIDs.length,
@@ -166,8 +171,7 @@ class WorkerTile {
                     sourceLayerIndex,
                     sourceID: this.source,
                     enableTerrain: this.enableTerrain,
-                    projection: this.projection.spec,
-                    availableImages
+                    projection: this.projection.spec
                 });
 
                 assert(this.tileTransform.projection.name === this.projection.name);
@@ -195,7 +199,7 @@ class WorkerTile {
                 for (const key in buckets) {
                     const bucket = buckets[key];
                     if (bucket instanceof SymbolBucket) {
-                        recalculateLayers(bucket.layers, this.zoom, availableImages);
+                        recalculateLayers(bucket.layers, this.zoom, options.brightness, availableImages);
                         performSymbolLayout(bucket,
                             glyphMap,
                             glyphAtlas.positions,
@@ -205,15 +209,16 @@ class WorkerTile {
                             availableImages,
                             this.tileID.canonical,
                             this.tileZoom,
-                            this.projection);
+                            this.projection,
+                            this.brightness);
                     } else if (bucket.hasPattern &&
                         (bucket instanceof LineBucket ||
                          bucket instanceof FillBucket ||
                          bucket instanceof FillExtrusionBucket)) {
-                        recalculateLayers(bucket.layers, this.zoom, availableImages);
+                        recalculateLayers(bucket.layers, this.zoom, options.brightness, availableImages);
                         // $FlowFixMe[incompatible-type] Flow can't interpret ImagePosition as SpritePosition for some reason here
                         const imagePositions: SpritePositions = imageAtlas.patternPositions;
-                        bucket.addFeatures(options, this.tileID.canonical, imagePositions, availableImages, this.tileTransform);
+                        bucket.addFeatures(options, this.tileID.canonical, imagePositions, availableImages, this.tileTransform, this.brightness);
                     }
                 }
 
@@ -225,6 +230,7 @@ class WorkerTile {
                     glyphAtlasImage: glyphAtlas.image,
                     lineAtlas,
                     imageAtlas,
+                    brightness: options.brightness,
                     // Only used for benchmarking:
                     glyphMap: this.returnDependencies ? glyphMap : null,
                     iconMap: this.returnDependencies ? iconMap : null,
@@ -236,7 +242,7 @@ class WorkerTile {
 
         const stacks = mapObject(options.glyphDependencies, (glyphs) => Object.keys(glyphs).map(Number));
         if (Object.keys(stacks).length) {
-            actor.send('getGlyphs', {uid: this.uid, stacks}, (err, result) => {
+            actor.send('getGlyphs', {uid: this.uid, stacks, scope: this.scope}, (err, result) => {
                 if (!error) {
                     error = err;
                     glyphMap = result;
@@ -249,7 +255,7 @@ class WorkerTile {
 
         const icons = Object.keys(options.iconDependencies);
         if (icons.length) {
-            actor.send('getImages', {icons, source: this.source, tileID: this.tileID, type: 'icons'}, (err, result) => {
+            actor.send('getImages', {icons, source: this.source, scope: this.scope, tileID: this.tileID, type: 'icons'}, (err, result) => {
                 if (!error) {
                     error = err;
                     iconMap = result;
@@ -262,7 +268,7 @@ class WorkerTile {
 
         const patterns = Object.keys(options.patternDependencies);
         if (patterns.length) {
-            actor.send('getImages', {icons: patterns, source: this.source, tileID: this.tileID, type: 'patterns'}, (err, result) => {
+            actor.send('getImages', {icons: patterns, source: this.source, scope: this.scope, tileID: this.tileID, type: 'patterns'}, (err, result) => {
                 if (!error) {
                     error = err;
                     patternMap = result;
@@ -279,9 +285,9 @@ class WorkerTile {
     }
 }
 
-function recalculateLayers(layers: $ReadOnlyArray<StyleLayer>, zoom: number, availableImages: Array<string>) {
+function recalculateLayers(layers: $ReadOnlyArray<StyleLayer>, zoom: number, brightness: number, availableImages: Array<string>) {
     // Layers are shared and may have been used by a WorkerTile with a different zoom.
-    const parameters = new EvaluationParameters(zoom);
+    const parameters = new EvaluationParameters(zoom, {brightness});
     for (const layer of layers) {
         layer.recalculate(parameters, availableImages);
     }

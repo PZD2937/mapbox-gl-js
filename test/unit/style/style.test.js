@@ -54,6 +54,8 @@ class StubMap extends Evented {
         this._prioritizeAndUpdateProjection = () => {};
     }
 
+    setCamera() {}
+
     _getMapId() {
         return 1;
     }
@@ -492,7 +494,7 @@ test('Style#setState', (t) => {
             'removeSource',
             'setGeoJSONSourceData',
             'setLayerZoomRange',
-            'setLight'
+            'setFlatLight'
         ].forEach((method) => t.stub(style, method).callsFake(() => t.fail(`${method} called`)));
         style.on('style.load', () => {
             const didChange = style.setState(createStyleJSON());

@@ -19,7 +19,7 @@ import type {OverscaledTileID} from '../source/tile_id.js';
 import type {DynamicDefinesType} from './program/program_uniforms.js';
 import {clamp, nextPowerOfTwo} from '../util/util.js';
 import {renderColorRamp} from '../util/color_ramp.js';
-import EXTENT from '../data/extent.js';
+import EXTENT from '../style-spec/data/extent.js';
 
 export default function drawLine(painter: Painter, sourceCache: SourceCache, layer: LineStyleLayer, coords: Array<OverscaledTileID>) {
     if (painter.renderPass !== 'translucent') return;
@@ -28,8 +28,10 @@ export default function drawLine(painter: Painter, sourceCache: SourceCache, lay
     const width = layer.paint.get('line-width');
     if (opacity.constantOr(1) === 0 || width.constantOr(1) === 0) return;
 
+    const emissiveStrength = layer.paint.get('line-emissive-strength');
+
     const depthMode = painter.depthModeForSublayer(0, DepthMode.ReadOnly);
-    const colorMode = painter.colorModeForRenderPass();
+    const colorMode = painter.colorModeForDrapableLayerRenderPass(emissiveStrength);
     const pixelRatio = (painter.terrain && painter.terrain.renderingToTexture) ? 1.0 : browser.devicePixelRatio;
 
     const dasharrayProperty = layer.paint.get('line-dasharray');
@@ -145,10 +147,10 @@ export default function drawLine(painter: Painter, sourceCache: SourceCache, lay
             programConfiguration.updatePaintBuffers();
         }
 
-        painter.prepareDrawProgram(context, program, coord.toUnwrapped());
+        painter.uploadCommonUniforms(context, program, coord.toUnwrapped());
 
         const renderLine = (stencilMode: StencilMode) => {
-            program.draw(context, gl.TRIANGLES, depthMode,
+            program.draw(painter, gl.TRIANGLES, depthMode,
                 stencilMode, colorMode, CullFaceMode.disabled, uniformValues,
                 layer.id, bucket.layoutVertexBuffer, bucket.indexBuffer, bucket.segments,
                 layer.paint, painter.transform.zoom, programConfiguration, [bucket.layoutVertexBuffer2]);

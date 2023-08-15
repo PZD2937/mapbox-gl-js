@@ -25,7 +25,7 @@ import tileTransform from '../geo/projection/tile_transform.js';
 import {mercatorXfromLng, mercatorYfromLat} from '../geo/mercator_coordinate.js';
 import boundsAttributes from '../data/bounds_attributes.js';
 import posAttributes, {posAttributesGlobeExt} from '../data/pos_attributes.js';
-import EXTENT from '../data/extent.js';
+import EXTENT from '../style-spec/data/extent.js';
 import Point from '@mapbox/point-geometry';
 import SegmentVector from '../data/segment.js';
 import {transitionTileAABBinECEF, globeNormalizeECEF, tileCoordToECEF, globeToMercatorTransition, interpolateVec3} from '../geo/projection/globe_util.js';
@@ -156,6 +156,7 @@ class Tile {
     _tileDebugTextSegments: SegmentVector;
     _tileDebugTextIndexBuffer: IndexBuffer;
     _globeTileDebugTextBuffer: ?VertexBuffer;
+    _lastUpdatedBrightness: ?number;
 
     /**
      * @param {OverscaledTileID} tileID
@@ -175,6 +176,9 @@ class Tile {
         this.hasRTLText = false;
         this.dependencies = {};
         this.isRaster = isRaster;
+        if (painter && painter.style) {
+            this._lastUpdatedBrightness = painter.style.getBrightness();
+        }
 
         // Counts the number of times a response was already expired when
         // received. We're using this to add a delay when making a new request
@@ -287,6 +291,7 @@ class Tile {
         if (data.lineAtlas) {
             this.lineAtlas = data.lineAtlas;
         }
+        this._lastUpdatedBrightness = data.brightness;
     }
 
     /**
@@ -400,10 +405,23 @@ class Tile {
         }
     }
 
-    prepare(imageManager: ImageManager) {
+    prepare(imageManager: ImageManager, painter: ?Painter, scope: string) {
         if (this.imageAtlas) {
-            this.imageAtlas.patchUpdatedImages(imageManager, this.imageAtlasTexture);
+            this.imageAtlas.patchUpdatedImages(imageManager, this.imageAtlasTexture, scope);
         }
+
+        if (!painter || !this.latestFeatureIndex || !this.latestFeatureIndex.rawTileData) {
+            return;
+        }
+        const brightness = painter.style.getBrightness();
+        if (!this._lastUpdatedBrightness && !brightness) {
+            return;
+        }
+        if (this._lastUpdatedBrightness && brightness && Math.abs(this._lastUpdatedBrightness - brightness) < 0.001) {
+            return;
+        }
+        this._lastUpdatedBrightness = brightness;
+        this.updateBuckets(undefined, painter);
     }
 
     // Queries non-symbol features rendered for this tile.
@@ -481,6 +499,15 @@ class Tile {
         return this.state === 'loaded' || this.state === 'reloading' || this.state === 'expired';
     }
 
+    bucketsLoaded(): boolean {
+        for (const id in this.buckets) {
+            if (this.buckets[id].uploadPending())
+                return false;
+        }
+
+        return true;
+    }
+
     patternsLoaded(): boolean {
         return !!this.imageAtlas && !!Object.keys(this.imageAtlas.patternPositions).length;
     }
@@ -553,8 +580,14 @@ class Tile {
             return;
         }
 
+        this.updateBuckets(states, painter);
+    }
+
+    updateBuckets(states: ?LayerFeatureStates, painter: Painter) {
+        if (!this.latestFeatureIndex) return;
         const vtLayers = this.latestFeatureIndex.loadVTLayers();
         const availableImages = painter.style.listImages();
+        const brightness = painter.style.getBrightness();
 
         for (const id in this.buckets) {
             if (!painter.style.hasLayer(id)) continue;
@@ -563,12 +596,15 @@ class Tile {
             // Buckets are grouped by common source-layer
             const sourceLayerId = bucket.layers[0]['sourceLayer'] || '_geojsonTileLayer';
             const sourceLayer = vtLayers[sourceLayerId];
-            const sourceLayerStates = states[sourceLayerId];
-            if (!sourceLayer || !sourceLayerStates || Object.keys(sourceLayerStates).length === 0) continue;
+            let sourceLayerStates = {};
+            if (states) {
+                sourceLayerStates = states[sourceLayerId];
+                if (!sourceLayer || !sourceLayerStates || Object.keys(sourceLayerStates).length === 0) continue;
+            }
 
             // $FlowFixMe[incompatible-type] Flow can't interpret ImagePosition as SpritePosition for some reason here
             const imagePositions: SpritePositions = (this.imageAtlas && this.imageAtlas.patternPositions) || {};
-            bucket.update(sourceLayerStates, sourceLayer, availableImages, imagePositions);
+            bucket.update(sourceLayerStates, sourceLayer, availableImages, imagePositions, brightness);
             if (bucket instanceof LineBucket || bucket instanceof FillBucket) {
                 const sourceCache = painter.style._getSourceCache(bucket.layers[0].source);
                 if (painter._terrain && painter._terrain.enabled && sourceCache && bucket.programConfigurations.needsUpload) {

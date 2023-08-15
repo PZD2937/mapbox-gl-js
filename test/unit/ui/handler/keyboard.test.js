@@ -7,9 +7,10 @@ import {extend} from '../../../../src/util/util.js';
 
 function createMap(t, options) {
     t.stub(Map.prototype, '_detectMissingCSS');
-    t.stub(Map.prototype, '_authenticate');
     return new Map(extend({
         container: DOM.create('div', '', window.document.body),
+        useWebGL2: false,
+        testMode: true,
     }, options));
 }
 

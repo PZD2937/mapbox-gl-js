@@ -35,7 +35,7 @@ function drawHeatmap(painter: Painter, sourceCache: SourceCache, layer: HeatmapS
         // large kernels are not clipped to tiles
         const stencilMode = StencilMode.disabled;
         // Turn on additive blending for kernels, which is a key aspect of kernel density estimation formula
-        const colorMode = new ColorMode([gl.ONE, gl.ONE], Color.transparent, [true, true, true, true]);
+        const colorMode = new ColorMode([gl.ONE, gl.ONE, gl.ONE, gl.ONE], Color.transparent, [true, true, true, true]);
         const resolutionScaling = painter.transform.projection.name === 'globe' ? 0.5 : 0.25;
 
         bindFramebuffer(context, painter, layer, resolutionScaling);
@@ -68,11 +68,11 @@ function drawHeatmap(painter: Painter, sourceCache: SourceCache, layer: HeatmapS
             const {zoom} = painter.transform;
             if (painter.terrain) painter.terrain.setupElevationDraw(tile, program);
 
-            painter.prepareDrawProgram(context, program, coord.toUnwrapped());
+            painter.uploadCommonUniforms(context, program, coord.toUnwrapped());
 
             const invMatrix = tr.projection.createInversionMatrix(tr, coord.canonical);
 
-            program.draw(context, gl.TRIANGLES, DepthMode.disabled, stencilMode, colorMode, cullMode,
+            program.draw(painter, gl.TRIANGLES, DepthMode.disabled, stencilMode, colorMode, cullMode,
                 heatmapUniformValues(painter, coord,
                     tile, invMatrix, mercatorCenter, zoom, layer.paint.get('heatmap-intensity')),
                 layer.id, bucket.layoutVertexBuffer, bucket.indexBuffer,
@@ -108,7 +108,7 @@ function bindFramebuffer(context: Context, painter: Painter, layer: HeatmapStyle
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
-        fbo = layer.heatmapFbo = context.createFramebuffer(width, height, false);
+        fbo = layer.heatmapFbo = context.createFramebuffer(width, height, true, null);
 
         bindTextureToFramebuffer(context, painter, texture, fbo, width, height);
 
@@ -148,7 +148,7 @@ function renderTextureToMap(painter: Painter, layer: HeatmapStyleLayer) {
     }
     colorRampTexture.bind(gl.LINEAR, gl.CLAMP_TO_EDGE);
 
-    painter.useProgram('heatmapTexture').draw(context, gl.TRIANGLES,
+    painter.useProgram('heatmapTexture').draw(painter, gl.TRIANGLES,
         DepthMode.disabled, StencilMode.disabled, painter.colorModeForRenderPass(), CullFaceMode.disabled,
         heatmapTextureUniformValues(painter, layer, 0, 1),
         layer.id, painter.viewportBuffer, painter.quadTriangleIndexBuffer,

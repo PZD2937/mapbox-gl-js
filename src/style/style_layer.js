@@ -16,6 +16,7 @@ import ProgramConfiguration from '../data/program_configuration.js';
 import featureFilter from '../style-spec/feature_filter/index.js';
 
 import type {FeatureState} from '../style-spec/expression/index.js';
+import type {Expression} from '../style-spec/expression/expression.js';
 import type {Bucket} from '../data/bucket.js';
 import type Point from '@mapbox/point-geometry';
 import type {FeatureFilter, FilterExpression} from '../style-spec/feature_filter/index.js';
@@ -29,7 +30,7 @@ import type {
     PropertyValueSpecification
 } from '../style-spec/types.js';
 import type {CustomLayerInterface} from './style_layer/custom_style_layer.js';
-import type Map from '../ui/map.js';
+import type MapboxMap from '../ui/map.js';
 import type {StyleSetterOptions} from './style.js';
 import type {TilespaceQueryGeometry} from './query_geometry.js';
 import type {DEMSampler} from '../terrain/elevation.js';
@@ -39,14 +40,17 @@ const TRANSITION_SUFFIX = '-transition';
 
 class StyleLayer extends Evented {
     id: string;
+    scope: string;
     metadata: mixed;
     type: string;
     source: string;
     sourceLayer: ?string;
+    slot: ?string;
     minzoom: ?number;
     maxzoom: ?number;
     filter: FilterSpecification | void;
     visibility: 'visible' | 'none' | void;
+    isConfigDependent: boolean;
 
     _unevaluatedLayout: Layout<any>;
     +layout: mixed;
@@ -59,6 +63,8 @@ class StyleLayer extends Evented {
     _filterCompiled: boolean;
     zIndex: number;
 
+    options: ?Map<string, Expression>;
+
     +queryRadius: (bucket: Bucket) => number;
     +queryIntersectsFeature: (queryGeometry: TilespaceQueryGeometry,
                               feature: IVectorTileFeature,
@@ -70,16 +76,17 @@ class StyleLayer extends Evented {
                               elevationHelper: ?DEMSampler,
                               layoutVertexArrayOffset: number) => boolean | number;
 
-    +onAdd: ?(map: Map) => void;
-    +onRemove: ?(map: Map) => void;
+    +onAdd: ?(map: MapboxMap) => void;
+    +onRemove: ?(map: MapboxMap) => void;
 
-    constructor(layer: LayerSpecification | CustomLayerInterface, properties: $ReadOnly<{layout?: Properties<*>, paint?: Properties<*>}>) {
+    constructor(layer: LayerSpecification | CustomLayerInterface, properties: $ReadOnly<{layout?: Properties<*>, paint?: Properties<*>}>, options?: ?Map<string, Expression>) {
         super();
 
         this.id = layer.id;
         this.type = layer.type;
         this._featureFilter = {filter: () => true, needGeometry: false, needFeature: false};
         this._filterCompiled = false;
+        this.isConfigDependent = false;
 
         if (layer.type === 'custom') return;
 
@@ -90,18 +97,23 @@ class StyleLayer extends Evented {
         this.maxzoom = layer.maxzoom;
         this.zIndex = layer.zIndex;
 
-        if (layer.type !== 'background' && layer.type !== 'sky') {
+        if (layer.type !== 'background' && layer.type !== 'sky' && layer.type !== 'slot') {
             this.source = layer.source;
             this.sourceLayer = layer['source-layer'];
             this.filter = layer.filter;
         }
 
+        this.options = options;
+
+        if (layer.slot) this.slot = layer.slot;
+
         if (properties.layout) {
-            this._unevaluatedLayout = new Layout(properties.layout);
+            this._unevaluatedLayout = new Layout(properties.layout, options);
+            this.isConfigDependent = this.isConfigDependent || this._unevaluatedLayout.isConfigDependent;
         }
 
         if (properties.paint) {
-            this._transitionablePaint = new Transitionable(properties.paint);
+            this._transitionablePaint = new Transitionable(properties.paint, options);
 
             for (const property in layer.paint) {
                 this.setPaintProperty(property, layer.paint[property], {validate: false});
@@ -109,6 +121,7 @@ class StyleLayer extends Evented {
             for (const property in layer.layout) {
                 this.setLayoutProperty(property, layer.layout[property], {validate: false});
             }
+            this.isConfigDependent = this.isConfigDependent || this._transitionablePaint.isConfigDependent;
 
             this._transitioningPaint = this._transitionablePaint.untransitioned();
             //$FlowFixMe
@@ -132,12 +145,12 @@ class StyleLayer extends Evented {
             }
         }
 
-        if (name === 'visibility') {
-            this.visibility = value;
-            return;
-        }
-
         this._unevaluatedLayout.setValue(name, value);
+        this.isConfigDependent = this.isConfigDependent || this._unevaluatedLayout.isConfigDependent;
+
+        if (name === 'visibility') {
+            this.visibility = this._unevaluatedLayout._values.visibility.possiblyEvaluate({zoom: 0});
+        }
     }
 
     getPaintProperty(name: string): void | TransitionSpecification | PropertyValueSpecification<mixed> {
@@ -165,6 +178,7 @@ class StyleLayer extends Evented {
             const oldValue = transitionable.value;
 
             this._transitionablePaint.setValue(name, value);
+            this.isConfigDependent = this.isConfigDependent || this._transitionablePaint.isConfigDependent;
             this._handleSpecialPaintPropertyUpdate(name);
 
             const newValue = this._transitionablePaint._values[name].value;
@@ -235,11 +249,6 @@ class StyleLayer extends Evented {
             'zIndex': this.zIndex
         };
 
-        if (this.visibility) {
-            output.layout = output.layout || {};
-            output.layout.visibility = this.visibility;
-        }
-
         return filterObject(output, (value, key) => {
             return value !== undefined &&
                 !(key === 'layout' && !Object.keys(value).length) &&
@@ -275,6 +284,14 @@ class StyleLayer extends Evented {
     }
 
     hasOffscreenPass(): boolean {
+        return false;
+    }
+
+    hasShadowPass(): boolean {
+        return false;
+    }
+
+    hasLightBeamPass(): boolean {
         return false;
     }
 

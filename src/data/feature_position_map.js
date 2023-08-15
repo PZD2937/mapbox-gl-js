@@ -9,20 +9,16 @@ type SerializedFeaturePositionMap = {
     positions: Uint32Array;
 };
 
-type FeaturePosition = {
-    index: number;
-    start: number;
-    end: number;
-};
-
 // A transferable data structure that maps feature ids to their indices and buffer offsets
 export default class FeaturePositionMap {
     ids: Array<number>;
+    uniqueIds: Array<number>;
     positions: Array<number>;
     indexed: boolean;
 
     constructor() {
         this.ids = [];
+        this.uniqueIds = [];
         this.positions = [];
         this.indexed = false;
     }
@@ -32,7 +28,7 @@ export default class FeaturePositionMap {
         this.positions.push(index, start, end);
     }
 
-    getPositions(id: mixed): Array<FeaturePosition> {
+    eachPosition(id: mixed, fn: (index: number, start: number, end: number) => void) {
         assert(this.indexed);
 
         const intId = getNumericId(id);
@@ -49,15 +45,13 @@ export default class FeaturePositionMap {
                 i = m + 1;
             }
         }
-        const positions = [];
         while (this.ids[i] === intId) {
             const index = this.positions[3 * i];
             const start = this.positions[3 * i + 1];
             const end = this.positions[3 * i + 2];
-            positions.push({index, start, end});
+            fn(index, start, end);
             i++;
         }
-        return positions;
     }
 
     static serialize(map: FeaturePositionMap, transferables: Array<ArrayBuffer>): SerializedFeaturePositionMap {
@@ -79,6 +73,11 @@ export default class FeaturePositionMap {
         // so TypedArray vs Array distinction that flow points out doesn't matter
         map.ids = (obj.ids: any);
         map.positions = (obj.positions: any);
+        let prev;
+        for (const id of map.ids) {
+            if (id !== prev) map.uniqueIds.push(id);
+            prev = id;
+        }
         map.indexed = true;
         return map;
     }

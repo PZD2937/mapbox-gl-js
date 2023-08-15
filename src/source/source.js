@@ -39,6 +39,7 @@ import {CanonicalTileID} from './tile_id.js';
 export interface Source {
     +type: string;
     id: string;
+    scope: string;
     minzoom: number,
     maxzoom: number,
     tileSize: number,
@@ -56,6 +57,7 @@ export interface Source {
     maxTileCacheSize?: ?number;
     language?: ?string;
     worldview?: ?string;
+    +usedInConflation?: boolean;
 
     hasTransition(): boolean;
     loaded(): boolean;
@@ -106,7 +108,8 @@ import video from '../source/video_source.js';
 import image from '../source/image_source.js';
 import canvas from '../source/canvas_source.js';
 import custom from '../source/custom_source.js';
-
+import model from '../../3d-style/source/model_source.js';
+import tiled3DModel from '../../3d-style/source/tiled_3d_model_source.js';
 import type {SourceSpecification} from '../style-spec/types.js';
 
 const sourceTypes: {[string]: Class<Source>} = {
@@ -116,6 +119,8 @@ const sourceTypes: {[string]: Class<Source>} = {
     geojson,
     video,
     image,
+    model,
+    'batched-model': tiled3DModel,
     canvas,
     custom
 };

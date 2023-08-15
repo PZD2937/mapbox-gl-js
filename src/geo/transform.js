@@ -8,7 +8,7 @@ import {tileAABB} from '../geo/projection/tile_transform.js';
 import Point from '@mapbox/point-geometry';
 import {wrap, clamp, pick, radToDeg, degToRad, getAABBPointSquareDist, furthestTileCorner, warnOnce, deepEqual} from '../util/util.js';
 import {number as interpolate} from '../style-spec/util/interpolate.js';
-import EXTENT from '../data/extent.js';
+import EXTENT from '../style-spec/data/extent.js';
 import {vec4, mat4, mat2, vec3, quat} from 'gl-matrix';
 import {Frustum, FrustumCorners, Ray} from '../util/primitives.js';
 import EdgeInsets from './edge_insets.js';
@@ -20,6 +20,7 @@ import {UnwrappedTileID, OverscaledTileID, CanonicalTileID} from '../source/tile
 import {
     calculateGlobeMatrix,
     polesInViewport,
+    aabbForTileOnGlobe,
     GLOBE_ZOOM_THRESHOLD_MIN,
     GLOBE_ZOOM_THRESHOLD_MAX,
     GLOBE_SCALE_MATCH_LATITUDE
@@ -36,7 +37,8 @@ import type {Mat4, Vec3, Vec4, Quat} from 'gl-matrix';
 import type {Aabb} from '../util/primitives';
 
 const NUM_WORLD_COPIES = 3;
-const DEFAULT_MIN_ZOOM = 0;
+export const DEFAULT_MIN_ZOOM = 0;
+export const DEFAULT_MAX_ZOOM = 25.5;
 
 type RayIntersectionResult = { p0: Vec4, p1: Vec4, t: number};
 type ElevationReference = "sea" | "ground";
@@ -51,6 +53,19 @@ type RootTile = {
     x: number,
     y: number,
     zoom: number,
+};
+
+const OrthographicPitchTranstionValue = 15;
+const lerp = (x: number, y: number, t: number) => { return (1 - t) * x + t * y; };
+const easeIn = (x: number) => {
+    return x * x * x * x * x;
+};
+const lerpMatrix = (out: Float64Array, a: Float64Array, b: Float64Array, value: number) => {
+    for (let i = 0; i < 16; i++) {
+        out[i] = lerp(a[i], b[i], value);
+    }
+
+    return out;
 };
 
 /**
@@ -106,6 +121,8 @@ class Transform {
 
     worldToFogMatrix: Float64Array;
     skyboxMatrix: Float32Array;
+
+    starsProjMatrix: Float32Array;
 
     // Transform from screen coordinates to GL NDC, [0, w] x [h, 0] --> [-1, 1] x [-1, 1]
     // Roughly speaking, applies pixelsToGLUnits scaling with a translation
@@ -170,6 +187,8 @@ class Transform {
     _mercatorScaleRatio: number;
     _isCameraConstrained: boolean;
 
+    _orthographicProjectionAtLowPitch: boolean;
+
     constructor(minZoom: ?number, maxZoom: ?number, minPitch: ?number, maxPitch: ?number, renderWorldCopies: boolean | void, projection?: ?ProjectionSpecification, bounds: ?LngLatBounds) {
         this.tileSize = 512; // constant
 
@@ -208,6 +227,8 @@ class Transform {
 
         // Move the horizon closer to the center. 0 would not shift the horizon. 1 would put the horizon at the center.
         this._horizonShift = 0.1;
+
+        this._orthographicProjectionAtLowPitch = false;
     }
 
     clone(): Transform {
@@ -276,6 +297,18 @@ class Transform {
         this.mercatorFromTransition = false;
 
         return projectionHasChanged;
+    }
+
+    // Returns whether the projection need to be reevaluated
+    setOrthographicProjectionAtLowPitch(enabled: boolean): boolean {
+        if (this._orthographicProjectionAtLowPitch === enabled) {
+            return false;
+        }
+
+        this._orthographicProjectionAtLowPitch = enabled;
+        this._calcMatrices();
+
+        return true;
     }
 
     setMercatorFromTransition(): boolean {
@@ -775,7 +808,8 @@ class Transform {
         let z = this.coveringZoomLevel(options);
         const actualZ = z;
 
-        const useElevationData = this.elevation && !options.isTerrainDEM;
+        const hasExaggeration = this.elevation && this.elevation.exaggeration();
+        const useElevationData = hasExaggeration && !options.isTerrainDEM;
         const isMercator = this.projection.name === 'mercator';
 
         if (options.minzoom !== undefined && z < options.minzoom) return [];
@@ -792,6 +826,7 @@ class Transform {
         const meterToTile = numTiles * mercatorZfromAltitude(1, this.center.lat);
         const cameraAltitude = this._camera.position[2] / mercatorZfromAltitude(1, this.center.lat);
         const cameraPoint = [numTiles * cameraCoord.x, numTiles * cameraCoord.y, cameraAltitude * (zInMeters ? 1 : meterToTile)];
+        const verticalFrustumIntersect = isGlobe || hasExaggeration;
         // Let's consider an example for !roundZoom: e.g. tileZoom 16 is used from zoom 16 all the way to zoom 16.99.
         // This would mean that the minimal distance to split would be based on distance from camera to center of 16.99 zoom.
         // The same is already incorporated in logic behind roundZoom for raster (so there is no adjustment needed in following line).
@@ -995,13 +1030,24 @@ class Transform {
             const y = it.y;
             let fullyVisible = it.fullyVisible;
 
+            const isPoleNeighbourAndGlobeProjection = () => {
+                return this.projection.name === 'globe' && (it.y === 0 || it.y === (1 << it.zoom) - 1);
+            };
+
             // Visibility of a tile is not required if any of its ancestor is fully inside the frustum
             if (!fullyVisible) {
-                const intersectResult = it.aabb.intersects(cameraFrustum);
+                let intersectResult = verticalFrustumIntersect ? it.aabb.intersects(cameraFrustum) : it.aabb.intersectsFlat(cameraFrustum);
 
-                if (intersectResult === 0)
+                // For globe projection and pole neighboouring tiles - clip against pole segments as well
+                if (intersectResult === 0 && isPoleNeighbourAndGlobeProjection()) {
+                    const tileId = new CanonicalTileID(it.zoom, x, y);
+                    const poleAABB = aabbForTileOnGlobe(this, numTiles, tileId, true);
+                    intersectResult = poleAABB.intersects(cameraFrustum);
+                }
+
+                if (intersectResult === 0) {
                     continue;
-
+                }
                 fullyVisible = intersectResult === 2;
             }
 
@@ -1011,6 +1057,23 @@ class Transform {
                 if (!!options.minzoom && options.minzoom > tileZoom) {
                     // Not within source tile range.
                     continue;
+                }
+
+                // Perform more precise intersection tests to cull the remaining < 1% false positives from the earlier test.
+                if (!fullyVisible) {
+
+                    let intersectResult = verticalFrustumIntersect ? it.aabb.intersectsPrecise(cameraFrustum) : it.aabb.intersectsPreciseFlat(cameraFrustum);
+
+                    // For globe projection and pole neighboouring tiles - clip against pole segments as well
+                    if (intersectResult === 0 && isPoleNeighbourAndGlobeProjection()) {
+                        const tileId = new CanonicalTileID(it.zoom, x, y);
+                        const poleAABB = aabbForTileOnGlobe(this, numTiles, tileId, true);
+                        intersectResult = poleAABB.intersectsPrecise(cameraFrustum);
+                    }
+
+                    if (intersectResult === 0) {
+                        continue;
+                    }
                 }
 
                 const dx = centerPoint[0] - ((0.5 + x + (it.wrap << it.zoom)) * (1 << (z - it.zoom)));
@@ -1896,12 +1959,38 @@ class Transform {
 
         const zUnit = this.projection.zAxisUnit === "meters" ? pixelsPerMeter : 1.0;
         const worldToCamera = this._camera.getWorldToCamera(this.worldSize, zUnit);
-        const cameraToClip = this._camera.getCameraToClipPerspective(this._fov, this.width / this.height, this._nearZ, this._farZ);
 
-        // Apply center of perspective offset
-        cameraToClip[8] = -offset.x * 2 / this.width;
-        cameraToClip[9] = offset.y * 2 / this.height;
+        let cameraToClip;
 
+        const cameraToClipPerspective = this._camera.getCameraToClipPerspective(this._fov, this.width / this.height, this._nearZ, this._farZ);
+        // Apply offset/padding
+        cameraToClipPerspective[8] = -offset.x * 2 / this.width;
+        cameraToClipPerspective[9] = offset.y * 2 / this.height;
+
+        if (this.projection.name !== 'globe' && this._orthographicProjectionAtLowPitch && this.pitch < OrthographicPitchTranstionValue) {
+            const cameraToCenterDistance =  0.5 * this.height / Math.tan(this._fov / 2.0) * 1.0;
+
+            // Calculate bounds for orthographic view
+            let top = cameraToCenterDistance * Math.tan(this._fov * 0.5);
+            let right = top * this.aspect;
+            let left = -right;
+            let bottom = -top;
+            // Apply offset/padding
+            right -= offset.x;
+            left -= offset.x;
+            top += offset.y;
+            bottom += offset.y;
+
+            cameraToClip = this._camera.getCameraToClipOrthographic(left, right, bottom, top, this._nearZ, this._farZ);
+
+            const mixValue =
+                this.pitch >= OrthographicPitchTranstionValue ? 1.0 : this.pitch / OrthographicPitchTranstionValue;
+            lerpMatrix(cameraToClip, cameraToClip, cameraToClipPerspective, easeIn(mixValue));
+        } else {
+            cameraToClip = cameraToClipPerspective;
+        }
+
+        const worldToClipPerspective: Array<number> | Float32Array | Float64Array = mat4.mul([], cameraToClipPerspective, worldToCamera);
         let m: Array<number> | Float32Array | Float64Array = mat4.mul([], cameraToClip, worldToCamera);
 
         if (this.projection.isReprojectedInTileSpace) {
@@ -1913,6 +2002,7 @@ class Transform {
             mat4.multiply(adjustments, adjustments, getProjectionAdjustments(this));
             mat4.translate(adjustments, adjustments, [-mc.x * this.worldSize, -mc.y * this.worldSize, 0]);
             mat4.multiply(m, m, adjustments);
+            mat4.multiply(worldToClipPerspective, worldToClipPerspective, adjustments);
             this.inverseAdjustmentMatrix = getProjectionAdjustmentInverted(this);
         } else {
             this.inverseAdjustmentMatrix = [1, 0, 0, 1];
@@ -1938,6 +2028,9 @@ class Transform {
         mat4.rotateZ(view, view, this.angle);
 
         const projection = mat4.perspective(new Float32Array(16), this._fov, this.width / this.height, this._nearZ, this._farZ);
+
+        this.starsProjMatrix = mat4.clone(projection);
+
         // The distance in pixels the skybox needs to be shifted down by to meet the shifted horizon.
         const skyboxHorizonShift = (Math.PI / 2 - this._pitch) * (this.height / this._fov) * this._horizonShift;
         // Apply center of perspective offset to skybox projection
@@ -1973,7 +2066,7 @@ class Transform {
         this.glCoordMatrix = m;
 
         // matrix for conversion from location to screen coordinates
-        this.pixelMatrix = mat4.multiply(new Float64Array(16), this.labelPlaneMatrix, this.projMatrix);
+        this.pixelMatrix = mat4.multiply(new Float64Array(16), this.labelPlaneMatrix, worldToClipPerspective);
 
         this._calcFogMatrices();
         this._distanceTileDataCache = {};
@@ -2278,7 +2371,15 @@ class Transform {
     getCameraToCenterDistance(projection: Projection, zoom: number = this.zoom, worldSize: number = this.worldSize): number {
         const t = getProjectionInterpolationT(projection, zoom, this.width, this.height, 1024);
         const projectionScaler = projection.pixelSpaceConversion(this.center.lat, worldSize, t);
-        return 0.5 / Math.tan(this._fov * 0.5) * this.height * projectionScaler;
+        let distance =  0.5 / Math.tan(this._fov * 0.5) * this.height * projectionScaler;
+
+        // In case we have orthographic transition we need to interpolate the distance value in the range [1, distance]
+        // to calculate correct perspective ratio values for symbols
+        if (this._orthographicProjectionAtLowPitch && this.projection.name !== 'globe' && true && this.pitch < OrthographicPitchTranstionValue) {
+            const mixValue = this.pitch >= OrthographicPitchTranstionValue ? 1.0 : this.pitch / OrthographicPitchTranstionValue;
+            distance = lerp(1.0, distance, easeIn(mixValue));
+        }
+        return distance;
     }
 
     getWorldToCameraMatrix(): Mat4 {

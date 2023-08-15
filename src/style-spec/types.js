@@ -59,6 +59,7 @@ export type DataDrivenPropertyValueSpecification<T> =
 
 export type StyleSpecification = {|
     "version": 8,
+    "fragment"?: boolean,
     "name"?: string,
     "metadata"?: mixed,
     "center"?: Array<number>,
@@ -66,15 +67,28 @@ export type StyleSpecification = {|
     "bearing"?: number,
     "pitch"?: number,
     "light"?: LightSpecification,
+    "lights"?: Array<LightsSpecification>,
     "terrain"?: TerrainSpecification,
     "fog"?: FogSpecification,
-    "sources": {[_: string]: SourceSpecification},
+    "camera"?: CameraSpecification,
+    "imports"?: Array<ImportSpecification>,
+    "schema"?: SchemaSpecification,
+    "sources": SourcesSpecification,
     "sprite"?: string,
     "glyphs"?: string,
     "transition"?: TransitionSpecification,
     "projection"?: ProjectionSpecification,
-    "layers": Array<LayerSpecification>
+    "layers": Array<LayerSpecification>,
+    "models"?: ModelsSpecification
 |}
+
+export type SourcesSpecification = {
+    [_: string]: SourceSpecification
+}
+
+export type ModelsSpecification = {
+    [_: string]: ModelSpecification
+}
 
 export type LightSpecification = {|
     "anchor"?: PropertyValueSpecification<"map" | "viewport">,
@@ -97,10 +111,40 @@ export type FogSpecification = {|
     "star-intensity"?: PropertyValueSpecification<number>
 |}
 
+export type CameraSpecification = {|
+    "camera-projection"?: PropertyValueSpecification<"perspective" | "orthographic">
+|}
+
 export type ProjectionSpecification = {|
     "name": "albers" | "equalEarth" | "equirectangular" | "lambertConformalConic" | "mercator" | "naturalEarth" | "winkelTripel" | "globe",
     "center"?: [number, number],
     "parallels"?: [number, number]
+|}
+
+export type ImportSpecification = {|
+    "id": string,
+    "url": string,
+    "config"?: ConfigSpecification,
+    "data"?: StyleSpecification
+|}
+
+export type ConfigSpecification = {
+    [_: string]: mixed
+}
+
+export type SchemaSpecification = {
+    [_: string]: OptionSpecification
+}
+
+export type OptionSpecification = {|
+    "default": mixed,
+    "type"?: "string" | "number" | "boolean" | "color",
+    "array"?: boolean,
+    "minValue"?: number,
+    "maxValue"?: number,
+    "stepValue"?: number,
+    "values"?: Array<mixed>,
+    "metadata"?: mixed
 |}
 
 export type VectorSourceSpecification = {
@@ -114,7 +158,8 @@ export type VectorSourceSpecification = {
     "maxzoom"?: number,
     "attribution"?: string,
     "promoteId"?: PromoteIdSpecification,
-    "volatile"?: boolean
+    "volatile"?: boolean,
+    [_: string]: mixed
 }
 
 export type RasterSourceSpecification = {
@@ -128,7 +173,8 @@ export type RasterSourceSpecification = {
     "tileSize"?: number,
     "scheme"?: "xyz" | "tms",
     "attribution"?: string,
-    "volatile"?: boolean
+    "volatile"?: boolean,
+    [_: string]: mixed
 }
 
 export type RasterDEMSourceSpecification = {
@@ -142,7 +188,8 @@ export type RasterDEMSourceSpecification = {
     "tileSize"?: number,
     "attribution"?: string,
     "encoding"?: "terrarium" | "mapbox",
-    "volatile"?: boolean
+    "volatile"?: boolean,
+    [_: string]: mixed
 }
 
 export type GeoJSONSourceSpecification = {|
@@ -178,6 +225,13 @@ export type ImageSourceSpecification = {|
     "coordinates": [[number, number], [number, number], [number, number], [number, number]]
 |}
 
+export type ModelSourceSpecification = {|
+    "type": "model" | "batched-model",
+    "maxzoom"?: number,
+    "minzoom"?: number,
+    "tiles"?: Array<string>
+|}
+
 export type SourceSpecification =
     | VectorSourceSpecification
     | RasterSourceSpecification
@@ -185,6 +239,46 @@ export type SourceSpecification =
     | GeoJSONSourceSpecification
     | VideoSourceSpecification
     | ImageSourceSpecification
+    | ModelSourceSpecification
+
+export type ModelSpecification = string;
+
+export type AmbientLightSpecification = {|
+    "id": string,
+    "properties"?: {|
+        "color"?: PropertyValueSpecification<ColorSpecification>,
+        "intensity"?: PropertyValueSpecification<number>
+    |},
+    "type": "ambient"
+|}
+
+export type DirectionalLightSpecification = {|
+    "id": string,
+    "properties"?: {|
+        "direction"?: PropertyValueSpecification<[number, number]>,
+        "color"?: PropertyValueSpecification<ColorSpecification>,
+        "intensity"?: PropertyValueSpecification<number>,
+        "cast-shadows"?: ExpressionSpecification,
+        "shadow-intensity"?: PropertyValueSpecification<number>
+    |},
+    "type": "directional"
+|}
+
+export type FlatLightSpecification = {|
+    "id": string,
+    "properties"?: {|
+        "anchor"?: PropertyValueSpecification<"map" | "viewport">,
+        "position"?: PropertyValueSpecification<[number, number, number]>,
+        "color"?: PropertyValueSpecification<ColorSpecification>,
+        "intensity"?: PropertyValueSpecification<number>
+    |},
+    "type": "flat"
+|}
+
+export type LightsSpecification =
+    | AmbientLightSpecification
+    | DirectionalLightSpecification
+    | FlatLightSpecification;
 
 export type FillLayerSpecification = {|
     "id": string,
@@ -192,13 +286,14 @@ export type FillLayerSpecification = {|
     "metadata"?: mixed,
     "source": string,
     "source-layer"?: string,
+    "slot"?: string,
     "minzoom"?: number,
     "maxzoom"?: number,
     "filter"?: FilterSpecification,
     "zIndex"?: number,
     "layout"?: {|
         "fill-sort-key"?: DataDrivenPropertyValueSpecification<number>,
-        "visibility"?: "visible" | "none"
+        "visibility"?: ExpressionSpecification
     |},
     "paint"?: {|
         "fill-antialias"?: PropertyValueSpecification<boolean>,
@@ -207,7 +302,8 @@ export type FillLayerSpecification = {|
         "fill-outline-color"?: DataDrivenPropertyValueSpecification<ColorSpecification>,
         "fill-translate"?: PropertyValueSpecification<[number, number]>,
         "fill-translate-anchor"?: PropertyValueSpecification<"map" | "viewport">,
-        "fill-pattern"?: DataDrivenPropertyValueSpecification<ResolvedImageSpecification>
+        "fill-pattern"?: DataDrivenPropertyValueSpecification<ResolvedImageSpecification>,
+        "fill-emissive-strength"?: PropertyValueSpecification<number>
     |}
 |}
 
@@ -217,6 +313,7 @@ export type LineLayerSpecification = {|
     "metadata"?: mixed,
     "source": string,
     "source-layer"?: string,
+    "slot"?: string,
     "minzoom"?: number,
     "maxzoom"?: number,
     "filter"?: FilterSpecification,
@@ -227,7 +324,7 @@ export type LineLayerSpecification = {|
         "line-miter-limit"?: PropertyValueSpecification<number>,
         "line-round-limit"?: PropertyValueSpecification<number>,
         "line-sort-key"?: DataDrivenPropertyValueSpecification<number>,
-        "visibility"?: "visible" | "none"
+        "visibility"?: ExpressionSpecification
     |},
     "paint"?: {|
         "line-opacity"?: DataDrivenPropertyValueSpecification<number>,
@@ -241,7 +338,10 @@ export type LineLayerSpecification = {|
         "line-dasharray"?: DataDrivenPropertyValueSpecification<Array<number>>,
         "line-pattern"?: DataDrivenPropertyValueSpecification<ResolvedImageSpecification>,
         "line-gradient"?: ExpressionSpecification,
-        "line-trim-offset"?: [number, number]
+        "line-trim-offset"?: [number, number],
+        "line-emissive-strength"?: PropertyValueSpecification<number>,
+        "line-border-width"?: DataDrivenPropertyValueSpecification<number>,
+        "line-border-color"?: DataDrivenPropertyValueSpecification<ColorSpecification>
     |}
 |}
 
@@ -251,6 +351,7 @@ export type SymbolLayerSpecification = {|
     "metadata"?: mixed,
     "source": string,
     "source-layer"?: string,
+    "slot"?: string,
     "minzoom"?: number,
     "maxzoom"?: number,
     "filter"?: FilterSpecification,
@@ -266,8 +367,8 @@ export type SymbolLayerSpecification = {|
         "icon-optional"?: PropertyValueSpecification<boolean>,
         "icon-rotation-alignment"?: PropertyValueSpecification<"map" | "viewport" | "auto">,
         "icon-size"?: DataDrivenPropertyValueSpecification<number>,
-        "icon-text-fit"?: PropertyValueSpecification<"none" | "width" | "height" | "both">,
-        "icon-text-fit-padding"?: PropertyValueSpecification<[number, number, number, number]>,
+        "icon-text-fit"?: DataDrivenPropertyValueSpecification<"none" | "width" | "height" | "both">,
+        "icon-text-fit-padding"?: DataDrivenPropertyValueSpecification<[number, number, number, number]>,
         "icon-image"?: DataDrivenPropertyValueSpecification<ResolvedImageSpecification>,
         "icon-rotate"?: DataDrivenPropertyValueSpecification<number>,
         "icon-padding"?: PropertyValueSpecification<number>,
@@ -297,16 +398,19 @@ export type SymbolLayerSpecification = {|
         "text-allow-overlap"?: PropertyValueSpecification<boolean>,
         "text-ignore-placement"?: PropertyValueSpecification<boolean>,
         "text-optional"?: PropertyValueSpecification<boolean>,
-        "visibility"?: "visible" | "none"
+        "visibility"?: ExpressionSpecification
     |},
     "paint"?: {|
         "icon-opacity"?: DataDrivenPropertyValueSpecification<number>,
+        "icon-emissive-strength"?: DataDrivenPropertyValueSpecification<number>,
+        "text-emissive-strength"?: DataDrivenPropertyValueSpecification<number>,
         "icon-color"?: DataDrivenPropertyValueSpecification<ColorSpecification>,
         "icon-halo-color"?: DataDrivenPropertyValueSpecification<ColorSpecification>,
         "icon-halo-width"?: DataDrivenPropertyValueSpecification<number>,
         "icon-halo-blur"?: DataDrivenPropertyValueSpecification<number>,
         "icon-translate"?: PropertyValueSpecification<[number, number]>,
         "icon-translate-anchor"?: PropertyValueSpecification<"map" | "viewport">,
+        "icon-image-cross-fade"?: DataDrivenPropertyValueSpecification<number>,
         "text-opacity"?: DataDrivenPropertyValueSpecification<number>,
         "text-color"?: DataDrivenPropertyValueSpecification<ColorSpecification>,
         "text-halo-color"?: DataDrivenPropertyValueSpecification<ColorSpecification>,
@@ -323,13 +427,14 @@ export type CircleLayerSpecification = {|
     "metadata"?: mixed,
     "source": string,
     "source-layer"?: string,
+    "slot"?: string,
     "minzoom"?: number,
     "maxzoom"?: number,
     "filter"?: FilterSpecification,
     "zIndex"?: number,
     "layout"?: {|
         "circle-sort-key"?: DataDrivenPropertyValueSpecification<number>,
-        "visibility"?: "visible" | "none"
+        "visibility"?: ExpressionSpecification
     |},
     "paint"?: {|
         "circle-radius"?: DataDrivenPropertyValueSpecification<number>,
@@ -342,7 +447,8 @@ export type CircleLayerSpecification = {|
         "circle-pitch-alignment"?: PropertyValueSpecification<"map" | "viewport">,
         "circle-stroke-width"?: DataDrivenPropertyValueSpecification<number>,
         "circle-stroke-color"?: DataDrivenPropertyValueSpecification<ColorSpecification>,
-        "circle-stroke-opacity"?: DataDrivenPropertyValueSpecification<number>
+        "circle-stroke-opacity"?: DataDrivenPropertyValueSpecification<number>,
+        "circle-emissive-strength"?: PropertyValueSpecification<number>
     |}
 |}
 
@@ -352,12 +458,13 @@ export type HeatmapLayerSpecification = {|
     "metadata"?: mixed,
     "source": string,
     "source-layer"?: string,
+    "slot"?: string,
     "minzoom"?: number,
     "maxzoom"?: number,
     "filter"?: FilterSpecification,
     "zIndex"?: number,
     "layout"?: {|
-        "visibility"?: "visible" | "none"
+        "visibility"?: ExpressionSpecification
     |},
     "paint"?: {|
         "heatmap-radius"?: DataDrivenPropertyValueSpecification<number>,
@@ -374,13 +481,14 @@ export type FillExtrusionLayerSpecification = {|
     "metadata"?: mixed,
     "source": string,
     "source-layer"?: string,
+    "slot"?: string,
     "minzoom"?: number,
     "maxzoom"?: number,
     "filter"?: FilterSpecification,
     "zIndex"?: number,
     "layout"?: {|
-        "visibility"?: "visible" | "none",
-        "fill-extrusion-edge-radius"?: number
+        "visibility"?: ExpressionSpecification,
+        "fill-extrusion-edge-radius"?: ExpressionSpecification
     |},
     "paint"?: {|
         "fill-extrusion-opacity"?: PropertyValueSpecification<number>,
@@ -393,6 +501,15 @@ export type FillExtrusionLayerSpecification = {|
         "fill-extrusion-vertical-gradient"?: PropertyValueSpecification<boolean>,
         "fill-extrusion-ambient-occlusion-intensity"?: PropertyValueSpecification<number>,
         "fill-extrusion-ambient-occlusion-radius"?: PropertyValueSpecification<number>,
+        "fill-extrusion-ambient-occlusion-wall-radius"?: PropertyValueSpecification<number>,
+        "fill-extrusion-ambient-occlusion-ground-radius"?: PropertyValueSpecification<number>,
+        "fill-extrusion-ambient-occlusion-ground-attenuation"?: PropertyValueSpecification<number>,
+        "fill-extrusion-flood-light-color"?: PropertyValueSpecification<ColorSpecification>,
+        "fill-extrusion-flood-light-intensity"?: PropertyValueSpecification<number>,
+        "fill-extrusion-flood-light-wall-radius"?: DataDrivenPropertyValueSpecification<number>,
+        "fill-extrusion-flood-light-ground-radius"?: DataDrivenPropertyValueSpecification<number>,
+        "fill-extrusion-flood-light-ground-attenuation"?: PropertyValueSpecification<number>,
+        "fill-extrusion-vertical-scale"?: PropertyValueSpecification<number>,
         "fill-extrusion-rounded-roof"?: PropertyValueSpecification<boolean>
     |}
 |}
@@ -403,15 +520,19 @@ export type RasterLayerSpecification = {|
     "metadata"?: mixed,
     "source": string,
     "source-layer"?: string,
+    "slot"?: string,
     "minzoom"?: number,
     "maxzoom"?: number,
     "filter"?: FilterSpecification,
     "zIndex"?: number,
     "layout"?: {|
-        "visibility"?: "visible" | "none"
+        "visibility"?: ExpressionSpecification
     |},
     "paint"?: {|
         "raster-opacity"?: PropertyValueSpecification<number>,
+        "raster-color"?: ExpressionSpecification,
+        "raster-color-mix"?: PropertyValueSpecification<[number, number, number, number]>,
+        "raster-color-range"?: PropertyValueSpecification<[number, number]>,
         "raster-hue-rotate"?: PropertyValueSpecification<number>,
         "raster-brightness-min"?: PropertyValueSpecification<number>,
         "raster-brightness-max"?: PropertyValueSpecification<number>,
@@ -428,12 +549,13 @@ export type HillshadeLayerSpecification = {|
     "metadata"?: mixed,
     "source": string,
     "source-layer"?: string,
+    "slot"?: string,
     "minzoom"?: number,
     "maxzoom"?: number,
     "filter"?: FilterSpecification,
     "zIndex"?: number,
     "layout"?: {|
-        "visibility"?: "visible" | "none"
+        "visibility"?: ExpressionSpecification
     |},
     "paint"?: {|
         "hillshade-illumination-direction"?: PropertyValueSpecification<number>,
@@ -445,20 +567,53 @@ export type HillshadeLayerSpecification = {|
     |}
 |}
 
+export type ModelLayerSpecification = {|
+    "id": string,
+    "type": "model",
+    "metadata"?: mixed,
+    "source": string,
+    "source-layer"?: string,
+    "slot"?: string,
+    "minzoom"?: number,
+    "maxzoom"?: number,
+    "filter"?: FilterSpecification,
+    "layout"?: {|
+        "visibility"?: ExpressionSpecification,
+        "model-id"?: DataDrivenPropertyValueSpecification<string>
+    |},
+    "paint"?: {|
+        "model-opacity"?: PropertyValueSpecification<number>,
+        "model-rotation"?: DataDrivenPropertyValueSpecification<[number, number, number]>,
+        "model-scale"?: DataDrivenPropertyValueSpecification<[number, number, number]>,
+        "model-translation"?: DataDrivenPropertyValueSpecification<[number, number, number]>,
+        "model-color"?: DataDrivenPropertyValueSpecification<ColorSpecification>,
+        "model-color-mix-intensity"?: DataDrivenPropertyValueSpecification<number>,
+        "model-type"?: "common-3d" | "location-indicator",
+        "model-cast-shadows"?: ExpressionSpecification,
+        "model-receive-shadows"?: ExpressionSpecification,
+        "model-ambient-occlusion-intensity"?: PropertyValueSpecification<number>,
+        "model-emissive-strength"?: DataDrivenPropertyValueSpecification<number>,
+        "model-roughness"?: DataDrivenPropertyValueSpecification<number>,
+        "model-height-based-emissive-strength-multiplier"?: DataDrivenPropertyValueSpecification<[number, number, number, number, number]>
+    |}
+|}
+
 export type BackgroundLayerSpecification = {|
     "id": string,
     "type": "background",
     "metadata"?: mixed,
+    "slot"?: string,
     "minzoom"?: number,
     "maxzoom"?: number,
     "zIndex"?: number,
     "layout"?: {|
-        "visibility"?: "visible" | "none"
+        "visibility"?: ExpressionSpecification
     |},
     "paint"?: {|
         "background-color"?: PropertyValueSpecification<ColorSpecification>,
         "background-pattern"?: PropertyValueSpecification<ResolvedImageSpecification>,
-        "background-opacity"?: PropertyValueSpecification<number>
+        "background-opacity"?: PropertyValueSpecification<number>,
+        "background-emissive-strength"?: PropertyValueSpecification<number>
     |}
 |}
 
@@ -466,11 +621,12 @@ export type SkyLayerSpecification = {|
     "id": string,
     "type": "sky",
     "metadata"?: mixed,
+    "slot"?: string,
     "minzoom"?: number,
     "maxzoom"?: number,
     "zIndex"?: number,
     "layout"?: {|
-        "visibility"?: "visible" | "none"
+        "visibility"?: ExpressionSpecification
     |},
     "paint"?: {|
         "sky-type"?: PropertyValueSpecification<"gradient" | "atmosphere">,
@@ -485,6 +641,13 @@ export type SkyLayerSpecification = {|
     |}
 |}
 
+export type SlotLayerSpecification = {|
+    "id": string,
+    "type": "slot",
+    "metadata"?: mixed,
+    "slot"?: string
+|}
+
 export type LayerSpecification =
     | FillLayerSpecification
     | LineLayerSpecification
@@ -494,6 +657,8 @@ export type LayerSpecification =
     | FillExtrusionLayerSpecification
     | RasterLayerSpecification
     | HillshadeLayerSpecification
+    | ModelLayerSpecification
     | BackgroundLayerSpecification
-    | SkyLayerSpecification;
+    | SkyLayerSpecification
+    | SlotLayerSpecification;
 

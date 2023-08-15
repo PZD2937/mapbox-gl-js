@@ -64,11 +64,11 @@ function renderHillshade(painter: Painter, coord: OverscaledTileID, tile: Tile, 
 
     const uniformValues = hillshadeUniformValues(painter, tile, layer, painter.terrain ? coord.projMatrix : null);
 
-    painter.prepareDrawProgram(context, program, coord.toUnwrapped());
+    painter.uploadCommonUniforms(context, program, coord.toUnwrapped());
 
     const {tileBoundsBuffer, tileBoundsIndexBuffer, tileBoundsSegments} = painter.getTileBoundsBuffers(tile);
 
-    program.draw(context, gl.TRIANGLES, depthMode, stencilMode, colorMode, CullFaceMode.disabled,
+    program.draw(painter, gl.TRIANGLES, depthMode, stencilMode, colorMode, CullFaceMode.disabled,
         uniformValues, layer.id, tileBoundsBuffer,
         tileBoundsIndexBuffer, tileBoundsSegments);
 }
@@ -112,7 +112,7 @@ function prepareHillshade(painter: Painter, tile: Tile, layer: HillshadeStyleLay
         const renderTexture = new Texture(context, {width: tileSize, height: tileSize, data: null}, gl.RGBA);
         renderTexture.bind(gl.LINEAR, gl.CLAMP_TO_EDGE);
 
-        fbo = tile.fbo = context.createFramebuffer(tileSize, tileSize, true);
+        fbo = tile.fbo = context.createFramebuffer(tileSize, tileSize, true, 'renderbuffer');
         fbo.colorAttachment.set(renderTexture.texture);
     }
 
@@ -121,7 +121,7 @@ function prepareHillshade(painter: Painter, tile: Tile, layer: HillshadeStyleLay
 
     const {tileBoundsBuffer, tileBoundsIndexBuffer, tileBoundsSegments} = painter.getMercatorTileBoundsBuffers();
 
-    painter.useProgram('hillshadePrepare').draw(context, gl.TRIANGLES,
+    painter.useProgram('hillshadePrepare').draw(painter, gl.TRIANGLES,
         depthMode, stencilMode, colorMode, CullFaceMode.disabled,
         hillshadeUniformPrepareValues(tile.tileID, dem),
         layer.id, tileBoundsBuffer,

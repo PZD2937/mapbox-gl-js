@@ -22,6 +22,10 @@ export const placementOpacityAttributes: StructArrayLayout = createLayout([
     {name: 'a_fade_opacity', components: 1, type: 'Uint32'}
 ], 4);
 
+export const iconTransitioningAttributes: StructArrayLayout = createLayout([
+    {name: 'a_texb', components: 2, type: 'Uint16'}
+]);
+
 export const collisionVertexAttributes: StructArrayLayout = createLayout([
     {name: 'a_placed', components: 2, type: 'Uint8'},
     {name: 'a_shift', components: 2, type: 'Float32'},
@@ -127,6 +131,7 @@ export const symbolInstance: StructArrayLayout = createLayout([
     {type: 'Uint32', name: 'crossTileID'},
     {type: 'Float32', components: 2, name: 'textOffset'},
     {type: 'Float32', name: 'collisionCircleDiameter'},
+    {type: 'Uint8', name: 'hasIconTextFit'}
 ]);
 
 export const glyphOffset: StructArrayLayout = createLayout([

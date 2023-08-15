@@ -199,7 +199,6 @@ function makeFetchRequest(requestParameters: RequestParameters, callback: Respon
 
 function makeXMLHttpRequest(requestParameters: RequestParameters, callback: ResponseCallback<any>): Cancelable {
     const xhr: XMLHttpRequest = new window.XMLHttpRequest();
-
     xhr.open(requestParameters.method || 'GET', requestParameters.url, true);
     if (requestParameters.type === 'arrayBuffer') {
         xhr.responseType = 'arraybuffer';

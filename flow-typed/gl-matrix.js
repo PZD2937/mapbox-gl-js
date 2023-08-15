@@ -24,7 +24,6 @@ declare module "gl-matrix" {
         dot(Vec3, Vec3): number,
         equals(Vec3, Vec3): boolean,
         exactEquals(Vec3, Vec3): boolean,
-
         clone<T: Vec3>(T): T,
         normalize<T: Vec3>(T, Vec3): T,
         add<T: Vec3>(T, Vec3, Vec3): T,
@@ -72,6 +71,7 @@ declare module "gl-matrix" {
         mul<T: Mat3>(T, Mat3, Mat3): T,
         multiply<T: Mat3>(T, Mat3, Mat3): T,
         adjoint<T: Mat3>(T, Mat3): T,
+        invert<T: Mat3>(T, Mat3): T,
         transpose<T: Mat3>(T, Mat3): T
     };
 
@@ -94,6 +94,7 @@ declare module "gl-matrix" {
         fromRotation<T: Mat4>(T, number, Vec3): T,
         translate<T: Mat4>(T, Mat4, Vec3): T,
         invert<T: Mat4>(T, Mat4): T,
+        transpose<T: Mat4>(T, Mat4): T,
         copy<T: Mat4>(T, Mat4): T,
         clone<T: Mat4>(T): T
     };
@@ -108,6 +109,7 @@ declare module "gl-matrix" {
         identity<T: Quat>(T): T,
         rotateX<T: Quat>(T, Quat, number): T,
         rotateY<T: Quat>(T, Quat, number): T,
-        rotateZ<T: Quat>(T, Quat, number): T
+        rotateZ<T: Quat>(T, Quat, number): T,
+        rotationTo<T:Quat>(T, Quat, Quat): T 
     }
 }

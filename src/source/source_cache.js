@@ -123,7 +123,7 @@ class SourceCache extends Evented {
         if (!this._source.loaded()) { return false; }
         for (const t in this._tiles) {
             const tile = this._tiles[t];
-            if (tile.state !== 'loaded' && tile.state !== 'errored')
+            if (tile.state !== 'errored' && (tile.state !== 'loaded' || !tile.bucketsLoaded()))
                 return false;
         }
         return true;
@@ -175,7 +175,7 @@ class SourceCache extends Evented {
         for (const i in this._tiles) {
             const tile = this._tiles[i];
             tile.upload(context);
-            tile.prepare(this.map.style.imageManager);
+            tile.prepare(this.map.style.imageManager, this.map ? this.map.painter : null, this._source.scope);
         }
     }
 

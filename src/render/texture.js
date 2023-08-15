@@ -7,10 +7,14 @@ import type {RGBAImage, AlphaImage} from '../util/image.js';
 
 export type TextureFormat =
     | $PropertyType<WebGLRenderingContext, 'RGBA'>
-    | $PropertyType<WebGLRenderingContext, 'ALPHA'>;
+    | $PropertyType<WebGLRenderingContext, 'ALPHA'>
+    | $PropertyType<WebGLRenderingContext, 'DEPTH_COMPONENT'>;
 export type TextureFilter =
     | $PropertyType<WebGLRenderingContext, 'LINEAR'>
+    | $PropertyType<WebGLRenderingContext, 'NEAREST_MIPMAP_NEAREST'>
     | $PropertyType<WebGLRenderingContext, 'LINEAR_MIPMAP_NEAREST'>
+    | $PropertyType<WebGLRenderingContext, 'NEAREST_MIPMAP_LINEAR'>
+    | $PropertyType<WebGLRenderingContext, 'LINEAR_MIPMAP_LINEAR'>
     | $PropertyType<WebGLRenderingContext, 'NEAREST'>;
 export type TextureWrap =
     | $PropertyType<WebGLRenderingContext, 'REPEAT'>
@@ -38,8 +42,10 @@ class Texture {
     size: [number, number];
     texture: WebGLTexture;
     format: TextureFormat;
-    filter: ?TextureFilter;
-    wrap: ?TextureWrap;
+    minFilter: ?TextureFilter;
+    magFilter: ?TextureFilter;
+    wrapS: ?TextureWrap;
+    wrapT: ?TextureWrap;
     useMipmap: boolean;
 
     constructor(context: Context, image: TextureImage, format: TextureFormat, options: ?{ premultiply?: boolean, useMipmap?: boolean }) {
@@ -65,12 +71,27 @@ class Texture {
             this.size = [width, height];
 
             if (image instanceof HTMLImageElement || image instanceof HTMLCanvasElement || image instanceof HTMLVideoElement || image instanceof ImageData || (ImageBitmap && image instanceof ImageBitmap)) {
-                gl.texImage2D(gl.TEXTURE_2D, 0, this.format, this.format, gl.UNSIGNED_BYTE, image);
+                let baseFormat = this.format;
+                // $FlowFixMe[prop-missing] - Flow cannot check for gl.R8
+                if (context.isWebGL2 && this.format === gl.R8) {
+                    // $FlowFixMe[prop-missing] - Flow cannot check for gl.RED
+                    baseFormat = gl.RED;
+                }
+                gl.texImage2D(gl.TEXTURE_2D, 0, this.format, baseFormat, gl.UNSIGNED_BYTE, image);
             } else {
-                // $FlowFixMe prop-missing - Flow can't refine image type here
-                gl.texImage2D(gl.TEXTURE_2D, 0, this.format, width, height, 0, this.format, gl.UNSIGNED_BYTE, image.data);
-            }
+                let internalFormat = this.format;
+                let type = gl.UNSIGNED_BYTE;
 
+                if (this.format === gl.DEPTH_COMPONENT) {
+                    // $FlowFixMe[incompatible-type]
+                    internalFormat = gl.DEPTH_COMPONENT16;
+                    // $FlowFixMe[incompatible-type]
+                    type = gl.UNSIGNED_SHORT;
+                }
+
+                // $FlowFixMe prop-missing - Flow can't refine image type here
+                gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, width, height, 0, this.format, type, image.data);
+            }
         } else {
             const {x, y} = position || {x: 0, y: 0};
             if (image instanceof HTMLImageElement || image instanceof HTMLCanvasElement || image instanceof HTMLVideoElement || image instanceof ImageData || (ImageBitmap && image instanceof ImageBitmap)) {
@@ -92,18 +113,45 @@ class Texture {
         const {gl} = context;
         gl.bindTexture(gl.TEXTURE_2D, this.texture);
 
-        if (filter !== this.filter) {
+        if (filter !== this.minFilter) {
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER,
                 this.useMipmap ? (filter === gl.NEAREST ? gl.NEAREST_MIPMAP_NEAREST : gl.LINEAR_MIPMAP_NEAREST) : filter
             );
-            this.filter = filter;
+            this.minFilter = filter;
         }
 
-        if (wrap !== this.wrap) {
+        if (wrap !== this.wrapS) {
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap);
-            this.wrap = wrap;
+            this.wrapS = wrap;
+        }
+    }
+
+    bindExtraParam(minFilter: TextureFilter, magFilter: TextureFilter, wrapS: TextureWrap, wrapT: TextureWrap) {
+        const {context} = this;
+        const {gl} = context;
+        gl.bindTexture(gl.TEXTURE_2D, this.texture);
+
+        if (magFilter !== this.magFilter) {
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, magFilter);
+            this.magFilter = magFilter;
+        }
+        if (minFilter !== this.minFilter) {
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER,
+                this.useMipmap ? (minFilter === gl.NEAREST ? gl.NEAREST_MIPMAP_NEAREST : gl.LINEAR_MIPMAP_NEAREST) : minFilter
+            );
+            this.minFilter = minFilter;
+        }
+
+        if (wrapS !== this.wrapS) {
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrapS);
+            this.wrapS = wrapS;
+        }
+
+        if (wrapT !== this.wrapT) {
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrapT);
+            this.wrapT = wrapT;
         }
     }
 

@@ -53,6 +53,7 @@ const createElevation = (func, exaggeration) => {
 test('Map', (t) => {
     t.beforeEach(() => {
         window.useFakeXMLHttpRequest();
+        t.setTimeout(2000);
     });
 
     t.afterEach(() => {
@@ -75,9 +76,22 @@ test('Map', (t) => {
         t.throws(() => {
             new Map({
                 container: 'anElementIdWhichDoesNotExistInTheDocument',
+                useWebGL2: false,
                 testMode: true
             });
         }, new Error("Container 'anElementIdWhichDoesNotExistInTheDocument' not found"), 'throws on invalid map container id');
+        t.end();
+    });
+
+    t.test('default style', (t) => {
+        t.stub(Map.prototype, '_detectMissingCSS');
+
+        const stub = t.stub(Map.prototype, 'setStyle');
+        new Map({container: window.document.createElement('div'), useWebGL2: false, testMode: false});
+
+        t.ok(stub.calledOnce);
+        t.equal(stub.getCall(0).args[0], 'mapbox://styles/mapbox/standard-beta');
+
         t.end();
     });
 
@@ -232,7 +246,7 @@ test('Map', (t) => {
     t.test('emits load event after a style is set', (t) => {
         t.stub(Map.prototype, '_detectMissingCSS');
         t.stub(Map.prototype, '_authenticate');
-        const map = new Map({container: window.document.createElement('div'), testMode: true});
+        const map = new Map({container: window.document.createElement('div'), useWebGL2: false, testMode: true});
 
         map.on('load', fail);
 
@@ -307,7 +321,7 @@ test('Map', (t) => {
     t.test('#setStyle', (t) => {
         t.test('returns self', (t) => {
             t.stub(Map.prototype, '_detectMissingCSS');
-            const map = new Map({container: window.document.createElement('div'), testMode: true});
+            const map = new Map({container: window.document.createElement('div'), useWebGL2: false, testMode: true});
             t.equal(map.setStyle({
                 version: 8,
                 sources: {},
@@ -387,7 +401,7 @@ test('Map', (t) => {
         t.test('style transform overrides unmodified map transform', (t) => {
             t.stub(Map.prototype, '_detectMissingCSS');
             t.stub(Map.prototype, '_authenticate');
-            const map = new Map({container: window.document.createElement('div'), testMode: true});
+            const map = new Map({container: window.document.createElement('div'), useWebGL2: false, testMode: true});
 
             map.transform.setMaxBounds(LngLatBounds.convert([-120, -60, 140, 80]));
             map.transform.resize(600, 400);
@@ -406,7 +420,7 @@ test('Map', (t) => {
         t.test('style transform does not override map transform modified via options', (t) => {
             t.stub(Map.prototype, '_detectMissingCSS');
             t.stub(Map.prototype, '_authenticate');
-            const map = new Map({container: window.document.createElement('div'), zoom: 10, center: [-77.0186, 38.8888], testMode: true});
+            const map = new Map({container: window.document.createElement('div'), zoom: 10, center: [-77.0186, 38.8888], useWebGL2: false, testMode: true});
             t.notOk(map.transform.unmodified, 'map transform is modified by options');
             map.setStyle(createStyle());
             map.on('style.load', () => {
@@ -421,7 +435,7 @@ test('Map', (t) => {
         t.test('style transform does not override map transform modified via setters', (t) => {
             t.stub(Map.prototype, '_detectMissingCSS');
             t.stub(Map.prototype, '_authenticate');
-            const map = new Map({container: window.document.createElement('div'), testMode: true});
+            const map = new Map({container: window.document.createElement('div'), useWebGL2: false, testMode: true});
             t.ok(map.transform.unmodified);
             map.setZoom(10);
             map.setCenter([-77.0186, 38.8888]);
@@ -567,7 +581,7 @@ test('Map', (t) => {
             window.document.styleSheets.length = 1;
             const style = createStyle();
             const div = window.document.createElement('div');
-            let map = new Map({style, container: div, testMode: true});
+            let map = new Map({style, container: div, useWebGL2: false, testMode: true});
             map.setZoom(3);
             map.on('load', () => {
                 map.setProjection('globe');
@@ -578,7 +592,7 @@ test('Map', (t) => {
                 t.equal(style.terrain, undefined);
                 map.remove();
 
-                map = new Map({style, container: div, testMode: true});
+                map = new Map({style, container: div, useWebGL2: false, testMode: true});
                 t.equal(map.getProjection().name, 'mercator');
                 t.equal(map.getTerrain(), null);
                 t.equal(style.terrain, undefined);
@@ -901,12 +915,12 @@ test('Map', (t) => {
                 const fog = new Fog({});
                 const fogSpy = t.spy(fog, '_validate');
 
-                fog.set({color: [444]}, {validate: false});
+                fog.set({color: 444}, {validate: false});
                 fog.updateTransitions({transition: false}, {});
                 fog.recalculate({zoom: 16, now: 10});
 
                 t.ok(fogSpy.calledOnce);
-                t.deepEqual(fog.properties.get('color'), [444]);
+                t.deepEqual(fog.properties.get('color'), 444);
                 t.end();
             });
             t.end();
@@ -2441,22 +2455,40 @@ test('Map', (t) => {
     });
 
     t.test('#remove deletes gl resources used by the atmosphere', (t) => {
-        const style = extend(createStyle(), {zoom: 1});
-        const map = createMap(t, {style});
+        const styleWithAtmosphere = {
+            'version': 8,
+            'sources': {},
+            'fog':  {
+                'color': '#0F2127',
+                'high-color': '#000',
+                'horizon-blend': 0.5,
+                'space-color': '#000'
+            },
+            'layers': [],
+            'zoom': 2,
+            'projection': {
+                name: 'globe'
+            }
+        };
+
+        const map = createMap(t, {style:styleWithAtmosphere});
 
         map.on('style.load', () => {
             map.once('render', () => {
-                const atmosphereBuffers = map.painter.atmosphereBuffer;
-
-                t.ok(atmosphereBuffers);
-
-                t.true(atmosphereBuffers.vertexBuffer.buffer);
-                t.true(atmosphereBuffers.indexBuffer.buffer);
+                const atmosphereBuffer = map.painter._atmosphere.atmosphereBuffer;
+                const starsVx = map.painter._atmosphere.starsVx;
+                const starsIdx = map.painter._atmosphere.starsIdx;
+                t.ok(atmosphereBuffer.vertexBuffer.buffer);
+                t.ok(atmosphereBuffer.indexBuffer.buffer);
+                t.ok(starsVx.buffer);
+                t.ok(starsIdx.buffer);
 
                 map.remove();
 
-                t.false(atmosphereBuffers.vertexBuffer.buffer);
-                t.false(atmosphereBuffers.indexBuffer.buffer);
+                t.false(atmosphereBuffer.vertexBuffer.buffer);
+                t.false(atmosphereBuffer.indexBuffer.buffer);
+                t.false(starsVx.buffer);
+                t.false(starsIdx.buffer);
 
                 t.end();
             });
@@ -2473,6 +2505,7 @@ test('Map', (t) => {
 
         const map = new Map({
             container,
+            useWebGL2: false,
             testMode: true
         });
         map.remove();
@@ -2917,6 +2950,7 @@ test('Map', (t) => {
     });
 
     t.test('#setLayoutProperty', (t) => {
+        t.setTimeout(2000);
         t.test('sets property', (t) => {
             const map = createMap(t, {
                 style: {
@@ -3194,6 +3228,7 @@ test('Map', (t) => {
     });
 
     t.test('#setPaintProperty', (t) => {
+        t.setTimeout(2000);
         t.test('sets property', (t) => {
             const map = createMap(t, {
                 style: {
@@ -3844,7 +3879,7 @@ test('Map', (t) => {
         window.document.styleSheets[0] = styleSheet;
         window.document.styleSheets.length = 1;
 
-        new Map({container: window.document.createElement('div'), testMode: true});
+        new Map({container: window.document.createElement('div'), useWebGL2: false, testMode: true});
 
         t.notok(stub.calledOnce);
         t.end();
@@ -3852,7 +3887,7 @@ test('Map', (t) => {
 
     t.test('should warn when CSS is missing', (t) => {
         const stub = t.stub(console, 'warn');
-        new Map({container: window.document.createElement('div'), testMode: true});
+        new Map({container: window.document.createElement('div'), useWebGL2: false, testMode: true});
 
         t.ok(stub.calledOnce);
 
@@ -3888,7 +3923,7 @@ test('Map', (t) => {
 
         t.notok(map.hasImage(id));
 
-        map.style.imageManager.getImages([id], () => {
+        map.style.imageManager.getImages([id], '', () => {
             t.equals(called, id);
             t.ok(map.hasImage(id));
             t.end();
@@ -3922,9 +3957,72 @@ test('Map', (t) => {
         });
     });
 
-    t.test('#snapToNorth', (t) => {
+    t.test('map#setLights map#getLights', (t) => {
+        const map = createMap(t);
 
+        map.on('load', () =>  {
+            const lights = [
+                {
+                    id: "sun_light",
+                    type: "directional",
+                    properties: {
+                        "color": "rgba(255.0, 0.0, 0.0, 1.0)",
+                        "intensity": 0.4,
+                        "direction": [200.0, 40.0],
+                        "cast-shadows": true,
+                        "shadow-intensity": 0.2
+                    }
+                },
+                {
+                    "id": "environment",
+                    "type": "ambient",
+                    "properties": {
+                        "color": "rgba(255.0, 0.0, 0.0, 1.0)",
+                        "intensity": 0.4
+                    }
+                }
+            ];
+
+            map.setLights(lights);
+            t.deepEqual(map.getLights(), lights);
+            map.setLights(null);
+            t.deepEqual(map.getLights(), [
+                {
+                    "id": "flat",
+                    "properties": {},
+                    "type": "flat"
+                }
+            ]);
+
+            t.end();
+        });
+    });
+
+    t.test('map#setLights with missing id and light type throws error', (t) => {
+        const map = createMap(t);
+
+        map.on('load', () =>  {
+            const lights = [{
+                properties: {
+                    "color": "rgba(255.0, 0.0, 0.0, 1.0)",
+                    "intensity": 0.4,
+                    "direction": [200.0, 40.0],
+                    "cast-shadows": true,
+                    "shadow-intensity": 0.2
+                }
+            }];
+
+            const stub = t.stub(console, 'error');
+            map.setLights(lights);
+
+            t.ok(stub.calledOnce);
+            t.end();
+        });
+    });
+
+    t.test('#snapToNorth', (t) => {
         t.test('snaps when less than < 7 degrees', (t) => {
+            t.setTimeout(10000);
             const map = createMap(t);
             map.on('load', () =>  {
                 map.setBearing(6);
@@ -3938,6 +4036,7 @@ test('Map', (t) => {
         });
 
         t.test('does not snap when > 7 degrees', (t) => {
+            t.setTimeout(2000);
             const map = createMap(t);
             map.on('load', () =>  {
                 map.setBearing(8);
@@ -3951,6 +4050,7 @@ test('Map', (t) => {
         });
 
         t.test('snaps when < bearingSnap', (t) => {
+            t.setTimeout(2000);
             const map = createMap(t, {"bearingSnap": 12});
             map.on('load', () =>  {
                 map.setBearing(11);
@@ -3964,6 +4064,7 @@ test('Map', (t) => {
         });
 
         t.test('does not snap when > bearingSnap', (t) => {
+            t.setTimeout(2000);
             const map = createMap(t, {"bearingSnap": 10});
             map.on('load', () =>  {
                 map.setBearing(11);
@@ -3983,7 +4084,7 @@ test('Map', (t) => {
         const version = map.version;
         t.test('returns version string', (t) => {
             t.ok(version);
-            t.match(version, /^2\.[0-9]+\.[0-9]+(-dev|-beta\.[1-9])?$/);
+            t.match(version, /^3\.[0-9]+\.[0-9]+(-dev|-beta\.[1-9])?$/);
             t.end();
         });
         t.test('cannot be set', (t) => {

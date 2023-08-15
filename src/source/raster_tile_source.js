@@ -55,6 +55,7 @@ import {loadRasterTile} from "./raster_tile_worker_source.js";
 class RasterTileSource extends Evented implements Source {
     type: 'raster' | 'raster-dem';
     id: string;
+    scope: string;
     minzoom: number;
     maxzoom: number;
     url: string;

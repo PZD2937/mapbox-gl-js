@@ -7,14 +7,14 @@ import MercatorCoordinate, {
     mercatorYfromLat,
     MAX_MERCATOR_LATITUDE
 } from '../mercator_coordinate.js';
-import EXTENT from '../../data/extent.js';
+import EXTENT from '../../style-spec/data/extent.js';
 import {number as interpolate} from '../../style-spec/util/interpolate.js';
 import {degToRad, radToDeg, clamp, smoothstep, getColumn, shortestAngle} from '../../util/util.js';
 import {vec3, vec4, mat3, mat4} from 'gl-matrix';
 import SegmentVector from '../../data/segment.js';
 import {members as globeLayoutAttributes} from '../../terrain/globe_attributes.js';
 import posAttributes from '../../data/pos_attributes.js';
-import {TriangleIndexArray, GlobeVertexArray, LineIndexArray, PosArray} from '../../data/array_types.js';
+import {TriangleIndexArray, GlobeVertexArray, PosArray} from '../../data/array_types.js';
 import {Aabb, Ray} from '../../util/primitives.js';
 import LngLat, {earthRadius} from '../lng_lat.js';
 import LngLatBounds from '../lng_lat_bounds.js';
@@ -239,7 +239,8 @@ function transformPoints(corners: Array<Vec3>, globeMatrix: Mat4, scale: number)
 }
 
 // Returns AABB in world/camera space scaled by numTiles / tr.worldSize
-export function aabbForTileOnGlobe(tr: Transform, numTiles: number, tileId: CanonicalTileID): Aabb {
+// extendToPoles - extend tiles neighboring to north / south pole segments with the north/south pole point
+export function aabbForTileOnGlobe(tr: Transform, numTiles: number, tileId: CanonicalTileID, extendToPoles: boolean): Aabb {
     const scale = numTiles / tr.worldSize;
     const m = tr.globeMatrix;
 
@@ -263,7 +264,8 @@ export function aabbForTileOnGlobe(tr: Transform, numTiles: number, tileId: Cano
     // Simplified aabb is computed by first encapsulating 4 transformed corner points of the tile.
     // The resulting aabb is not complete yet as curved edges of the tile might span outside of the boundaries.
     // It is enough to extend the aabb to contain only the edge that's closest to the center point.
-    const bounds = tileCornersToBounds(tileId);
+    const bounds = tileCornersToBounds(tileId, extendToPoles);
+
     const corners = boundsToECEF(bounds);
 
     // Transform the corners to world space
@@ -363,10 +365,10 @@ export function aabbForTileOnGlobe(tr: Transform, numTiles: number, tileId: Cano
     return new Aabb(cornerMin, cornerMax);
 }
 
-export function tileCornersToBounds({x, y, z}: CanonicalTileID): LngLatBounds {
+export function tileCornersToBounds({x, y, z}: CanonicalTileID, extendToPoles: boolean = false): LngLatBounds {
     const s = 1.0 / (1 << z);
-    const sw = new LngLat(lngFromMercatorX(x * s), latFromMercatorY((y + 1) * s));
-    const ne = new LngLat(lngFromMercatorX((x + 1) * s), latFromMercatorY(y * s));
+    const sw = new LngLat(lngFromMercatorX(x * s), y === (1 << z) - 1 && extendToPoles ? -90 : latFromMercatorY((y + 1) * s));
+    const ne = new LngLat(lngFromMercatorX((x + 1) * s), y === 0 && extendToPoles ? 90 : latFromMercatorY(y * s));
     return new LngLatBounds(sw, ne);
 }
 
@@ -718,9 +720,6 @@ export class GlobeSharedBuffers {
     _gridIndexBuffer: IndexBuffer;
     _gridSegments: Array<GridLodSegments>;
 
-    _wireframeIndexBuffer: IndexBuffer;
-    _wireframeSegments: Array<SegmentVector>;
-
     constructor(context: Context) {
         this._createGrid(context);
         this._createPoles(context);
@@ -736,11 +735,6 @@ export class GlobeSharedBuffers {
         for (const segments of this._gridSegments) {
             segments.withSkirts.destroy();
             segments.withoutSkirts.destroy();
-        }
-
-        if (this._wireframeIndexBuffer) {
-            this._wireframeIndexBuffer.destroy();
-            for (const segments of this._wireframeSegments) segments.destroy();
         }
     }
 
@@ -917,37 +911,5 @@ export class GlobeSharedBuffers {
 
     getPoleBuffers(z: number): [VertexBuffer, VertexBuffer, IndexBuffer, SegmentVector] {
         return [this._poleNorthVertexBuffer, this._poleSouthVertexBuffer, this._poleIndexBuffer, this._poleSegments[z]];
-    }
-
-    getWirefameBuffers(context: Context, lod: number): [VertexBuffer, IndexBuffer, SegmentVector] {
-        if (!this._wireframeSegments) {
-            const wireframeIndices = new LineIndexArray();
-            const quadExt = GLOBE_VERTEX_GRID_SIZE;
-            const vertexExt = quadExt + 1 + (EMBED_SKIRTS ? 2 : 0);
-
-            const iterOffset = EMBED_SKIRTS ? 1 : 0;
-
-            this._wireframeSegments = [];
-            for (let k = 0, primitiveOffset = 0; k < GLOBE_LATITUDINAL_GRID_LOD_TABLE.length; k++) {
-                const latitudinalLod = GLOBE_LATITUDINAL_GRID_LOD_TABLE[k];
-                for (let j = iterOffset; j < latitudinalLod + iterOffset; j++) {
-                    for (let i = iterOffset; i < quadExt + iterOffset; i++) {
-                        const index = j * vertexExt + i;
-                        wireframeIndices.emplaceBack(index, index + 1);
-                        wireframeIndices.emplaceBack(index, index + vertexExt);
-                        wireframeIndices.emplaceBack(index, index + vertexExt + 1);
-                    }
-                }
-
-                const numVertices = (latitudinalLod + 1) * vertexExt;
-                const numPrimitives = latitudinalLod * quadExt * 3;
-
-                this._wireframeSegments.push(SegmentVector.simpleSegment(0, primitiveOffset, numVertices, numPrimitives));
-                primitiveOffset += numPrimitives;
-            }
-
-            this._wireframeIndexBuffer = context.createIndexBuffer(wireframeIndices);
-        }
-        return [this._gridBuffer, this._wireframeIndexBuffer, this._wireframeSegments[lod]];
     }
 }

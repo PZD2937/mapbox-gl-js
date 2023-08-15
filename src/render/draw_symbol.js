@@ -156,7 +156,7 @@ function updateVariableAnchors(coords: Array<OverscaledTileID>, painter: Painter
 
         const pixelsToTileUnits = tr.calculatePixelsToTileUnitsMatrix(tile);
         const labelPlaneMatrix = symbolProjection.getLabelPlaneMatrixForRendering(tileMatrix, tile.tileID.canonical, pitchWithMap, rotateWithMap, tr, bucket.getProjection(), pixelsToTileUnits);
-        const updateTextFitIcon = layer.layout.get('icon-text-fit') !== 'none' &&  bucket.hasIconData();
+        const updateTextFitIcon = bucket.hasIconTextFit() &&  bucket.hasIconData();
 
         if (size) {
             const tileScale = Math.pow(2, tr.zoom - tile.tileID.overscaledZ);
@@ -363,7 +363,7 @@ function drawLayerSymbols(painter: Painter, sourceCache: SourceCache, layer: Sym
         const glCoordMatrix = symbolProjection.getGlCoordMatrix(tileMatrix, tile.tileID.canonical, pitchWithMap, rotateWithMap, tr, bucket.getProjection(), s);
 
         const hasVariableAnchors = variablePlacement && bucket.hasTextData();
-        const updateTextFitIcon = layer.layout.get('icon-text-fit') !== 'none' &&
+        const updateTextFitIcon = bucket.hasIconTextFit() &&
             hasVariableAnchors &&
             bucket.hasIconData();
 
@@ -380,6 +380,7 @@ function drawLayerSymbols(painter: Painter, sourceCache: SourceCache, layer: Sym
         const uLabelPlaneMatrix = projectedPosOnLabelSpace ? identityMat4 : labelPlaneMatrixRendering;
         const uglCoordMatrix = painter.translatePosMatrix(glCoordMatrix, tile, translate, translateAnchor, true);
         const invMatrix = bucket.getProjection().createInversionMatrix(tr, coord.canonical);
+        const transitionProgress = layer.paint.get('icon-image-cross-fade').constantOr(0.0);
 
         const baseDefines = ([]: any);
         if (painter.terrainRenderModeElevated() && pitchWithMap) {
@@ -390,6 +391,9 @@ function drawLayerSymbols(painter: Painter, sourceCache: SourceCache, layer: Sym
         }
         if (projectedPosOnLabelSpace) {
             baseDefines.push('PROJECTED_POS_ON_VIEWPORT');
+        }
+        if (transitionProgress > 0.0) {
+            baseDefines.push('ICON_TRANSITION');
         }
 
         const hasHalo = isSDF && layer.paint.get(isText ? 'text-halo-width' : 'icon-halo-width').constantOr(1) !== 0;
@@ -405,7 +409,7 @@ function drawLayerSymbols(painter: Painter, sourceCache: SourceCache, layer: Sym
             }
         } else {
             uniformValues = symbolIconUniformValues(sizeData.kind, size, rotateInShader, pitchWithMap, painter, matrix,
-                uLabelPlaneMatrix, uglCoordMatrix, isText, texSize, coord, globeToMercator, mercatorCenter, invMatrix, cameraUpVector, bucket.getProjection());
+                uLabelPlaneMatrix, uglCoordMatrix, isText, texSize, coord, globeToMercator, mercatorCenter, invMatrix, cameraUpVector, bucket.getProjection(), transitionProgress);
         }
 
         const program = painter.useProgram(getSymbolProgramName(isSDF, isText, bucket), programConfiguration, baseDefines);
@@ -465,24 +469,34 @@ function drawLayerSymbols(painter: Painter, sourceCache: SourceCache, layer: Sym
             }
         }
 
-        if (state.isSDF) {
+        painter.uploadCommonLightUniforms(painter.context, state.program);
+
+        if (context.isWebGL2 && state.hasHalo) {
             const uniformValues = ((state.uniformValues: any): UniformValues<SymbolSDFUniformsType>);
-            if (state.hasHalo) {
-                uniformValues['u_is_halo'] = 1;
-                drawSymbolElements(state.buffers, segmentState.segments, layer, painter, state.program, depthMode, stencilMode, colorMode, uniformValues);
-            }
+            uniformValues['u_is_halo'] = 1;
+            drawSymbolElements(state.buffers, segmentState.segments, layer, painter, state.program, depthMode, stencilMode, colorMode, uniformValues, 2);
             uniformValues['u_is_halo'] = 0;
+        } else {
+            if (state.isSDF) {
+                const uniformValues = ((state.uniformValues: any): UniformValues<SymbolSDFUniformsType>);
+                if (state.hasHalo) {
+                    uniformValues['u_is_halo'] = 1;
+                    drawSymbolElements(state.buffers, segmentState.segments, layer, painter, state.program, depthMode, stencilMode, colorMode, uniformValues, 1);
+                }
+                uniformValues['u_is_halo'] = 0;
+            }
+            drawSymbolElements(state.buffers, segmentState.segments, layer, painter, state.program, depthMode, stencilMode, colorMode, state.uniformValues, 1);
         }
-        drawSymbolElements(state.buffers, segmentState.segments, layer, painter, state.program, depthMode, stencilMode, colorMode, state.uniformValues);
     }
 }
 
-function drawSymbolElements(buffers: SymbolBuffers, segments: SegmentVector, layer: SymbolStyleLayer, painter: Painter, program: any, depthMode: DepthMode, stencilMode: StencilMode, colorMode: ColorMode, uniformValues: UniformValues<SymbolSDFUniformsType>) {
+function drawSymbolElements(buffers: SymbolBuffers, segments: SegmentVector, layer: SymbolStyleLayer, painter: Painter, program: any, depthMode: DepthMode, stencilMode: StencilMode, colorMode: ColorMode, uniformValues: UniformValues<SymbolSDFUniformsType>, instanceCount: number) {
     const context = painter.context;
     const gl = context.gl;
-    const dynamicBuffers = [buffers.dynamicLayoutVertexBuffer, buffers.opacityVertexBuffer, buffers.globeExtVertexBuffer];
-    program.draw(context, gl.TRIANGLES, depthMode, stencilMode, colorMode, CullFaceMode.disabled,
+    const dynamicBuffers = [buffers.dynamicLayoutVertexBuffer, buffers.opacityVertexBuffer, buffers.iconTransitioningVertexBuffer, buffers.globeExtVertexBuffer];
+    program.draw(painter, gl.TRIANGLES, depthMode, stencilMode, colorMode, CullFaceMode.disabled,
         uniformValues, layer.id, buffers.layoutVertexBuffer,
         buffers.indexBuffer, segments, layer.paint,
-        painter.transform.zoom, buffers.programConfigurations.get(layer.id), dynamicBuffers);
+        painter.transform.zoom, buffers.programConfigurations.get(layer.id), dynamicBuffers,
+        instanceCount);
 }

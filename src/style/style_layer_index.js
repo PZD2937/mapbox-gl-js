@@ -7,6 +7,7 @@ import groupByLayout from '../style-spec/group_by_layout.js';
 
 import type {TypedStyleLayer} from './style_layer/typed_style_layer.js';
 import type {LayerSpecification} from '../style-spec/types.js';
+import type {Expression} from '../style-spec/expression/expression.js';
 
 export type LayerConfigs = {[_: string]: LayerSpecification };
 export type Family<Layer: TypedStyleLayer> = Array<Layer>;
@@ -17,6 +18,7 @@ class StyleLayerIndex {
 
     _layerConfigs: LayerConfigs;
     _layers: {[_: string]: TypedStyleLayer };
+    _options: ?Map<string, Expression>;
 
     constructor(layerConfigs: ?Array<LayerSpecification>) {
         this.keyCache = {};
@@ -25,17 +27,19 @@ class StyleLayerIndex {
         }
     }
 
-    replace(layerConfigs: Array<LayerSpecification>) {
+    replace(layerConfigs: Array<LayerSpecification>, options?: ?Map<string, Expression>) {
         this._layerConfigs = {};
         this._layers = {};
-        this.update(layerConfigs, []);
+        this.update(layerConfigs, [], options);
     }
 
-    update(layerConfigs: Array<LayerSpecification>, removedIds: Array<string>) {
+    update(layerConfigs: Array<LayerSpecification>, removedIds: Array<string>, options: ?Map<string, Expression>) {
+        this._options = options;
+
         for (const layerConfig of layerConfigs) {
             this._layerConfigs[layerConfig.id] = layerConfig;
 
-            const layer = this._layers[layerConfig.id] = ((createStyleLayer(layerConfig): any): TypedStyleLayer);
+            const layer = this._layers[layerConfig.id] = ((createStyleLayer(layerConfig, this._options): any): TypedStyleLayer);
             layer.compileFilter();
             if (this.keyCache[layerConfig.id])
                 delete this.keyCache[layerConfig.id];
