@@ -147,6 +147,8 @@ export default class RasterTileWorkerSource {
 
     getCoverTiles(params: { projection: string, tile: CanonicalTileID }, callback: Callback) {
         const {tile, projection} = params;
+
+        const worldSize = 1 << tile.z;
         const coverTiles = [];
         const bound = tile.toLngLatBounds();
         const trNorthwestCoords = transformLngLat(bound.getNorthWest(), 'WGS84', projection);
@@ -154,21 +156,28 @@ export default class RasterTileWorkerSource {
         // 左上角像素坐标
         const ltPixel = lngLatToPixel(trNorthwestCoords, tile.z, projection);
         const trSoutheastCoords = transformLngLat(bound.getSouthEast(), 'WGS84', projection);
-        // 右下脚像素坐标
+        // 右下角像素坐标
         const rbPoint = lngLatToPixel(trSoutheastCoords, tile.z, projection);
-        // console.log(rbPoint);
+
         const northwestTile = lngLatToTileFromZ(trNorthwestCoords, tile.z, projection);
         const southeastTile = lngLatToTileFromZ(trSoutheastCoords, tile.z, projection);
-        const xMin = Math.min(northwestTile.x, southeastTile.x);
-        const xMax = Math.max(northwestTile.x, southeastTile.x);
-        const yMin = Math.min(northwestTile.y, southeastTile.y);
-        const yMax = Math.max(northwestTile.y, southeastTile.y);
-        const xRange = xMax - xMin, yRange = yMax - yMin;
-        for (let x = xMin; x <= xMax; x++) {
-            for (let y = yMin; y <= yMax; y++) {
-                const dx = (x - xMin) * direction.x + (direction.x < 0 ? xRange : 0);
-                const dy = (y - yMin) * direction.y + (direction.y < 0 ? yRange : 0);
-                coverTiles.push({x, y, z: tile.z, dx, dy});
+
+        const xMin = direction.x > 0 ? northwestTile.x : southeastTile.x;
+        const xMax = direction.x > 0 ? southeastTile.x : northwestTile.x;
+        const yMin = direction.y > 0 ? northwestTile.y : southeastTile.y;
+        const yMax = direction.y > 0 ? southeastTile.y : northwestTile.y;
+        let xRange = xMax - xMin, yRange = yMax - yMin;
+        // 穿过子午线
+        if(xMin > xMax){
+            xRange = worldSize - xMin;
+            xRange += xMax;
+        }
+        for (let x = 0; x < xRange + 1; x++) {
+            for (let y = 0; y < yRange + 1; y++) {
+                const tileX = (xMin + x) % worldSize, tileY = yMin + y;
+                const dx = x * direction.x + (direction.x < 0 ? xRange : 0);
+                const dy = y * direction.y + (direction.y < 0 ? yRange : 0);
+                coverTiles.push({x: tileX, y: tileY, z: tile.z, dx, dy});
             }
         }
         callback(null, {

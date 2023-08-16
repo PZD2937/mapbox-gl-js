@@ -36,6 +36,7 @@ const EPSG3857 = {
         // Wrap Tile X
         x = x % z2;
         if (x < 0) x = x + z2;
+        x = Math.min(x , z2 - 1);
         return new CanonicalTileID(z, Math.floor(x), Math.floor(y))
     }
 }
@@ -48,7 +49,7 @@ const EPSG4326 = {
         const s = 256 * resolution;
         const x = Math.floor((lngLat.lng + 180 + delta) / s);
         const y = -Math.ceil((lngLat.lat - 90 - delta) / s);
-        return new CanonicalTileID(z, x, y)
+        return new CanonicalTileID(z, Math.min(x, (1 << z) -1), y)
     }
 }
 
@@ -169,7 +170,7 @@ const BAIDU = {
         const resolution = this.getPixelDensity(zoom, lngLat.lat);
         const x = Math.floor(point.x * resolution / 256);
         const y = Math.floor(point.y * resolution / 256);
-        return new CanonicalTileID(zoom, x, y)
+        return new CanonicalTileID(zoom, Math.min(x, (1 << zoom) - 1), y)
     },
 
     tileToLngLat(tileID: CanonicalTileID): LngLat {
