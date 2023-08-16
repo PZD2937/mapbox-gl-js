@@ -30,13 +30,14 @@ const EPSG3857 = {
     direction: {x: 1, y: 1},
     lngLatToTile(lngLat: LngLat, z: number): CanonicalTileID {
         let sin = Math.sin(lngLat.lat * Math.PI / 180),
-            z2 = Math.pow(2, z),
+            z2 = 1 << z,
             x = z2 * (lngLat.lng / 360 + 0.5),
             y = z2 * (0.5 - 0.25 * Math.log((1 + sin) / (1 - sin)) / Math.PI);
         // Wrap Tile X
         x = x % z2;
         if (x < 0) x = x + z2;
-        x = Math.min(x , z2 - 1);
+        y = Math.min(y, z2 - 1);
+        y = Math.max(0, y);
         return new CanonicalTileID(z, Math.floor(x), Math.floor(y))
     }
 }
@@ -45,11 +46,12 @@ const EPSG4326 = {
     direction: {x: 1, y: 1},
     lngLatToTile(lngLat: LngLat, z: number): CanonicalTileID {
         const delta = 1E-7;
-        const resolution = 180 / (Math.pow(2, z) * 128);
+        const worldSize = 1 << z;
+        const resolution = 180 / (worldSize * 128);
         const s = 256 * resolution;
         const x = Math.floor((lngLat.lng + 180 + delta) / s);
         const y = -Math.ceil((lngLat.lat - 90 - delta) / s);
-        return new CanonicalTileID(z, Math.min(x, (1 << z) -1), y)
+        return new CanonicalTileID(z, Math.min(x, worldSize - 1), Math.min(y , worldSize - 1))
     }
 }
 
@@ -170,7 +172,8 @@ const BAIDU = {
         const resolution = this.getPixelDensity(zoom, lngLat.lat);
         const x = Math.floor(point.x * resolution / 256);
         const y = Math.floor(point.y * resolution / 256);
-        return new CanonicalTileID(zoom, Math.min(x, (1 << zoom) - 1), y)
+        const worldSize = 1 << zoom;
+        return new CanonicalTileID(zoom, Math.min(x, worldSize - 1), Math.min(y, worldSize - 1))
     },
 
     tileToLngLat(tileID: CanonicalTileID): LngLat {
