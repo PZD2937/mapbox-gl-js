@@ -67,7 +67,7 @@ export default class Worker {
         this.workerSourceTypes = {
             vector: VectorTileWorkerSource,
             geojson: GeoJSONWorkerSource,
-            'batched-model': Tiled3dModelWorkerSource
+            'batched-model': Tiled3dModelWorkerSource,
             raster: RasterTileWorkerSource
         };
 
