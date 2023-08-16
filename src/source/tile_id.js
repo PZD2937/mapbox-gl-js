@@ -14,8 +14,8 @@ export class CanonicalTileID {
 
     constructor(z: number, x: number, y: number) {
         assert(z >= 0 && z <= 25);
-        assert(x >= 0 && x < Math.pow(2, z));
-        assert(y >= 0 && y < Math.pow(2, z));
+        assert(x >= 0 && x < 1 << z);
+        assert(y >= 0 && y < 1 << z);
         this.z = z;
         this.x = x;
         this.y = y;
@@ -45,8 +45,8 @@ export class CanonicalTileID {
     }
 
     toLngLatBounds(): LngLatBounds {
-        const sw = tileToLngLat(this.x + 1, this.y, this.z);
-        const ne = tileToLngLat(this.x, this.y + 1, this.z);
+        const sw = tileToLngLat(this.x, this.y + 1, this.z);
+        const ne = tileToLngLat(this.x + 1, this.y, this.z);
         return new LngLatBounds(sw, ne);
     }
 
