@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+    <title>Title</title>
+</head>
+<body>
+
+</body>
+<script src='../../dist/mapbox-gl.js'></script>
+<script>
+    // https://tile0.tianditu.gov.cn/province?t=vt&z={z}&x={x}&y={y}&tk=a66fdc6029126cf83ce233f81d44c4ba
+
+    var map = window.map = new mapboxgl.Map({
+        container: 'map',
+        zoom: 12.5,
+        center: [106, 29.7749],
+        style: './xintu_style.json',
+        hash: true,
+        projection: 'globe',
+        language: 'zh_CN'
+    });
+
+
+</script>
+</html>

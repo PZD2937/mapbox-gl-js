@@ -36,27 +36,15 @@
     </details>
 </div>
 </body>
-<script src='../dist/mapbox-gl-dev.js'></script>
-<!--<script src="./tian_pbf/tdtStyle.json"></script>-->
+<script src='../../dist/mapbox-gl.js'></script>
 <script>
-    // console.log(tdtStyle)
-    // mapboxgl.accessToken = "pk.eyJ1IjoibW91cm5lciIsImEiOiJWWnRiWG1VIn0.j6eccFHpE3Q04XPLI7JxbA"
-    const xhr = new XMLHttpRequest();
-    xhr.responseType = 'json'
-    xhr.open('get', './tian_pbf/tdtStyle.json')
-    xhr.onload = load
-    xhr.send();
-
-    function load() {
-        const data = xhr.response;
-        console.log(data);
-    }
+    // https://tile0.tianditu.gov.cn/province?t=vt&z={z}&x={x}&y={y}&tk=a66fdc6029126cf83ce233f81d44c4ba
 
     var map = window.map = new mapboxgl.Map({
         container: 'map',
         zoom: 12.5,
         center: [106, 29.7749],
-        style: './tian_pbf/tdtStyle.json',
+        style: './tdtStyle.json',
         hash: true,
         projection: 'globe',
         language: 'zh_CN'

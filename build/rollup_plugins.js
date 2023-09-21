@@ -54,7 +54,7 @@ export const plugins = ({minified, production, test, bench, keepClassNames}) => 
     }),
     alias({
         entries: {
-            '@mapbox/vector-tile': './lib/index.js'
+            '@mapbox/vector-tile': './lib/vector-tile/index.js'
         }
     })
 ].filter(Boolean);
