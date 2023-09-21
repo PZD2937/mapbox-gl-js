@@ -34,6 +34,7 @@ import {GLOBE_ZOOM_THRESHOLD_MAX} from '../geo/projection/globe_util.js';
 import {setCacheLimits} from '../util/tile_request_cache.js';
 import {Debug} from '../util/debug.js';
 import config from '../util/config.js';
+import {isFQID} from '../util/fqid.js';
 
 import type {PointLike} from '@mapbox/point-geometry';
 import type {RequestTransformFunction} from '../util/mapbox.js';
@@ -129,7 +130,6 @@ type MapOptions = {
     bearing?: number,
     pitch?: number,
     projection?: ProjectionSpecification | string,
-    optimizeForTerrain?: boolean,
     renderWorldCopies?: boolean,
     minTileCacheSize?: number,
     maxTileCacheSize?: number,
@@ -187,7 +187,6 @@ const defaultOptions = {
     failIfMajorPerformanceCaveat: false,
     preserveDrawingBuffer: false,
     trackResize: true,
-    optimizeForTerrain: true,
     renderWorldCopies: true,
     refreshExpiredTiles: true,
     minTileCacheSize: null,
@@ -287,7 +286,6 @@ const defaultOptions = {
  *     are rendered. By default, GL JS will not set a worldview so that the worldview of Mapbox tiles will be determined by the vector tile source's TileJSON.
  *     Valid worldview strings must be an [ISO alpha-2 country code](https://en.wikipedia.org/wiki/ISO_3166-1#Current_codes). Unsupported
  *     ISO alpha-2 codes will fall back to the TileJSON's default worldview. Invalid codes will result in a recoverable error.
- * @param {boolean} [options.optimizeForTerrain=true] With terrain on, if `true`, the map will render for performance priority, which may lead to layer reordering allowing to maximize performance (layers that are draped over terrain will be drawn first, including fill, line, background, hillshade and raster). Otherwise, if set to `false`, the map will always be drawn for layer order priority.
  * @param {boolean} [options.renderWorldCopies=true] If `true`, multiple copies of the world will be rendered side by side beyond -180 and 180 degrees longitude. If set to `false`:
  *     - When the map is zoomed out far enough that a single representation of the world does not fill the map's entire
  *     container, there will be blank space beyond 180 and -180 degrees longitude.
@@ -393,7 +391,6 @@ class Map extends Camera {
     _fadeDuration: number;
     _crossSourceCollisions: boolean;
     _collectResourceTiming: boolean;
-    _optimizeForTerrain: boolean;
     _renderTaskQueue: TaskQueue;
     _domRenderTaskQueue: TaskQueue;
     _controls: Array<IControl>;
@@ -519,7 +516,6 @@ class Map extends Camera {
         this._isInitialLoad = true;
         this._crossSourceCollisions = options.crossSourceCollisions;
         this._collectResourceTiming = options.collectResourceTiming;
-        this._optimizeForTerrain = options.optimizeForTerrain;
         this._language = this._parseLanguage(options.language);
         this._worldview = options.worldview;
         this._renderTaskQueue = new TaskQueue();
@@ -1568,6 +1564,15 @@ class Map extends Camera {
         if (!Array.isArray(layerIds)) {
             layerIds = [layerIds];
         }
+
+        if (layerIds) {
+            for (const layerId of layerIds) {
+                if (!this._isValidId(layerId)) {
+                    return this;
+                }
+            }
+        }
+
         const delegatedListener = this._createDelegatedListener(type, layerIds, listener);
 
         this._delegatedListeners = this._delegatedListeners || {};
@@ -1629,6 +1634,15 @@ class Map extends Camera {
         if (!Array.isArray(layerIds)) {
             layerIds = [layerIds];
         }
+
+        if (layerIds) {
+            for (const layerId of layerIds) {
+                if (!this._isValidId(layerId)) {
+                    return this;
+                }
+            }
+        }
+
         const delegatedListener = this._createDelegatedListener(type, layerIds, listener);
 
         for (const event in delegatedListener.delegates) {
@@ -1669,6 +1683,12 @@ class Map extends Camera {
         }
 
         layerIds = new Set(Array.isArray(layerIds) ? layerIds : [layerIds]);
+        for (const layerId of layerIds) {
+            if (!this._isValidId(layerId)) {
+                return this;
+            }
+        }
+
         const areLayerArraysEqual = (hash1: Set<string>, hash2: Set<string>) => {
             if (hash1.size !== hash2.size) {
                 return false; // at-least 1 arr has duplicate value(s)
@@ -1805,6 +1825,14 @@ class Map extends Camera {
         options = options || {};
         geometry = geometry || [([0, 0]: PointLike), ([this.transform.width, this.transform.height]: PointLike)];
 
+        if (options.layers && Array.isArray(options.layers)) {
+            for (const layerId of options.layers) {
+                if (!this._isValidId(layerId)) {
+                    return [];
+                }
+            }
+        }
+
         return this.style.queryRenderedFeatures(geometry, options, this.transform);
     }
 
@@ -1846,6 +1874,10 @@ class Map extends Camera {
      * @see [Example: Highlight features containing similar data](https://www.mapbox.com/mapbox-gl-js/example/query-similar-features/)
      */
     querySourceFeatures(sourceId: string, parameters: ?{sourceLayer: ?string, filter: ?Array<any>, validate?: boolean}): Array<QueryFeature> {
+        if (!this._isValidId(sourceId)) {
+            return [];
+        }
+
         return this.style.querySourceFeatures(sourceId, parameters);
     }
 
@@ -2008,6 +2040,16 @@ class Map extends Camera {
         return this.style.loaded();
     }
 
+    _isValidId(id: string): boolean {
+        // Disallow using fully qualified IDs in the public APIs
+        if (isFQID(id)) {
+            this.fire(new ErrorEvent(new Error(`IDs can't contain special symbols: "${id}".`)));
+            return false;
+        }
+
+        return true;
+    }
+
     /** @section {Sources} */
 
     /**
@@ -2043,6 +2085,10 @@ class Map extends Camera {
      * @see Example: Raster DEM source: [Add hillshading](https://docs.mapbox.com/mapbox-gl-js/example/hillshade/)
      */
     addSource(id: string, source: SourceSpecification): this {
+        if (!this._isValidId(id)) {
+            return this;
+        }
+
         this._lazyInitEmptyStyle();
         this.style.addSource(id, source);
         return this._update(true);
@@ -2058,6 +2104,10 @@ class Map extends Camera {
      * const sourceLoaded = map.isSourceLoaded('bathymetry-data');
      */
     isSourceLoaded(id: string): boolean {
+        if (!this._isValidId(id)) {
+            return false;
+        }
+
         return !!this.style && this.style._isSourceCacheLoaded(id);
     }
 
@@ -2105,6 +2155,10 @@ class Map extends Camera {
      * map.removeSource('bathymetry-data');
      */
     removeSource(id: string): this {
+        if (!this._isValidId(id)) {
+            return this;
+        }
+
         this.style.removeSource(id);
         this._updateTerrain();
         return this._update(true);
@@ -2131,6 +2185,10 @@ class Map extends Camera {
      * @see [Example: Add live realtime data](https://docs.mapbox.com/mapbox-gl-js/example/live-geojson/)
      */
     getSource(id: string): ?Source {
+        if (!this._isValidId(id)) {
+            return null;
+        }
+
         return this.style.getOwnSource(id);
     }
 
@@ -2540,6 +2598,10 @@ class Map extends Camera {
      * @see [Example: Add a WMS layer](https://docs.mapbox.com/mapbox-gl-js/example/wms/) (raster layer)
      */
     addLayer(layer: LayerSpecification | CustomLayerInterface, beforeId?: string): this {
+        if (!this._isValidId(layer.id)) {
+            return this;
+        }
+
         this._lazyInitEmptyStyle();
         this.style.addLayer(layer, beforeId);
         return this._update(true);
@@ -2557,6 +2619,10 @@ class Map extends Camera {
      * map.moveLayer('polygon', 'country-label');
      */
     moveLayer(id: string, beforeId?: string): this {
+        if (!this._isValidId(id)) {
+            return this;
+        }
+
         this.style.moveLayer(id, beforeId);
         return this._update(true);
     }
@@ -2575,6 +2641,10 @@ class Map extends Camera {
      * if (map.getLayer('state-data')) map.removeLayer('state-data');
      */
     removeLayer(id: string): this {
+        if (!this._isValidId(id)) {
+            return this;
+        }
+
         this.style.removeLayer(id);
         return this._update(true);
     }
@@ -2652,6 +2722,10 @@ class Map extends Camera {
      * @see [Example: Filter symbols by text input](https://www.mapbox.com/mapbox-gl-js/example/filter-markers-by-input/)
      */
     getLayer(id: string): ?StyleLayer {
+        if (!this._isValidId(id)) {
+            return null;
+        }
+
         return this.style.getOwnLayer(id);
     }
 
@@ -2675,6 +2749,10 @@ class Map extends Camera {
      * map.setLayerZoomRange('my-layer', 2, 5);
      */
     setLayerZoomRange(layerId: string, minzoom: number, maxzoom: number): this {
+        if (!this._isValidId(layerId)) {
+            return this;
+        }
+
         this.style.setLayerZoomRange(layerId, minzoom, maxzoom);
         return this._update(true);
     }
@@ -2713,6 +2791,10 @@ class Map extends Camera {
      * @see [Tutorial: Show changes over time](https://docs.mapbox.com/help/tutorials/show-changes-over-time/)
      */
     setFilter(layerId: string, filter: ?FilterSpecification,  options: StyleSetterOptions = {}): this {
+        if (!this._isValidId(layerId)) {
+            return this;
+        }
+
         this.style.setFilter(layerId, filter, options);
         return this._update(true);
     }
@@ -2726,6 +2808,10 @@ class Map extends Camera {
      * const filter = map.getFilter('myLayer');
      */
     getFilter(layerId: string): ?FilterSpecification {
+        if (!this._isValidId(layerId)) {
+            return null;
+        }
+
         return this.style.getFilter(layerId);
     }
 
@@ -2746,6 +2832,10 @@ class Map extends Camera {
      * @see [Example: Create a draggable point](https://www.mapbox.com/mapbox-gl-js/example/drag-a-point/)
      */
     setPaintProperty(layerId: string, name: string, value: any, options: StyleSetterOptions = {}): this {
+        if (!this._isValidId(layerId)) {
+            return this;
+        }
+
         this.style.setPaintProperty(layerId, name, value, options);
         return this._update(true);
     }
@@ -2760,6 +2850,10 @@ class Map extends Camera {
      * const paintProperty = map.getPaintProperty('mySymbolLayer', 'icon-color');
      */
     getPaintProperty(layerId: string, name: string): void | TransitionSpecification | PropertyValueSpecification<mixed> {
+        if (!this._isValidId(layerId)) {
+            return null;
+        }
+
         return this.style.getPaintProperty(layerId, name);
     }
 
@@ -2777,6 +2871,10 @@ class Map extends Camera {
      * @see [Example: Show and hide layers](https://docs.mapbox.com/mapbox-gl-js/example/toggle-layers/)
      */
     setLayoutProperty(layerId: string, name: string, value: any, options: StyleSetterOptions = {}): this {
+        if (!this._isValidId(layerId)) {
+            return this;
+        }
+
         this.style.setLayoutProperty(layerId, name, value, options);
         return this._update(true);
     }
@@ -2791,6 +2889,10 @@ class Map extends Camera {
      * const layoutProperty = map.getLayoutProperty('mySymbolLayer', 'icon-anchor');
      */
     getLayoutProperty(layerId: string, name: string): ?PropertyValueSpecification<mixed> {
+        if (!this._isValidId(layerId)) {
+            return null;
+        }
+
         return this.style.getLayoutProperty(layerId, name);
     }
 
@@ -3006,6 +3108,10 @@ class Map extends Camera {
      * @see [Tutorial: Create interactive hover effects with Mapbox GL JS](https://docs.mapbox.com/help/tutorials/create-interactive-hover-effects-with-mapbox-gl-js/)
      */
     setFeatureState(feature: { source: string; sourceLayer?: string; id: string | number; }, state: Object): this {
+        if (!this._isValidId(feature.source)) {
+            return this;
+        }
+
         this.style.setFeatureState(feature, state);
         return this._update();
     }
@@ -3057,6 +3163,10 @@ class Map extends Camera {
      * });
      */
     removeFeatureState(feature: { source: string; sourceLayer?: string; id?: string | number; }, key?: string): this {
+        if (!this._isValidId(feature.source)) {
+            return this;
+        }
+
         this.style.removeFeatureState(feature, key);
         return this._update();
     }
@@ -3090,6 +3200,10 @@ class Map extends Camera {
      * });
      */
     getFeatureState(feature: { source: string; sourceLayer?: string; id: string | number; }): any {
+        if (!this._isValidId(feature.source)) {
+            return null;
+        }
+
         return this.style.getFeatureState(feature);
     }
 
@@ -3136,16 +3250,17 @@ class Map extends Camera {
         this._detectMissingCSS();
 
         const canvasContainer = this._canvasContainer = DOM.create('div', 'mapboxgl-canvas-container', container);
+        this._canvas = DOM.create('canvas', 'mapboxgl-canvas', canvasContainer);
+
         if (this._interactive) {
             canvasContainer.classList.add('mapboxgl-interactive');
+            this._canvas.setAttribute('tabindex', '0');
         }
 
-        this._canvas = DOM.create('canvas', 'mapboxgl-canvas', canvasContainer);
         // $FlowFixMe[method-unbinding]
         this._canvas.addEventListener('webglcontextlost', this._contextLost, false);
         // $FlowFixMe[method-unbinding]
         this._canvas.addEventListener('webglcontextrestored', this._contextRestored, false);
-        this._canvas.setAttribute('tabindex', '0');
         this._canvas.setAttribute('aria-label', this._getUIString('Map.Title'));
         this._canvas.setAttribute('role', 'region');
 

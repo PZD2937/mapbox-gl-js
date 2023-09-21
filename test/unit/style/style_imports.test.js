@@ -2,8 +2,10 @@ import Style from '../../../src/style/style.js';
 import Transform from '../../../src/geo/transform.js';
 import StyleLayer from '../../../src/style/style_layer.js';
 import VectorTileSource from '../../../src/source/vector_tile_source.js';
+import GlyphManager from '../../../src/render/glyph_manager.js';
 import {Event, Evented} from '../../../src/util/evented.js';
 import {RequestManager} from '../../../src/util/mapbox.js';
+import {OverscaledTileID} from '../../../src/source/tile_id.js';
 
 import window from '../../../src/util/window.js';
 import {test} from '../../util/test.js';
@@ -59,7 +61,7 @@ test('Style#loadURL', (t) => {
         style.on('style.load', () => {
             t.equals(window.server.requests.length, 2);
 
-            const {style: fragmentStyle} = style.imports[0];
+            const fragmentStyle = style.getFragmentById('streets');
             t.deepEqual(fragmentStyle.stylesheet.layers, fragment.layers);
             t.deepEqual(fragmentStyle.stylesheet.sources, fragment.sources);
 
@@ -86,7 +88,7 @@ test('Style#loadURL', (t) => {
         style.on('style.load', () => {
             t.equals(window.server.requests.length, 1);
 
-            const {style: fragmentStyle} = style.imports[0];
+            const fragmentStyle = style.getFragmentById('streets');
             t.deepEqual(fragmentStyle.stylesheet.layers, fragment.layers);
             t.deepEqual(fragmentStyle.stylesheet.sources, fragment.sources);
 
@@ -180,6 +182,32 @@ test('Style#loadURL', (t) => {
         window.server.respondWith('/styles/parent.json', JSON.stringify(parentFragment));
         window.server.respondWith('/styles/child1.json', JSON.stringify(childFragment1));
         window.server.respondWith('/styles/child2.json', JSON.stringify(childFragment2));
+        style.loadURL('/style.json');
+    });
+
+    t.test('fires "style.import.load"', (t) => {
+        const map = new StubMap();
+        const style = new Style(map);
+        style.setEventedParent(map, {style});
+
+        const initialStyle = createStyleJSON({
+            imports: [{id: 'streets', url: '/styles/streets-v12.json'}],
+        });
+
+        const spy = t.spy();
+        map.on('style.import.load', spy);
+
+        style.on('style.load', () => {
+            t.ok(spy.calledOnce);
+
+            t.equal(spy.getCall(0).args[0].target, map);
+            t.equal(spy.getCall(0).args[0].style.scope, 'streets');
+
+            t.end();
+        });
+
+        window.server.respondWith('/style.json', JSON.stringify(initialStyle));
+        window.server.respondWith('/styles/streets-v12.json', JSON.stringify(createStyleJSON()));
         style.loadURL('/style.json');
     });
 
@@ -301,7 +329,7 @@ test('Style#loadJSON', (t) => {
         style.on('style.load', () => {
             t.equals(window.server.requests.length, 1);
 
-            const {style: fragmentStyle} = style.imports[0];
+            const fragmentStyle = style.getFragmentById('streets');
             t.deepEqual(fragmentStyle.stylesheet.layers, fragment.layers);
             t.deepEqual(fragmentStyle.stylesheet.sources, fragment.sources);
 
@@ -327,7 +355,7 @@ test('Style#loadJSON', (t) => {
         style.on('style.load', () => {
             t.equals(window.server.requests.length, 0);
 
-            const {style: fragmentStyle} = style.imports[0];
+            const fragmentStyle = style.getFragmentById('streets');
             t.deepEqual(fragmentStyle.stylesheet.layers, fragment.layers);
             t.deepEqual(fragmentStyle.stylesheet.sources, fragment.sources);
 
@@ -353,12 +381,37 @@ test('Style#loadJSON', (t) => {
         style.on('style.load', () => {
             let nestedStyle = style;
             for (let i = 1; i < MAX_IMPORT_DEPTH; i++) {
-                nestedStyle = nestedStyle.imports[0].style;
+                nestedStyle = nestedStyle.getFragmentById(`streets-${i}`);
                 t.ok(nestedStyle);
             }
 
             t.ok(stub.calledOnce);
             t.equal(nestedStyle.imports.length, 0);
+            t.end();
+        });
+
+        style.loadJSON(initialStyle);
+    });
+
+    t.test('fires "style.import.load"', (t) => {
+        const map = new StubMap();
+
+        const style = new Style(map);
+        style.setEventedParent(map, {style});
+
+        const initialStyle = createStyleJSON({
+            imports: [{id: 'streets', url: '/styles/streets-v12.json', data: createStyleJSON()}],
+        });
+
+        const spy = t.spy();
+        map.on('style.import.load', spy);
+
+        style.on('style.load', () => {
+            t.ok(spy.calledOnce);
+
+            t.equal(spy.getCall(0).args[0].target, map);
+            t.equal(spy.getCall(0).args[0].style.scope, 'streets');
+
             t.end();
         });
 
@@ -583,7 +636,7 @@ test('Style#addSource', (t) => {
 });
 
 test('Style#removeSource', (t) => {
-    t.test('same id in different scopes is intact', (t) => {
+    t.test('same id in different scope is intact', (t) => {
         const style = new Style(new StubMap());
 
         const initialStyle = createStyleJSON({
@@ -595,7 +648,9 @@ test('Style#removeSource', (t) => {
 
         style.on('style.load', () => {
             style.removeSource('mapbox');
-            t.ok(style.getSource(makeFQID('mapbox', 'streets')) instanceof VectorTileSource);
+            t.notOk(style.getSource('mapbox'), 'source in parent style is removed');
+            t.notOk(style.getOwnSource('mapbox'), 'source in parent style is removed');
+            t.ok(style.getSource(makeFQID('mapbox', 'streets')) instanceof VectorTileSource, 'source in child style is intact');
             t.end();
         });
 
@@ -701,6 +756,27 @@ test('Style#addLayer', (t) => {
 });
 
 test('Style#removeLayer', (t) => {
+    t.test('same id in different scope is intact', (t) => {
+        const style = new Style(new StubMap());
+
+        const initialStyle = createStyleJSON({
+            layers: [{id: 'background', type: 'background'}],
+            imports: [{id: 'streets', url: '/style.json', data: createStyleJSON({
+                layers: [{id: 'background', type: 'background'}]
+            })}],
+        });
+
+        style.on('style.load', () => {
+            style.removeLayer('background');
+            t.notOk(style.getLayer('background'), 'layer in parent style is removed');
+            t.notOk(style.getOwnLayer('background'), 'layer in parent style is removed');
+            t.ok(style.getLayer(makeFQID('background', 'streets')), 'layer in child style is intact');
+            t.end();
+        });
+
+        style.loadJSON(initialStyle);
+    });
+
     t.test('fire error on removing layer from different scope', (t) => {
         const map = new StubMap();
         const style = new Style(map);
@@ -1283,4 +1359,296 @@ test('Projection', (t) => {
     });
 
     t.end();
+});
+
+test('Glyphs', (t) => {
+    t.test('fallbacks to the default glyphs URL', (t) => {
+        const style = new Style(new StubMap());
+
+        style.loadJSON(createStyleJSON({
+            fragment: true,
+        }));
+
+        style.on('style.load', () => {
+            t.stub(GlyphManager, 'loadGlyphRange').callsFake((stack, range, urlTemplate) => {
+                t.equal(urlTemplate, 'mapbox://fonts/mapbox/{fontstack}/{range}.pbf');
+                t.equal(style.serialize().glyphs, undefined);
+                t.end();
+            });
+
+            style.glyphManager.getGlyphs({'Arial Unicode MS': [55]}, '');
+        });
+    });
+
+    t.end();
+});
+
+test('Style#queryRenderedFeatures', (t) => {
+    const style = new Style(new StubMap());
+    const transform = new Transform();
+    transform.resize(512, 512);
+
+    function tilesInStub() {
+        return [{
+            queryGeometry: {},
+            tilespaceGeometry: {},
+            bufferedTilespaceGeometry: {},
+            bufferedTilespaceBounds: {},
+            tileID: new OverscaledTileID(0, 0, 0, 0, 0),
+            tile: {tileID: new OverscaledTileID(0, 0, 0, 0, 0), queryRenderedFeatures: () => ({
+                land: [{
+                    featureIndex: 0,
+                    feature: {type: 'Feature', geometry: {type: 'Point'}}
+                }]
+            })},
+        }];
+    }
+
+    const fragment = createStyleJSON({
+        sources: {mapbox: {type: 'geojson', data: {type: 'FeatureCollection', features: []}}},
+        layers: [{id: 'land', type: 'line', source: 'mapbox'}],
+    });
+
+    const initialStyle = createStyleJSON({
+        sources: {mapbox: {type: 'geojson', data: {type: 'FeatureCollection', features: []}}},
+        layers: [{id: 'land', type: 'line', source: 'mapbox'}],
+        imports: [{id: 'streets', url: '/styles/streets-v12.json', data: fragment}]
+    });
+
+    style.loadJSON(initialStyle);
+
+    style.on('style.load', () => {
+        style._getSourceCache('mapbox').tilesIn = tilesInStub;
+        style._getSourceCache('mapbox').transform = transform;
+        style._getSourceCache(makeFQID('mapbox', 'streets')).tilesIn = tilesInStub;
+        style._getSourceCache(makeFQID('mapbox', 'streets')).transform = transform;
+
+        t.test('returns features only from the root style', (t) => {
+            const results = style.queryRenderedFeatures([0, 0], {}, transform);
+            t.equals(results.length, 1);
+            t.end();
+        });
+
+        t.test('returns features only from the root style when including layers', (t) => {
+            const results = style.queryRenderedFeatures([0, 0], {layers: ['land', makeFQID('land', 'streets')]}, transform);
+            t.equals(results.length, 1);
+            t.end();
+        });
+
+        t.end();
+    });
+});
+
+test('Style#setFeatureState', (t) => {
+    const style = new Style(new StubMap());
+
+    const fragment = createStyleJSON({
+        sources: {mapbox: {type: 'geojson', data: {type: 'FeatureCollection', features: []}}},
+    });
+
+    const initialStyle = createStyleJSON({
+        sources: {mapbox: {type: 'geojson', data: {type: 'FeatureCollection', features: []}}},
+        imports: [{id: 'streets', url: '/styles/streets-v12.json', data: fragment}]
+    });
+
+    style.loadJSON(initialStyle);
+
+    const spy = t.spy();
+    style.on('error', spy);
+
+    style.on('style.load', () => {
+        style.setFeatureState({source: makeFQID('mapbox', 'streets'), id: 12345}, {'hover': true});
+        t.ok(spy.calledOnce);
+        t.match(spy.firstCall.firstArg.error, /does not exist in the map's style/);
+        t.end();
+    });
+});
+
+test('Style#getFeatureState', (t) => {
+    const style = new Style(new StubMap());
+
+    const fragment = createStyleJSON({
+        sources: {mapbox: {type: 'geojson', data: {type: 'FeatureCollection', features: []}}},
+    });
+
+    const initialStyle = createStyleJSON({
+        sources: {mapbox: {type: 'geojson', data: {type: 'FeatureCollection', features: []}}},
+        imports: [{id: 'streets', url: '/styles/streets-v12.json', data: fragment}]
+    });
+
+    style.loadJSON(initialStyle);
+
+    const spy = t.spy();
+    style.on('error', spy);
+
+    style.on('style.load', () => {
+        t.notOk(style.getFeatureState({source: makeFQID('mapbox', 'streets'), id: 12345}));
+        t.ok(spy.calledOnce);
+        t.match(spy.firstCall.firstArg.error, /does not exist in the map's style/);
+        t.end();
+    });
+});
+
+test('Style#removeFeatureState', (t) => {
+    const style = new Style(new StubMap());
+
+    const fragment = createStyleJSON({
+        sources: {mapbox: {type: 'geojson', data: {type: 'FeatureCollection', features: []}}},
+    });
+
+    const initialStyle = createStyleJSON({
+        sources: {mapbox: {type: 'geojson', data: {type: 'FeatureCollection', features: []}}},
+        imports: [{id: 'streets', url: '/styles/streets-v12.json', data: fragment}]
+    });
+
+    style.loadJSON(initialStyle);
+
+    const spy = t.spy();
+    style.on('error', spy);
+
+    style.on('style.load', () => {
+        style.removeFeatureState({source: makeFQID('mapbox', 'streets'), id: 12345}, 'hover');
+        t.ok(spy.calledOnce);
+        t.match(spy.firstCall.firstArg.error, /does not exist in the map's style/);
+        t.end();
+    });
+});
+
+test('Style#setLayoutProperty', (t) => {
+    const style = new Style(new StubMap());
+
+    const fragment = createStyleJSON({
+        sources: {mapbox: {type: 'geojson', data: {type: 'FeatureCollection', features: []}}},
+        layers: [{id: 'land', type: 'line', source: 'mapbox', layout: {visibility: 'visible'}}],
+    });
+
+    const initialStyle = createStyleJSON({
+        imports: [{id: 'streets', url: '/styles/streets-v12.json', data: fragment}]
+    });
+
+    style.loadJSON(initialStyle);
+
+    const spy = t.spy();
+    style.on('error', spy);
+
+    style.on('style.load', () => {
+        style.setLayoutProperty(makeFQID('land', 'streets'), 'visibility', 'none');
+        t.match(spy.firstCall.firstArg.error, /does not exist in the map's style/);
+
+        t.notOk(style.getLayoutProperty(makeFQID('land', 'streets'), 'visibility'));
+        t.match(spy.secondCall.firstArg.error, /does not exist in the map's style/);
+
+        t.equal(style.getLayer(makeFQID('land', 'streets')).serialize().layout['visibility'], 'visible');
+        t.ok(spy.calledTwice);
+        t.end();
+    });
+});
+
+test('Style#setPaintProperty', (t) => {
+    const style = new Style(new StubMap());
+
+    const fragment = createStyleJSON({
+        sources: {mapbox: {type: 'geojson', data: {type: 'FeatureCollection', features: []}}},
+        layers: [{id: 'land', type: 'background', source: 'mapbox', paint: {'background-color': 'blue'}}],
+    });
+
+    const initialStyle = createStyleJSON({
+        imports: [{id: 'streets', url: '/styles/streets-v12.json', data: fragment}]
+    });
+
+    style.loadJSON(initialStyle);
+
+    const spy = t.spy();
+    style.on('error', spy);
+
+    style.on('style.load', () => {
+        style.setPaintProperty(makeFQID('land', 'streets'), 'background-color', 'red');
+        t.match(spy.firstCall.firstArg.error, /does not exist in the map's style/);
+
+        t.notOk(style.getPaintProperty(makeFQID('land', 'streets'), 'background-color'));
+        t.match(spy.secondCall.firstArg.error, /does not exist in the map's style/);
+
+        t.equal(style.getLayer(makeFQID('land', 'streets')).serialize().paint['background-color'], 'blue');
+        t.ok(spy.calledTwice);
+        t.end();
+    });
+});
+
+test('Style#setLayerZoomRange', (t) => {
+    const style = new Style(new StubMap());
+
+    const fragment = createStyleJSON({
+        sources: {mapbox: {type: 'geojson', data: {type: 'FeatureCollection', features: []}}},
+        layers: [{id: 'symbol', type: 'symbol', source: 'mapbox', minzoom: 0, maxzoom: 22}],
+    });
+
+    const initialStyle = createStyleJSON({
+        imports: [{id: 'streets', url: '/styles/streets-v12.json', data: fragment}]
+    });
+
+    style.loadJSON(initialStyle);
+
+    const spy = t.spy();
+    style.on('error', spy);
+
+    style.on('style.load', () => {
+        style.setLayerZoomRange(makeFQID('symbol', 'streets'), 5, 12);
+        t.match(spy.firstCall.firstArg.error, /does not exist in the map's style/);
+
+        t.equal(style.getLayer(makeFQID('symbol', 'streets')).minzoom, 0, 'set minzoom');
+        t.equal(style.getLayer(makeFQID('symbol', 'streets')).maxzoom, 22, 'set maxzoom');
+        t.end();
+    });
+});
+
+test('Style#setFilter', (t) => {
+    const style = new Style(new StubMap());
+
+    const fragment = createStyleJSON({
+        sources: {mapbox: {type: 'geojson', data: {type: 'FeatureCollection', features: []}}},
+        layers: [{id: 'symbol', type: 'symbol', source: 'mapbox', filter: ['==', 'id', 0]}],
+    });
+
+    const initialStyle = createStyleJSON({
+        imports: [{id: 'streets', url: '/styles/streets-v12.json', data: fragment}]
+    });
+
+    style.loadJSON(initialStyle);
+
+    const spy = t.spy();
+    style.on('error', spy);
+
+    style.on('style.load', () => {
+        style.setFilter(makeFQID('symbol', 'streets'), ['==', 'id', 1]);
+        t.match(spy.firstCall.firstArg.error, /does not exist in the map's style/);
+
+        t.notOk(style.getFilter(makeFQID('symbol', 'streets')));
+        t.match(spy.secondCall.firstArg.error, /does not exist in the map's style/);
+
+        t.deepEqual(style.getLayer(makeFQID('symbol', 'streets')).filter, ['==', 'id', 0]);
+        t.end();
+    });
+});
+
+test('Style#setGeoJSONSourceData', (t) => {
+    const style = new Style(new StubMap());
+
+    const fragment = createStyleJSON({
+        sources: {mapbox: {type: 'geojson', data: {type: 'FeatureCollection', features: []}}},
+    });
+
+    const initialStyle = createStyleJSON({
+        imports: [{id: 'streets', url: '/styles/streets-v12.json', data: fragment}]
+    });
+
+    style.loadJSON(initialStyle);
+
+    style.on('style.load', () => {
+        t.throws(() =>
+            style.setGeoJSONSourceData(makeFQID('mapbox', 'streets'), {type: 'FeatureCollection', features: []}),
+            /There is no source with this ID/
+        );
+
+        t.end();
+    });
 });

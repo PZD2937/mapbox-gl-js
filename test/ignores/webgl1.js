@@ -20,6 +20,8 @@ const skip = [
     "render-tests/model-layer/landmark-part-styling-indirect-doors-no-shadows",
     "render-tests/model-layer/landmark-terrain",
     "render-tests/model-layer/landmark-shadows-terrain",
+    "render-tests/model-layer/landmark-shadows-opacity",
+    "render-tests/model-layer/landmark-shadows-totally-transparent",
     "render-tests/model-layer/trees-shadow-scaled",
     "render-tests/model-layer/lighting-3d-mode/model-shadow",
     "render-tests/model-layer/lighting-3d-mode/shadow",
@@ -44,11 +46,20 @@ const skip = [
     "render-tests/lighting-3d-mode/fill-extrusion/flood-light/terrain-ao-with-shadows",
     "render-tests/lighting-3d-mode/fill-extrusion/flood-light/terrain-flood-light-with-shadows",
     "render-tests/lighting-3d-mode/fill-extrusion/flood-light/landmark-conflation-buckingham",
+    "render-tests/lighting-3d-mode/fill-extrusion/flood-light/MAPS3D-967",
+    "render-tests/lighting-3d-mode/fill-extrusion/flood-light/terrain-flood-light-no-seams",
     "render-tests/lighting-3d-mode/shadow/fill-extrusion",
     "render-tests/lighting-3d-mode/shadow/fill-extrusion-flat-roof",
     "render-tests/lighting-3d-mode/shadow/fill-extrusion-terrain",
+    "render-tests/lighting-3d-mode/shadow/fill-extrusion-translucent",
     "render-tests/lighting-3d-mode/shadow/fill-extrusion-vertical-scale",
     "render-tests/lighting-3d-mode/shadow/high-pitch-terrain",
+    "render-tests/lighting-3d-mode/shadow/intensity-zero",
+    "render-tests/lighting-3d-mode/shadow/pitch-limit",
+    "render-tests/lighting-3d-mode/shadow/pitch-max-distance",
+    "render-tests/lighting-3d-mode/shadow/shimmering",
+    "render-tests/lighting-3d-mode/shadow/viewport-padding",
+    "render-tests/measure-light/global-brightness-zoom-based-model",
 
     // Orthographic camera projection tests with shadows
     "render-tests/model-layer/camera-projection/with-shadows/camera-orthographic-high-pitch",
@@ -66,6 +77,7 @@ const skip = [
     "render-tests/wireframe/multiple-layers",
     "render-tests/wireframe/terrain",
     "render-tests/wireframe/terrain-high-exaggeration",
+    "render-tests/wireframe/wireframe-interpolation-vis",
 ];
 
 export default {todo, skip};

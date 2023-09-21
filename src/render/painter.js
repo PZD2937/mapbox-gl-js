@@ -500,7 +500,7 @@ class Painter {
 
     colorModeForDrapableLayerRenderPass(emissiveStrengthForDrapedLayers?: number): $ReadOnly<ColorMode> {
         const deferredDrapingEnabled = () => {
-            return this.style && this.style.enable3dLights() && this.terrain && this.terrain.renderingToTexture && this.style.map._optimizeForTerrain;
+            return this.style && this.style.enable3dLights() && this.terrain && this.terrain.renderingToTexture;
         };
 
         const gl = this.context.gl;
@@ -1053,6 +1053,11 @@ class Painter {
         return this.style && !!this.style.getTerrain() && !!this.terrain && !this.terrain.renderingToTexture;
     }
 
+    terrainUseFloatDEM(): boolean {
+        const context = this.context;
+        return context.isWebGL2 && context.extTextureFloatLinear !== undefined && context.extTextureFloatLinear !== null;
+    }
+
     /**
      * Returns #defines that would need to be injected into every Program
      * based on the current state of Painter.
@@ -1070,12 +1075,10 @@ class Painter {
             // In case of terrain and map optimized for terrain mode flag
             // Lighting is deferred to terrain stage
             if (name === 'globeRaster' || name === 'terrainRaster') {
-                if (this.style.map._optimizeForTerrain) {
-                    defines.push('LIGHTING_3D_MODE');
-                    defines.push('LIGHTING_3D_ALPHA_EMISSIVENESS');
-                }
+                defines.push('LIGHTING_3D_MODE');
+                defines.push('LIGHTING_3D_ALPHA_EMISSIVENESS');
             } else {
-                if (!rtt || !this.style.map._optimizeForTerrain) {
+                if (!rtt) {
                     defines.push('LIGHTING_3D_MODE');
                 }
             }
@@ -1090,6 +1093,7 @@ class Painter {
             }
         }
         if (this.terrainRenderModeElevated()) defines.push('TERRAIN');
+        if (this.terrainUseFloatDEM()) defines.push('TERRAIN_DEM_FLOAT_FORMAT');
         if (this.transform.projection.name === 'globe') defines.push('GLOBE');
         if (zeroExaggeration) defines.push('ZERO_EXAGGERATION');
         // When terrain is active, fog is rendered as part of draping, not as part of tile

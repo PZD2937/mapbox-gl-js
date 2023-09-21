@@ -145,6 +145,7 @@
     "glyphs": {
       "type": "string",
       "doc": "A URL template for loading signed-distance-field glyph sets in PBF format. The URL must include `{fontstack}` and `{range}` tokens. This property is required if any layer uses the `text-field` layout property. The URL must be absolute, containing the [scheme, authority and path components](https://en.wikipedia.org/wiki/URL#Syntax).",
+      "default": "mapbox://fonts/mapbox/{fontstack}/{range}.pbf",
       "example": "mapbox://fonts/mapbox/{fontstack}/{range}.pbf"
     },
     "transition": {
@@ -339,10 +340,9 @@
   "properties_light_directional": {
     "direction": {
       "type": "array",
-      "default": [
-        210,
-        30
-      ],
+      "default": [210, 30],
+      "minimum": [0, 0],
+      "maximum": [360, 90],
       "length": 2,
       "value": "number",
       "property-type": "data-constant",
@@ -354,10 +354,7 @@
         ]
       },
       "doc": "Direction of the light source specified as [a azimuthal angle, p polar angle] where a indicates the azimuthal angle of the light relative to north (in degrees and proceeding clockwise), and p indicates polar angle of the light (from 0°, directly above, to 180°, directly below).",
-      "example": [
-        90,
-        80
-      ]
+      "example": [90, 40]
     },
     "color": {
       "type": "color",
@@ -1495,7 +1492,7 @@
       "doc": "Radius of a fill extrusion edge in meters. If not zero, rounds extrusion edges for a smoother appearance.",
       "sdk-support": {
         "basic functionality": {
-          "js": "v2.10.0",
+          "js": "3.0.0",
           "android": "10.7.0",
           "ios": "10.7.0"
         },
@@ -5261,7 +5258,7 @@
       "minimum": 0,
       "transition": true,
       "units": "intensity",
-      "doc": "Emission strength",
+      "doc": "Controls the intensity of light emitted on the source features. This property works only with 3D light, i.e. when `lights` root property is defined.",
       "sdk-support": {
         "basic functionality": {
           "js": "3.0.0",
@@ -5528,7 +5525,7 @@
       "doc": "Controls the intensity of shading near ground and concave angles between walls. Default value 0.0 disables ambient occlusion and values around 0.3 provide the most plausible results for buildings.",
       "sdk-support": {
         "basic functionality": {
-          "js": "2.10.0",
+          "js": "3.0.0",
           "android": "10.7.0",
           "ios": "10.7.0"
         }
@@ -5553,7 +5550,7 @@
       ],
       "sdk-support": {
         "basic functionality": {
-          "js": "2.10.0",
+          "js": "3.0.0",
           "android": "10.7.0",
           "ios": "10.7.0"
         }
@@ -5780,7 +5777,7 @@
       "transition": false,
       "sdk-support": {
         "basic functionality": {
-          "js": "2.15.0",
+          "js": "3.0.0",
           "android": "10.10.0",
           "ios": "10.10.0"
         }
@@ -6107,7 +6104,24 @@
     },
     "line-gradient": {
       "type": "color",
-      "doc": "Defines a gradient with which to color a line feature. Can only be used with GeoJSON sources that specify `\"lineMetrics\": true`.",
+      "doc": "A gradient used to color a line feature at various distances along its length. Defined using a `step` or `interpolate` expression which outputs a color for each corresponding `line-progress` input value. `line-progress` is a percentage of the line feature's total length as measured on the webmercator projected coordinate plane (a `number` between `0` and `1`).  Can only be used with GeoJSON sources that specify `\"lineMetrics\": true`.",
+      "example": [
+        "interpolate",
+        [ "linear" ],
+        [ "line-progress" ],
+        0,
+        "blue",
+        0.1,
+        "royalblue",
+        0.3,
+        "cyan",
+        0.5,
+        "lime",
+        0.7,
+        "yellow",
+        1,
+        "red"
+      ],
       "transition": false,
       "requires": [
         {
@@ -6170,7 +6184,7 @@
       "minimum": 0,
       "transition": true,
       "units": "intensity",
-      "doc": "Emission strength",
+      "doc": "Controls the intensity of light emitted on the source features. This property works only with 3D light, i.e. when `lights` root property is defined.",
       "sdk-support": {
         "basic functionality": {
           "js": "3.0.0",
@@ -6584,7 +6598,7 @@
       "minimum": 0,
       "transition": true,
       "units": "intensity",
-      "doc": "Emission strength",
+      "doc": "Controls the intensity of light emitted on the source features. This property works only with 3D light, i.e. when `lights` root property is defined.",
       "sdk-support": {
         "basic functionality": {
           "js": "3.0.0",
@@ -6796,7 +6810,7 @@
       "minimum": 0,
       "transition": true,
       "units": "intensity",
-      "doc": "Emission strength",
+      "doc": "Controls the intensity of light emitted on the source features. This property works only with 3D light, i.e. when `lights` root property is defined.",
       "sdk-support": {
         "basic functionality": {
           "js": "3.0.0",
@@ -6824,7 +6838,7 @@
       "minimum": 0,
       "transition": true,
       "units": "intensity",
-      "doc": "Emission strength",
+      "doc": "Controls the intensity of light emitted on the source features. This property works only with 3D light, i.e. when `lights` root property is defined.",
       "sdk-support": {
         "basic functionality": {
           "js": "3.0.0",
@@ -7365,6 +7379,9 @@
       "value": "number",
       "property-type": "data-constant",
       "transition": true,
+      "requires": [
+        "raster-color"
+      ],
       "expression": {
         "interpolated": true,
         "parameters": [
@@ -7396,6 +7413,9 @@
       "value": "number",
       "property-type": "data-constant",
       "transition": true,
+      "requires": [
+        "raster-color"
+      ],
       "expression": {
         "interpolated": true,
         "parameters": [
@@ -7797,7 +7817,7 @@
       "minimum": 0,
       "transition": true,
       "units": "intensity",
-      "doc": "Emission strength",
+      "doc": "Controls the intensity of light emitted on the source features. This property works only with 3D light, i.e. when `lights` root property is defined.",
       "sdk-support": {
         "basic functionality": {
           "js": "3.0.0",

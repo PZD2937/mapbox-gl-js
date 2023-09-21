@@ -35,7 +35,10 @@ const todo = [
     "render-tests/model-layer/landmark-mbx",
     "render-tests/model-layer/model-runtime-api",
     "render-tests/model-layer/style-model-api-add",
-    "render-tests/model-layer/style-model-api-update"
+    "render-tests/model-layer/style-model-api-update",
+
+    // https://mapbox.atlassian.net/browse/MAPS3D-987
+    "render-tests/model-layer/landmark-shadows-terrain"
 ];
 
 const skip = [
@@ -172,9 +175,16 @@ const skip = [
     "render-tests/model-layer/landmark-conflation-borders-terrain",
     "render-tests/model-layer/landmark-conflation-multiple-model-layers",
     "render-tests/model-layer/landmark-shadows-terrain",
+    "render-tests/model-layer/landmark-shadows-opacity",
     "render-tests/model-layer/landmark-terrain",
     "render-tests/model-layer/lighting-3d-mode/shadow",
     "render-tests/model-layer/landmark-conflation-multiple-sources",
+
+    // Not implemented in gl-js
+    "render-tests/fill-extrusion-partial-rendering/partial-rendering-0",
+    "render-tests/fill-extrusion-partial-rendering/partial-rendering-1",
+    "render-tests/fill-extrusion-partial-rendering/partial-rendering-2",
+    "render-tests/fill-extrusion-partial-rendering/partial-rendering-3"
 ];
 
 export default {todo, skip};
