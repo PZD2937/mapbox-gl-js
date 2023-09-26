@@ -68,6 +68,39 @@ const lerpMatrix = (out: Float64Array, a: Float64Array, b: Float64Array, value: 
     return out;
 };
 
+class CoverTileCache {
+    _cache: Map<number, Array<OverscaledTileID>>;
+    _paintStartTimeStamp: number;
+
+    constructor() {
+        this._cache = new Map();
+        this._paintStartTimeStamp = 0
+    }
+
+    isCurrentFrame(paintStartTimeStamp: number): boolean {
+        return this._paintStartTimeStamp && (paintStartTimeStamp === this._paintStartTimeStamp);
+    }
+
+    setCache(zoom: number, tileIDs: Array<OverscaledTileID>, paintStartTimeStamp: number) {
+        if (!this.isCurrentFrame(paintStartTimeStamp)) {
+            this._cache.clear();
+            this._paintStartTimeStamp = paintStartTimeStamp
+        }
+        this._cache.set(zoom, tileIDs);
+    }
+
+    getCache(zoom: number, paintStartTimeStamp: number): ?Array<OverscaledTileID> {
+        if (this.isCurrentFrame(paintStartTimeStamp)) {
+            return this._cache.get(zoom);
+        }
+    }
+
+    getFirstCache(): ?[number, Array<OverscaledTileID>] {
+        return this._cache.entries().next().value;
+    }
+
+};
+
 /**
  * A single transform, generally used for a single tile to be
  * scaled, rotated, and zoomed.
@@ -189,6 +222,9 @@ class Transform {
 
     _orthographicProjectionAtLowPitch: boolean;
 
+    _coverTileCache: CoverTileCache;
+    _paintStartTimeStamp: number;
+
     constructor(minZoom: ?number, maxZoom: ?number, minPitch: ?number, maxPitch: ?number, renderWorldCopies: boolean | void, projection?: ?ProjectionSpecification, bounds: ?LngLatBounds) {
         this.tileSize = 512; // constant
 
@@ -224,6 +260,9 @@ class Transform {
         this._pixelsPerMercatorPixel = 1.0;
         this.globeRadius = 0;
         this.globeCenterInViewSpace = [0, 0, 0];
+
+        this._coverTileCache = new CoverTileCache();
+        this._paintStartTimeStamp = -1;
 
         // Move the horizon closer to the center. 0 would not shift the horizon. 1 would put the horizon at the center.
         this._horizonShift = 0.1;
@@ -815,6 +854,12 @@ class Transform {
         if (options.minzoom !== undefined && z < options.minzoom) return [];
         if (options.maxzoom !== undefined && z > options.maxzoom) z = options.maxzoom;
 
+        const cache = this._coverTileCache.getCache(z, this._paintStartTimeStamp);
+        if (cache) {
+            // console.log(`%c${options.sourceId} has cache, tile size ${options.tileSize}`, 'color: green')
+            return cache;
+        }
+
         const centerCoord = this.locationCoordinate(this.center);
         const centerLatitude = this.center.lat;
         const numTiles = 1 << z;
@@ -1161,6 +1206,9 @@ class Transform {
         // Relax the assertion on terrain, on high zoom we use distance to center of tile
         // while camera might be closer to selected center of map.
         assert(!cover.length || this.elevation || cover[0].overscaledZ === overscaledZ || !isMercator);
+
+        this._coverTileCache.setCache(z, cover, this._paintStartTimeStamp);
+
         return cover;
     }
 
