@@ -1,6 +1,6 @@
 // @flow
 
-import {asyncAll, extend, pick} from '../util/util.js';
+import {asyncAll, clamp, extend, pick} from '../util/util.js';
 
 import {getImage, ResourceType} from '../util/ajax.js';
 import {Event, ErrorEvent, Evented} from '../util/evented.js';
@@ -63,6 +63,7 @@ class RasterTileSource extends Evented implements Source {
     tileSize: number;
     customTags: ?Object;
     projection: ?string;
+    zoomOffset: ?number;
 
     bounds: ?[number, number, number, number];
     tileBounds: TileBounds;
@@ -80,6 +81,9 @@ class RasterTileSource extends Evented implements Source {
 
     constructor(id: string, options: RasterSourceSpecification | RasterDEMSourceSpecification, dispatcher: Dispatcher, eventedParent: Evented) {
         super();
+        if (this.tileSize && this.zoomOffset) {
+            throw new Error('tileSize and zoomOffset cannot exist at the same time');
+        }
         this.id = id;
         this.dispatcher = dispatcher;
         this.setEventedParent(eventedParent);
@@ -91,12 +95,13 @@ class RasterTileSource extends Evented implements Source {
         this.scheme = 'xyz';
         this.tileSize = 512;
         this._loaded = false;
+        this.zoomOffset = 0;
 
         this.deduped = new DedupedRequest();
         this.subLoading = {};
 
         this._options = extend({type: 'raster'}, options);
-        extend(this, pick(options, ['url', 'scheme', 'tileSize', 'projection', 'customTags', 'showDebugTileLoadTime']));
+        extend(this, pick(options, ['url', 'scheme', 'tileSize', 'projection', 'customTags', 'showDebugTileLoadTime', 'zoomOffset']));
     }
 
     load(callback?: Callback<void>) {
@@ -205,7 +210,7 @@ class RasterTileSource extends Evented implements Source {
     }
 
     needRevise() {
-        return this.projection && this.projection !== 'WGS84'
+        return (this.projection && this.projection !== 'WGS84') || this.zoomOffset;
     }
 
     loadTile(tile: Tile, callback: Callback<void>) {
@@ -257,7 +262,9 @@ class RasterTileSource extends Evented implements Source {
             tile: tile.tileID.canonical,
             projection: this.projection,
             source: this.id,
-            type: this.type
+            type: this.type,
+            reprojected: this.projection && this.projection !== 'WGS84',
+            zoom: clamp(tile.tileID.canonical.z + this.zoomOffset, this.minzoom, this.maxzoom)
         }, (err, data) => {
             if (tile.state === 'unloaded') return callback(null);
             if (!data) return callback(err);

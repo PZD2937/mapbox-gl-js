@@ -55,6 +55,16 @@ function canvasToImage(canvas: HTMLCanvasElement | OffscreenCanvas, callback: Ca
     }
 }
 
+function tileChildren(tile: {x: number, y: number, z: number}, targetZ: number, targetChildren: []) {
+    if(tile.z > targetZ) return targetChildren.push(tile);
+    const x = tile.x << 1, y = tile.y << 1, z = tile.z + 1, dx = (tile.dx || 0) * 2, dy = (tile.dy || 0) * 2;
+    const children = [{x, y, z, dx, dy}, {x: x + 1, y, z, dx: dx + 1, dy}, {x, y: y + 1, z, dx, dy: dy + 1}, {x: x + 1, y: y + 1, z, dx: dx + 1, dy: dy + 1}];
+    if(tile.z === targetZ) return targetChildren.push(...children);
+    for (let i = 0; i < 4; i++) {
+        tileChildren(children[i], targetZ - 1, targetChildren);
+    }
+}
+
 
 export function loadRasterTile(params: WorkerTileParameters, callback: Callback): Cancelable {
     const {requests, ltPixel, rbPixel} = params;
@@ -145,22 +155,41 @@ export default class RasterTileWorkerSource {
         this.loadRasterTile = loadRasterTile.bind(this);
     }
 
-    getCoverTiles(params: { projection: string, tile: CanonicalTileID }, callback: Callback) {
-        const {tile, projection} = params;
-
-        const worldSize = 1 << tile.z;
+    getCoverTiles(params: { projection: string, tile: CanonicalTileID, zoom: number, reprojected: boolean }, callback: Callback) {
+        const {tile, zoom, reprojected} = params;
+        const actualZ = zoom || tile.z;
         const coverTiles = [];
+
+        if (reprojected) {
+            return callback(null, this.reprojectedTile(params, coverTiles));
+        } else {
+            tile.z === zoom ? coverTiles.push({x: tile.x, y: tile.y, z: tile.z, dx: 0, dy: 0}) : tileChildren(tile, actualZ, coverTiles);
+            const size = 256 * (1 << actualZ - tile.z);
+            callback(null, {
+                coverTiles,
+                ltPixel: {x: 0, y: 0},
+                rbPixel: {x: size, y: size}
+            });
+        }
+    }
+
+    reprojectedTile(params: { projection: string, tile: CanonicalTileID, zoom: number }, coverTiles: []) {
+        const {tile, projection, zoom} = params;
+
+        const actualZ = zoom || tile.z;
+        const worldSize = 1 << actualZ;
+
         const bound = tile.toLngLatBounds();
         const trNorthwestCoords = transformLngLat(bound.getNorthWest(), 'WGS84', projection);
         const {direction} = getTileSystem(projection);
         // 左上角像素坐标
-        const ltPixel = lngLatToPixel(trNorthwestCoords, tile.z, projection);
+        const ltPixel = lngLatToPixel(trNorthwestCoords, actualZ, projection);
         const trSoutheastCoords = transformLngLat(bound.getSouthEast(), 'WGS84', projection);
         // 右下角像素坐标
-        const rbPoint = lngLatToPixel(trSoutheastCoords, tile.z, projection);
+        const rbPoint = lngLatToPixel(trSoutheastCoords, actualZ, projection);
 
-        const northwestTile = lngLatToTileFromZ(trNorthwestCoords, tile.z, projection);
-        const southeastTile = lngLatToTileFromZ(trSoutheastCoords, tile.z, projection);
+        const northwestTile = lngLatToTileFromZ(trNorthwestCoords, actualZ, projection);
+        const southeastTile = lngLatToTileFromZ(trSoutheastCoords, actualZ, projection);
 
         const xMin = direction.x > 0 ? northwestTile.x : southeastTile.x;
         const xMax = direction.x > 0 ? southeastTile.x : northwestTile.x;
@@ -168,7 +197,7 @@ export default class RasterTileWorkerSource {
         const yMax = direction.y > 0 ? southeastTile.y : northwestTile.y;
         let xRange = xMax - xMin, yRange = yMax - yMin;
         // 穿过子午线
-        if(xMin > xMax){
+        if (xMin > xMax) {
             xRange = worldSize - xMin;
             xRange += xMax;
         }
@@ -177,14 +206,14 @@ export default class RasterTileWorkerSource {
                 const tileX = (xMin + x) % worldSize, tileY = yMin + y;
                 const dx = x * direction.x + (direction.x < 0 ? xRange : 0);
                 const dy = y * direction.y + (direction.y < 0 ? yRange : 0);
-                coverTiles.push({x: tileX, y: tileY, z: tile.z, dx, dy});
+                coverTiles.push({x: tileX, y: tileY, z: actualZ, dx, dy});
             }
         }
-        callback(null, {
+        return {
             coverTiles,
             ltPixel,
             rbPixel: {x: rbPoint.x + 256 * xRange, y: rbPoint.y + 256 * yRange}
-        })
+        }
     }
 
     loadTile(params: WorkerTileParameters, callback: Callback) {
@@ -208,7 +237,6 @@ export default class RasterTileWorkerSource {
             }
         }
     }
-
 
     abortTile(params: TileParameters & { tileID: CanonicalTileID }) {
         const {tileID} = params;
