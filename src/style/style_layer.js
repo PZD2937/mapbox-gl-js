@@ -154,8 +154,12 @@ class StyleLayer extends Evented {
         this.isConfigDependent = this.isConfigDependent || this._unevaluatedLayout.isConfigDependent;
 
         if (name === 'visibility') {
-            this.visibility = this._unevaluatedLayout._values.visibility.possiblyEvaluate({zoom: 0});
+            this.possiblyEvaluateVisibility();
         }
+    }
+
+    possiblyEvaluateVisibility() {
+        this.visibility = this._unevaluatedLayout._values.visibility.possiblyEvaluate({zoom: 0});
     }
 
     getPaintProperty(name: string): void | TransitionSpecification | PropertyValueSpecification<mixed> {
@@ -296,8 +300,16 @@ class StyleLayer extends Evented {
         return false;
     }
 
+    canCastShadows(): boolean {
+        return false;
+    }
+
     hasLightBeamPass(): boolean {
         return false;
+    }
+
+    cutoffRange(): number {
+        return 0.0;
     }
 
     resize() {

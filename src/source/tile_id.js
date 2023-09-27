@@ -14,8 +14,8 @@ export class CanonicalTileID {
 
     constructor(z: number, x: number, y: number) {
         assert(z >= 0 && z <= 25);
-        assert(x >= 0 && x < 1 << z);
-        assert(y >= 0 && y < 1 << z);
+        assert(x >= 0 && x < Math.pow(2, z));
+        assert(y >= 0 && y < Math.pow(2, z));
         this.z = z;
         this.x = x;
         this.y = y;
@@ -120,8 +120,9 @@ export class OverscaledTileID {
         // We're first testing for z == 0, to avoid a 32 bit shift, which is undefined.
         return parent.overscaledZ === 0 || (
             parent.overscaledZ < this.overscaledZ &&
-            parent.canonical.x === (this.canonical.x >> zDifference) &&
-            parent.canonical.y === (this.canonical.y >> zDifference));
+                parent.canonical.z < this.canonical.z &&
+                parent.canonical.x === (this.canonical.x >> zDifference) &&
+                parent.canonical.y === (this.canonical.y >> zDifference));
     }
 
     children(sourceMaxZoom: number): Array<OverscaledTileID> {
@@ -194,7 +195,7 @@ function calculateKey(wrap: number, overscaledZ: number, z: number, x: number, y
     return key;
 }
 
-function getQuadkey(z: number, x: number, y: number): string {
+function getQuadkey(z: number, x: number, y: number) {
     let quadkey = '', mask;
     for (let i = z; i > 0; i--) {
         mask = 1 << (i - 1);

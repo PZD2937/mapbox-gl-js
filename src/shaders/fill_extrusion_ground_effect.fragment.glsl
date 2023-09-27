@@ -7,6 +7,7 @@ uniform highp vec3 u_flood_light_color;
 uniform highp float u_attenuation;
 
 uniform sampler2D u_fb;
+uniform float u_fb_size;
 
 #ifdef SDF_SUBPASS
 varying highp vec2 v_pos;
@@ -35,7 +36,7 @@ void main() {
 #ifdef CLEAR_SUBPASS
     vec4 color = vec4(1.0);
 #ifdef CLEAR_FROM_TEXTURE
-    color = texelFetch(u_fb, ivec2(gl_FragCoord.xy), 0);
+    color = texture2D(u_fb, gl_FragCoord.xy / vec2(u_fb_size));
 #endif // CLEAR_FROM_TEXTURE
     gl_FragColor = color;
 #else // CLEAR_SUBPASS
@@ -50,6 +51,9 @@ void main() {
 #ifdef FOG
     fog = v_fog;
 #endif // FOG
+#ifdef RENDER_CUTOFF
+    fog *= v_cutoff_opacity;
+#endif // RENDER_CUTOFF
     gl_FragColor = vec4(vec3(0.0), mix(1.0, d, effect_intensity * u_opacity * fog));
 #else // SDF_SUBPASS
 vec4 color = mix(vec4(u_flood_light_color, 1.0), vec4(vec3(0.0), 1.0), u_ao_pass);

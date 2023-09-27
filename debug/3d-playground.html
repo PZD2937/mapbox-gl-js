@@ -80,6 +80,11 @@ const Demo3D = function() {
     this.sunHaloColor = {r:255, g:255, b:255};
     this.skyColor = {r:255, g:255, b:255};
     this.starIntensity = 1.0;
+    this.fogColor = {r:255, g:255, b:255};
+    this.fogRangeMin = 3.0;
+    this.fogRangeMax = 10.0;
+    this.fogVerticalRangeMin = 100.0;
+    this.fogVerticalRangeMax = 200.0;
     this.sunIntensity = 30.0;
     this.verticalGradient = false;
     this.lightIntensity = 0.26;
@@ -92,6 +97,7 @@ const Demo3D = function() {
     this.floodLightGroundAttenuation = 0.69;
     this.buildingColor = {r:255, g:255, b:255};
     this.buildingOpacity = 1;
+    this.cutoffFadeRange = 0.5;
     this.ambientLightColor = {r:255, g:255, b:255};
     this.ambientLightIntensity = 0.5;
     this.directionalLightColor = {r:255, g:255, b:255};
@@ -142,7 +148,7 @@ const demo3d = new Demo3D();
 
 function updateLights(enable, loadFromStyleIfPresent) {
     const currentLights = map.getLights();
-    if (currentLights && loadFromStyleIfPresent) {
+    if (currentLights && currentLights[0].type !== 'flat' && loadFromStyleIfPresent) {
         demo3d.enable3dLights = true;
         const cDirectional = parseCSSColor(currentLights[0].properties.color); // eslint-disable-line
         demo3d.directionalLightColor = {r: cDirectional[0], g: cDirectional[1], b: cDirectional[2]};
@@ -334,6 +340,12 @@ window.onload = function() {
     const sunAtmosphereIntensity = sky.addInput(demo3d, 'sunAtmosphereIntensity', {min:0.0, max:1.0});
     const skyColor = sky.addInput(demo3d, 'skyColor');
     const starIntensity = sky.addInput(demo3d, 'starIntensity', {min:0.0, max:1.0});
+
+    const fogColor = sky.addInput(demo3d, 'fogColor');
+    const fogRangeMin = sky.addInput(demo3d, 'fogRangeMin', {min:-20.0, max:20.0});
+    const fogRangeMax = sky.addInput(demo3d, 'fogRangeMax', {min:-20.0, max:20.0});
+    const fogVerticalRangeMin = sky.addInput(demo3d, 'fogVerticalRangeMin', {min:0.0, max:200.0});
+    const fogVerticalRangeMax = sky.addInput(demo3d, 'fogVerticalRangeMax', {min:0.0, max:200.0});
     sky.on('change', (ev) => {
         map.setLights([
             {
@@ -348,7 +360,13 @@ window.onload = function() {
             'rgba(' + demo3d.sunHaloColor.r + ', ' + demo3d.sunHaloColor.g + ', ' + demo3d.sunHaloColor.b + ', ' + demo3d.sunHaloIntensity + ')');
         map.setPaintProperty('sky', 'sky-atmosphere-color',
             'rgba(' + demo3d.skyColor.r + ', ' + demo3d.skyColor.g + ', ' + demo3d.skyColor.b + ', ' + demo3d.sunAtmosphereIntensity + ')');
-        map.setFog({'star-intensity': demo3d.starIntensity});
+        map.setFog({
+            "color":
+            'rgba(' + demo3d.fogColor.r + ', ' + demo3d.fogColor.g + ', ' + demo3d.fogColor.b + ', 1.0)',
+            'star-intensity': demo3d.starIntensity,
+            "range": [demo3d.fogRangeMin, demo3d.fogRangeMax],
+            'vertical-range': [demo3d.fogVerticalRangeMin, demo3d.fogVerticalRangeMax]
+        });
     });
 
     // Buildings
@@ -362,6 +380,7 @@ window.onload = function() {
     const verticalGradient = buildings.addInput(demo3d, 'verticalGradient');
     const buildingColor = buildings.addInput(demo3d, 'buildingColor');
     const buildingOpacity = buildings.addInput(demo3d, 'buildingOpacity', {min:0.0, max:1.0});
+    const cutoffFadeRange = buildings.addInput(demo3d, 'cutoffFadeRange', {min:0.0, max:1.0});
     const edgeRadius = buildings.addInput(demo3d, 'edgeRadius');
     const roundedRoof = buildings.addInput(demo3d, 'roundedRoof');
     const lightIntensity = buildings.addInput(demo3d, 'lightIntensity', {min:0.0, max:1.0});
@@ -370,6 +389,7 @@ window.onload = function() {
         map.setPaintProperty(demo3d.buildingExtrusion, 'fill-extrusion-color',
             'rgb(' + demo3d.buildingColor.r + ', ' + demo3d.buildingColor.g + ', ' + demo3d.buildingColor.b + ')');
         map.setPaintProperty(demo3d.buildingExtrusion, 'fill-extrusion-opacity', demo3d.buildingOpacity);
+        map.setPaintProperty(demo3d.buildingExtrusion, 'fill-extrusion-cutoff-fade-range', demo3d.cutoffFadeRange);
         map.setLayoutProperty(demo3d.buildingExtrusion, 'fill-extrusion-edge-radius', demo3d.edgeRadius);
         map.setPaintProperty(demo3d.buildingExtrusion, 'fill-extrusion-rounded-roof', demo3d.roundedRoof);
 
@@ -430,6 +450,8 @@ map.on('style.load', function() {
         "tileSize": 512,
         "maxzoom": 14
     });
+    map.style.setPaintProperty("trees", "model-cutoff-fade-range", 1.0);
+    map.style.setPaintProperty("3d-building", "fill-extrusion-cutoff-fade-range", 0.5);
     map.setTerrain(demo3d.enableTerrain ? {"source": "mapbox-dem", "exaggeration": 1.5} : null);
     demo3d.buildingExtrusion = map.style._order.find((id) => map.style.getLayer(id).type === 'fill-extrusion' && map.style.getLayer(id).sourceLayer === 'building');
     if (!demo3d.buildingExtrusion) {
@@ -449,6 +471,7 @@ map.on('style.load', function() {
                 'fill-extrusion-height': ["get", "height"],
                 'fill-extrusion-base': ["get", "min_height"],
                 'fill-extrusion-opacity': demo3d.buildingOpacity,
+                'fill-extrusion-cutoff-fade-range': demo3d.cutoffFadeRange,
                 'fill-extrusion-vertical-gradient': demo3d.verticalGradient,
                 'fill-extrusion-ambient-occlusion-radius': demo3d.aoWallRadius,
                 'fill-extrusion-ambient-occlusion-intensity': demo3d.aoIntensity,
@@ -502,7 +525,12 @@ map.on('style.load', function() {
             ]
         }
     });
-    map.setFog({});
+    map.setFog({
+        "color": 'rgba(' + demo3d.fogColor.r + ', ' + demo3d.fogColor.g + ', ' + demo3d.fogColor.b + ', 1.0)',
+        'star-intensity': demo3d.starIntensity,
+        "range": [demo3d.fogRangeMin, demo3d.fogRangeMax],
+        "vertical-range": [demo3d.fogVerticalRangeMin, demo3d.fogVerticalRangeMax]
+    });
     map.setLights([
         {
             'type': 'flat',

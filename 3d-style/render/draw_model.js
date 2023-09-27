@@ -28,6 +28,7 @@ import assert from 'assert';
 import {DEMSampler} from '../../src/terrain/elevation.js';
 import {OverscaledTileID} from '../../src/source/tile_id.js';
 import {Aabb} from '../../src/util/primitives.js';
+import {getCutoffParams} from '../../src/render/cutoff.js';
 
 export default drawModels;
 
@@ -187,7 +188,6 @@ function drawMesh(sortedMesh: SortedMesh, painter: Painter, layer: ModelStyleLay
     const shadowRenderer = painter.shadowRenderer;
     if (shadowRenderer) { shadowRenderer.useNormalOffset = false; }
 
-    const program = painter.useProgram('model', null, ((definesValues: any): DynamicDefinesType[]));
     let fogMatrixArray = null;
     if (painter.style.fog) {
         const fogMatrix = fogMatrixForModel(sortedMesh.nodeModelMatrix, painter.transform);
@@ -195,7 +195,13 @@ function drawMesh(sortedMesh: SortedMesh, painter: Painter, layer: ModelStyleLay
         fogMatrixArray = new Float32Array(fogMatrix);
     }
 
-    painter.uploadCommonUniforms(context, program, null, fogMatrixArray);
+    const cutoffParams = getCutoffParams(painter, layer.paint.get('model-cutoff-fade-range'));
+    if (cutoffParams.shouldRenderCutoff) {
+        definesValues.push('RENDER_CUTOFF');
+    }
+    const program = painter.useProgram('model', null, ((definesValues: any): DynamicDefinesType[]));
+
+    painter.uploadCommonUniforms(context, program, null, fogMatrixArray, cutoffParams);
 
     const isShadowPass = painter.renderPass === 'shadow';
 
@@ -203,7 +209,9 @@ function drawMesh(sortedMesh: SortedMesh, painter: Painter, layer: ModelStyleLay
         shadowRenderer.setupShadowsFromMatrix(sortedMesh.nodeModelMatrix, program);
     }
 
-    program.draw(painter, context.gl.TRIANGLES, depthMode, stencilMode, colorMode, CullFaceMode.backCCW,
+    const cullFaceMode = mesh.material.doubleSided ? CullFaceMode.disabled : CullFaceMode.backCCW;
+
+    program.draw(painter, context.gl.TRIANGLES, depthMode, stencilMode, colorMode, cullFaceMode,
             uniformValues, layer.id, mesh.vertexBuffer, mesh.indexBuffer, mesh.segments, layer.paint, painter.transform.zoom,
             undefined, dynamicBuffers);
 }
@@ -527,12 +535,13 @@ function drawInstancedModels(painter: Painter, source: SourceCache, layer: Model
     }
 }
 
+const minimumInstanceCount = 20;
+
 function drawInstancedNode(painter: Painter, layer: ModelStyleLayer, node: Node, modelInstances: any, cameraPos: [number, number, number], coord: OverscaledTileID, renderData: RenderData) {
     const context = painter.context;
     const isShadowPass = painter.renderPass === 'shadow';
     const shadowRenderer = painter.shadowRenderer;
     const depthMode = isShadowPass && shadowRenderer ? shadowRenderer.getShadowPassDepthMode() : new DepthMode(context.gl.LEQUAL, DepthMode.ReadWrite, painter.depthRangeFor3D);
-    const colorMode = isShadowPass && shadowRenderer ? shadowRenderer.getShadowPassColorMode() : painter.colorModeForRenderPass();
 
     if (node.meshes) {
         for (const mesh of node.meshes) {
@@ -540,22 +549,33 @@ function drawInstancedNode(painter: Painter, layer: ModelStyleLayer, node: Node,
             const dynamicBuffers = [];
             let program;
             let uniformValues;
+            let colorMode;
 
+            if (modelInstances.instancedDataArray.length > minimumInstanceCount) {
+                definesValues.push('INSTANCED_ARRAYS');
+            }
+
+            const cutoffParams = getCutoffParams(painter, layer.paint.get('model-cutoff-fade-range'));
+            if (cutoffParams.shouldRenderCutoff) {
+                definesValues.push('RENDER_CUTOFF');
+            }
             if (isShadowPass && shadowRenderer) {
                 program = painter.useProgram('modelDepth', null, ((definesValues: any): DynamicDefinesType[]));
                 uniformValues = modelDepthUniformValues(renderData.shadowTileMatrix, renderData.shadowTileMatrix, Float32Array.from(node.matrix));
+                colorMode = shadowRenderer.getShadowPassColorMode();
             } else {
                 setupMeshDraw(definesValues, dynamicBuffers, mesh, painter);
                 program = painter.useProgram('model', null, ((definesValues: any): DynamicDefinesType[]));
                 const material = mesh.material;
                 const pbr = material.pbrMetallicRoughness;
+                const layerOpacity = layer.paint.get('model-opacity');
 
                 uniformValues = modelUniformValues(
                     coord.projMatrix,
                     Float32Array.from(node.matrix),
                     new Float32Array(16),
                     painter,
-                    layer.paint.get('model-opacity'),
+                    layerOpacity,
                     pbr.baseColorFactor,
                     material.emissiveFactor,
                     pbr.metallicFactor,
@@ -571,18 +591,29 @@ function drawInstancedNode(painter: Painter, layer: ModelStyleLayer, node: Node,
                         program.setShadowUniformValues(context, shadowRenderer.getShadowUniformValues());
                     }
                 }
+
+                const needsBlending = cutoffParams.shouldRenderCutoff || layerOpacity < 1.0 || material.alphaMode !== 'OPAQUE';
+                colorMode = needsBlending ? ColorMode.alphaBlended : ColorMode.unblended;
             }
 
-            painter.uploadCommonUniforms(context, program, coord.toUnwrapped());
+            painter.uploadCommonUniforms(context, program, coord.toUnwrapped(), null, cutoffParams);
 
             assert(modelInstances.instancedDataArray.bytesPerElement === 64);
-            const instanceUniform = isShadowPass ? "u_instance" : "u_normal_matrix";
-            for (let i = 0; i < modelInstances.instancedDataArray.length; ++i) {
-                /* $FlowIgnore[prop-missing] modelDepth uses u_instance and model uses u_normal_matrix for packing instance data */
-                uniformValues[instanceUniform] = new Float32Array(modelInstances.instancedDataArray.arrayBuffer, i * 64, 16);
-                program.draw(painter, context.gl.TRIANGLES, depthMode, StencilMode.disabled, colorMode, CullFaceMode.disabled,
+            const cullFaceMode = mesh.material.doubleSided ? CullFaceMode.disabled : CullFaceMode.backCCW;
+            if  (modelInstances.instancedDataArray.length > minimumInstanceCount) {
+                dynamicBuffers.push(modelInstances.instancedDataBuffer);
+                program.draw(painter, context.gl.TRIANGLES, depthMode, StencilMode.disabled, colorMode, cullFaceMode,
                 uniformValues, layer.id, mesh.vertexBuffer, mesh.indexBuffer, mesh.segments, layer.paint, painter.transform.zoom,
-                undefined, dynamicBuffers);
+                undefined, dynamicBuffers, modelInstances.instancedDataArray.length);
+            } else {
+                const instanceUniform = isShadowPass ? "u_instance" : "u_normal_matrix";
+                for (let i = 0; i < modelInstances.instancedDataArray.length; ++i) {
+                    /* $FlowIgnore[prop-missing] modelDepth uses u_instance and model uses u_normal_matrix for packing instance data */
+                    uniformValues[instanceUniform] = new Float32Array(modelInstances.instancedDataArray.arrayBuffer, i * 64, 16);
+                    program.draw(painter, context.gl.TRIANGLES, depthMode, StencilMode.disabled, colorMode, cullFaceMode,
+                    uniformValues, layer.id, mesh.vertexBuffer, mesh.indexBuffer, mesh.segments, layer.paint, painter.transform.zoom,
+                    undefined, dynamicBuffers);
+                }
             }
         }
     }
@@ -613,7 +644,6 @@ function prepareBatched(painter: Painter, source: SourceCache, layer: ModelStyle
         if (bucket.needsReEvaluation(painter, zoom, layer)) {
             bucket.evaluate(layer);
         }
-
     }
 }
 
@@ -639,7 +669,7 @@ function drawBatchedModels(painter: Painter, source: SourceCache, layer: ModelSt
     const depthModeRW = new DepthMode(context.gl.LEQUAL, DepthMode.ReadWrite, painter.depthRangeFor3D);
     const depthModeRO = new DepthMode(context.gl.LEQUAL, DepthMode.ReadOnly, painter.depthRangeFor3D);
 
-    const drawTiles = function(colorMode: ColorMode, depthWrite: boolean) {
+    const drawTiles = function(enableColor: boolean, depthWrite: boolean) {
         for (const coord of coords) {
             const tile = source.getTile(coord);
             const bucket: ?Tiled3dModelBucket = (tile.getBucket(layer): any);
@@ -746,7 +776,9 @@ function drawBatchedModels(painter: Painter, source: SourceCache, layer: ModelSt
                             layer
                     );
 
-                    const depthMode = depthWrite ? (isLight ? depthModeRO : depthModeRW) : depthModeRO;
+                    const meshNeedsBlending = isLight || layerOpacity < 1.0 || nodeInfo.hasTranslucentParts;
+                    const colorMode = enableColor ? (meshNeedsBlending ? ColorMode.alphaBlended : ColorMode.unblended) : ColorMode.disabled;
+                    const depthMode = (depthWrite && !isLight) ? depthModeRW : depthModeRO;
 
                     program.draw(painter, context.gl.TRIANGLES, depthMode, StencilMode.disabled, colorMode, CullFaceMode.backCCW,
                         uniformValues, layer.id, mesh.vertexBuffer, mesh.indexBuffer, mesh.segments, layer.paint, painter.transform.zoom,
@@ -760,15 +792,15 @@ function drawBatchedModels(painter: Painter, source: SourceCache, layer: ModelSt
     prepareBatched(painter, source, layer, coords);
 
     if (layerOpacity === 1.0) {
-        drawTiles(painter.colorModeForRenderPass(), true);
+        drawTiles(true, true);
     } else {
         // Draw transparent buildings in two passes so that only the closest surface is drawn.
         // First draw all the extrusions into only the depth buffer. No colors are drawn.
         // Then draw all the extrusions a second type, only coloring fragments if they have the
         // same depth value as the closest fragment in the previous pass. Use the stencil buffer
         // to prevent the second draw in cases where we have coincident polygons.
-        drawTiles(ColorMode.disabled, true);
-        drawTiles(painter.colorModeForRenderPass(), false);
+        drawTiles(false, true);
+        drawTiles(true, false);
     }
 }
 

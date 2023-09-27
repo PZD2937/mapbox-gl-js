@@ -747,7 +747,7 @@ test('Style#removeSource', (t) => {
             }]
         }));
         style.on('style.load', () => {
-            style.update(1, 0);
+            style.update({zoom: 1, fadeDuration: 0});
             callback(style);
         });
         return style;
@@ -1334,7 +1334,7 @@ test('Style#setPaintProperty', (t) => {
         tr.resize(512, 512);
 
         style.once('style.load', () => {
-            style.update(tr.zoom, 0);
+            style.update({zoom: tr.zoom, fadeDuration: 0});
             const sourceCache = style._getSourceCache('geojson');
             const source = style.getSource('geojson');
 
@@ -1798,7 +1798,7 @@ test('Style#setLayerZoomRange', (t) => {
             t.spy(style, '_reloadSource');
 
             style.setLayerZoomRange('raster', 5, 12);
-            style.update(0);
+            style.update({zoom: 0});
             t.notOk(style._reloadSource.called, '_reloadSource should not be called for raster source');
             t.end();
         });
@@ -1978,7 +1978,7 @@ test('Style#queryRenderedFeatures', (t) => {
         style._getSourceCache('mapbox').transform = transform;
         style._getSourceCache('other').transform = transform;
 
-        style.update(0);
+        style.update({zoom: 0});
         style._updateSources(transform);
 
         t.test('returns feature type', (t) => {
@@ -2383,18 +2383,19 @@ test('Style#getFog', (t) => {
     const defaultRange = styleSpec.fog["range"].default;
     const defaultColor = styleSpec.fog["color"].default;
     const defaultHorizonBlend = styleSpec.fog["horizon-blend"].default;
+    const defaultVerticalRange = styleSpec.fog["vertical-range"].default;
 
     t.test('rolls up inline source into style', (t) => {
         const style = new Style(new StubMap());
         style.loadJSON({
             "version": 8,
-            "fog": {"range": [1, 2], "color": "white", "horizon-blend": 0},
+            "fog": {"range": [1, 2], "color": "white", "horizon-blend": 0, "vertical-range": [0, 0]},
             "sources": {},
             "layers": []
         });
 
         style.on('style.load', () => {
-            style.setFog({"range": [0, 1], "color": "white", "horizon-blend": 0});
+            style.setFog({"range": [0, 1], "color": "white", "horizon-blend": 0, "vertical-range": [0, 0]});
             t.ok(style.getFog());
             t.deepEqual(style.getFog(), {
                 "range": [0, 1],
@@ -2402,7 +2403,8 @@ test('Style#getFog', (t) => {
                 "horizon-blend": 0,
                 "high-color": defaultHighColor,
                 "star-intensity": defaultStarIntensity,
-                "space-color": defaultSpaceColor
+                "space-color": defaultSpaceColor,
+                "vertical-range": defaultVerticalRange
             });
             t.end();
         });
@@ -2425,7 +2427,8 @@ test('Style#getFog', (t) => {
                 "horizon-blend": defaultHorizonBlend,
                 "high-color": defaultHighColor,
                 "star-intensity": defaultStarIntensity,
-                "space-color": defaultSpaceColor
+                "space-color": defaultSpaceColor,
+                "vertical-range": defaultVerticalRange
             });
             t.end();
         });
@@ -2433,3 +2436,60 @@ test('Style#getFog', (t) => {
 
     t.end();
 });
+
+test('Style#castShadows check', (t) => {
+    function createStyle() {
+        const style = new Style(new StubMap());
+        style.loadJSON({
+            "version": 8,
+            "lights": [
+                {
+                    "type": "ambient",
+                    "id": "environment",
+                    "properties": {
+                        "intensity": 0.2
+                    }
+                },
+                {
+                    "type": "directional",
+                    "id": "sun_light",
+                    "properties": {
+                        "intensity": 0.8,
+                        "cast-shadows": true,
+                        "shadow-intensity": 1.0
+                    }
+                }
+            ],
+            "sources": {
+                "geojson": createGeoJSONSource()
+            },
+            "layers": [{
+                "id": "symbol_id",
+                "type": "symbol",
+                "source": "geojson"
+            },
+            {
+                "id": "background_id",
+                "type": "background"
+            },
+            {
+                "id": "line_id",
+                "type": "line",
+                "source": "geojson"
+            }]
+        });
+        return style;
+    }
+
+    const style = createStyle();
+    style.on('style.load', () => {
+        const sourceCache = style._getSourceCache('geojson');
+        t.notOk(sourceCache.castsShadows);
+        style.addLayer({id: 'fillext', source: 'geojson', type: 'fill-extrusion'});
+        t.ok(sourceCache.castsShadows);
+        style.removeLayer('fillext');
+        t.notOk(sourceCache.castsShadows);
+        t.end();
+    });
+});
+

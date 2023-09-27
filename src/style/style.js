@@ -23,6 +23,7 @@ import {createExpression} from '../style-spec/expression/index.js';
 
 import type {LightProps as Ambient} from '../../3d-style/style/ambient_light_properties.js';
 import type {LightProps as Directional} from '../../3d-style/style/directional_light_properties.js';
+import type {Vec3} from 'gl-matrix';
 import {
     validateStyle,
     validateSource,
@@ -41,6 +42,7 @@ import {
 } from '../source/source.js';
 import {queryRenderedFeatures, queryRenderedSymbols, querySourceFeatures} from '../source/query_features.js';
 import SourceCache from '../source/source_cache.js';
+import BuildingIndex from '../source/building_index.js';
 import GeoJSONSource from '../source/geojson_source.js';
 import styleSpec from '../style-spec/reference/latest.js';
 import getWorkerPool from '../util/global_worker_pool.js';
@@ -56,6 +58,7 @@ import PauseablePlacement from './pauseable_placement.js';
 import CrossTileSymbolIndex from '../symbol/cross_tile_symbol_index.js';
 import {validateCustomStyleLayer} from './style_layer/custom_style_layer.js';
 import {makeFQID, getNameFromFQID, getScopeFromFQID} from '../util/fqid.js';
+import {shadowDirectionFromProperties} from '../../3d-style/render/shadow_renderer.js';
 
 // We're skipping validation errors with the `source.canvas` identifier in order
 // to continue to allow canvas sources to be added at runtime/updated in
@@ -120,6 +123,8 @@ const supportedDiffOperations = pick(diffOperations, [
     'setCamera'
     // 'setGlyphs',
     // 'setSprite',
+    // 'addImport',
+    // 'removeImport',
 ]);
 
 const ignoredDiffOperations = pick(diffOperations, [
@@ -160,6 +165,7 @@ export type StyleImport = {|
 |};
 
 const MAX_IMPORT_DEPTH = 5;
+const defaultTransition = {duration: 300, delay: 0};
 
 // Symbols are draped only on native and for certain cases only
 const drapedLayers = new Set(['fill', 'line', 'background', "hillshade", "raster"]);
@@ -221,6 +227,8 @@ class Style extends Evented {
     _markersNeedUpdate: boolean;
     _brightness: ?number;
     _configDependentLayers: Set<string>;
+    _buildingIndex: BuildingIndex;
+    _transition: TransitionSpecification;
 
     crossTileSymbolIndex: CrossTileSymbolIndex;
     pauseablePlacement: PauseablePlacement;
@@ -295,6 +303,8 @@ class Style extends Evented {
         this._order = [];
         this._drapedFirstOrder = [];
         this._markersNeedUpdate = false;
+        this._buildingIndex = new BuildingIndex(this);
+        this._transition = extend({}, defaultTransition);
 
         this.options = options.config || new Map();
         this._configDependentLayers = new Set();
@@ -431,6 +441,9 @@ class Style extends Evented {
 
                 if (style.fog != null)
                     this.fog = style.fog;
+
+                if (style._transition != null)
+                    this.setTransition(style._transition);
             }
 
             this.dispatcher.broadcast('setLayers', {
@@ -567,24 +580,8 @@ class Style extends Evented {
 
         this._ownOrder = layers.map((layer) => makeFQID(layer.id, this.scope));
 
-        this._ownLayers = {};
-        this._serializedLayers = {};
-        for (const layer of layers) {
-            const styleLayer = createStyleLayer(layer, this.options);
-            styleLayer.id = makeFQID(styleLayer.id, this.scope);
-            styleLayer.scope = this.scope;
-            if (styleLayer.isConfigDependent) this._configDependentLayers.add(styleLayer.id);
-            if (styleLayer.source) styleLayer.source = makeFQID(styleLayer.source, this.scope);
-
-            styleLayer.setEventedParent(this, {layer: {id: styleLayer.id}});
-            this._layers[styleLayer.id] = styleLayer;
-            this._ownLayers[styleLayer.id] = styleLayer;
-            this._serializedLayers[styleLayer.id] = styleLayer.serialize();
-            this._updateLayerCount(styleLayer, true);
-        }
-
         if (this.stylesheet.light) {
-            console.log("The `light` root property is deprecated, prefer using `lights` with `flat` light type instead.");
+            warnOnce('The `light` root property is deprecated, prefer using `lights` with `flat` light type instead.');
         }
 
         if (this.stylesheet.lights) {
@@ -600,6 +597,29 @@ class Style extends Evented {
             this.light = new Light(this.stylesheet.light);
         }
 
+        this._ownLayers = {};
+        this._serializedLayers = {};
+        for (const layer of layers) {
+            const styleLayer = createStyleLayer(layer, this.options);
+            styleLayer.id = makeFQID(styleLayer.id, this.scope);
+            styleLayer.scope = this.scope;
+            if (styleLayer.isConfigDependent) this._configDependentLayers.add(styleLayer.id);
+            if (styleLayer.source) styleLayer.source = makeFQID(styleLayer.source, this.scope);
+
+            styleLayer.setEventedParent(this, {layer: {id: styleLayer.id}});
+            this._layers[styleLayer.id] = styleLayer;
+            this._ownLayers[styleLayer.id] = styleLayer;
+            this._serializedLayers[styleLayer.id] = styleLayer.serialize();
+            this._updateLayerCount(styleLayer, true);
+
+            const sourceCache = this._getLayerSourceCache(styleLayer);
+            const shadowsEnabled = !!this.directionalLight && this.directionalLight.shadowsEnabled();
+
+            if (sourceCache && styleLayer.canCastShadows() && shadowsEnabled) {
+                sourceCache.castsShadows = true;
+            }
+        }
+
         if (this.stylesheet.models) {
             this.modelManager.addModels(this.stylesheet.models, this.scope);
         }
@@ -611,6 +631,10 @@ class Style extends Evented {
 
         if (this.stylesheet.fog) {
             this._createFog(this.stylesheet.fog);
+        }
+
+        if (this.stylesheet.transition) {
+            this.setTransition(this.stylesheet.transition);
         }
 
         // Given a stylesheet, in order of priority, we select:
@@ -714,6 +738,7 @@ class Style extends Evented {
         sort(mergedOrder);
         this._layers = mergedLayers;
         this._updateDrapeFirstLayers();
+        this._buildingIndex.processLayersChanged();
     }
 
     terrainSetForDrapingOnly(): boolean {
@@ -807,7 +832,7 @@ class Style extends Evented {
         if (!this.imageManager.isLoaded())
             return false;
 
-        if (this.stylesheet.models && !this.modelManager.isLoaded())
+        if (!this.modelManager.isLoaded())
             return false;
 
         for (const {style} of this.imports) {
@@ -828,12 +853,33 @@ class Style extends Evented {
         return serializedLayers;
     }
 
-    hasTransitions(): boolean {
+    hasLightTransitions(): boolean {
         if (this.light && this.light.hasTransition()) {
             return true;
         }
 
-        if (this.fog && this.fog.hasTransition()) {
+        if (this.ambientLight && this.ambientLight.hasTransition()) {
+            return true;
+        }
+
+        if (this.directionalLight && this.directionalLight.hasTransition()) {
+            return true;
+        }
+
+        return false;
+    }
+
+    hasFogTransition(): boolean {
+        if (!this.fog) return false;
+        return this.fog.hasTransition();
+    }
+
+    hasTransitions(): boolean {
+        if (this.hasLightTransitions()) {
+            return true;
+        }
+
+        if (this.hasFogTransition()) {
             return true;
         }
 
@@ -884,9 +930,19 @@ class Style extends Evented {
             return;
         }
 
-        if (parameters.brightness !== this._brightness) {
-            this._brightness = parameters.brightness;
-            this.dispatcher.broadcast('setBrightness', parameters.brightness);
+        if (this.ambientLight) {
+            this.ambientLight.recalculate(parameters);
+        }
+
+        if (this.directionalLight) {
+            this.directionalLight.recalculate(parameters);
+        }
+
+        const brightness = this.calculateLightsBrightness();
+        parameters.brightness = brightness || 0.0;
+        if (brightness !== this._brightness) {
+            this._brightness = brightness;
+            this.dispatcher.broadcast('setBrightness', brightness);
         }
 
         const changed = this._changed;
@@ -928,7 +984,18 @@ class Style extends Evented {
                 this._layers[id].updateTransitions(parameters);
             }
 
-            this.light.updateTransitions(parameters);
+            if (this.light) {
+                this.light.updateTransitions(parameters);
+            }
+
+            if (this.ambientLight) {
+                this.ambientLight.updateTransitions(parameters);
+            }
+
+            if (this.directionalLight) {
+                this.directionalLight.updateTransitions(parameters);
+            }
+
             if (this.fog) {
                 this.fog.updateTransitions(parameters);
             }
@@ -972,13 +1039,18 @@ class Style extends Evented {
             }
         }
 
-        this.light.recalculate(parameters);
+        if (this.light) {
+            this.light.recalculate(parameters);
+        }
+
         if (this.terrain) {
             this.terrain.recalculate(parameters);
         }
+
         if (this.fog) {
             this.fog.recalculate(parameters);
         }
+
         this.z = parameters.zoom;
 
         if (this._markersNeedUpdate) {
@@ -1168,8 +1240,6 @@ class Style extends Evented {
             const sourceCacheId = (onlySymbols ? 'symbol:' : 'other:') + id;
             const sourceCache = this._sourceCaches[sourceCacheId] = new SourceCache(sourceCacheId, sourceInstance, onlySymbols);
             (onlySymbols ? this._symbolSourceCaches : this._otherSourceCaches)[id] = sourceCache;
-            sourceCache.style = this;
-
             sourceCache.onAdd(this.map);
         };
 
@@ -1275,44 +1345,55 @@ class Style extends Evented {
     setLights(lights: ?Array<LightsSpecification>) {
         this._checkLoaded();
 
-        delete this.ambientLight;
-        delete this.directionalLight;
-
-        if (lights) {
-            for (const light of lights) {
-                if (this._validate(validateLights, 'lights', light)) {
-                    return;
-                }
-
-                const parameters = this._getTransitionParameters({duration: 0});
-                switch (light.type) {
-                case 'ambient':
-                    this.ambientLight = new Lights<Ambient>(light, ambientProps, this.options);
-                    this.ambientLight.updateTransitions(parameters);
-                    break;
-                case 'directional':
-                    this.directionalLight = new Lights<Directional>(light, directionalProps, this.options);
-                    this.directionalLight.updateTransitions(parameters);
-                    break;
-                default:
-                    assert(false, "Unknown light type");
-                }
-            }
-
-            const evaluationParameters = new EvaluationParameters(this.z || 0, {
-                now: browser.now(),
-                transition: this.getTransition()
-            });
-            if (this.ambientLight) {
-                this.ambientLight.recalculate(evaluationParameters);
-            }
-            if (this.directionalLight) {
-                this.directionalLight.recalculate(evaluationParameters);
-            }
-
-            this._brightness = this.calculateLightsBrightness();
-            this.dispatcher.broadcast('setBrightness', this._brightness);
+        if (!lights) {
+            delete this.ambientLight;
+            delete this.directionalLight;
+            return;
         }
+
+        const transitionParameters = this._getTransitionParameters();
+
+        for (const light of lights) {
+            if (this._validate(validateLights, 'lights', light)) {
+                return;
+            }
+
+            switch (light.type) {
+            case 'ambient':
+                if (this.ambientLight) {
+                    const ambientLight = this.ambientLight;
+                    ambientLight.set(light);
+                    ambientLight.updateTransitions(transitionParameters);
+                } else {
+                    this.ambientLight = new Lights<Ambient>(light, ambientProps, this.scope, this.options);
+                }
+                break;
+            case 'directional':
+                if (this.directionalLight) {
+                    const directionalLight = this.directionalLight;
+                    directionalLight.set(light);
+                    directionalLight.updateTransitions(transitionParameters);
+                } else {
+                    this.directionalLight = new Lights<Directional>(light, directionalProps, this.scope, this.options);
+                }
+                break;
+            default:
+                assert(false, `Unknown light type: ${light.type}`);
+            }
+        }
+
+        const evaluationParameters = new EvaluationParameters(this.z || 0, transitionParameters);
+
+        if (this.ambientLight) {
+            this.ambientLight.recalculate(evaluationParameters);
+        }
+
+        if (this.directionalLight) {
+            this.directionalLight.recalculate(evaluationParameters);
+        }
+
+        this._brightness = this.calculateLightsBrightness();
+        this.dispatcher.broadcast('setBrightness', this._brightness);
     }
 
     calculateLightsBrightness(): ?number {
@@ -1377,24 +1458,35 @@ class Style extends Evented {
 
     setConfigProperty(importId: string, key: string, value: any) {
         const expressionParsed = createExpression(value);
-
-        if (expressionParsed.result === 'success') {
-            const expression = expressionParsed.value.expression;
-
-            const fragment = this.getFragmentById(importId);
-            fragment.options.set(key, expression);
-
-            for (const id of fragment._configDependentLayers) {
-                const layer = this.getLayer(id);
-                if (layer) {
-                    this._updateLayer(layer);
-                }
-            }
-            this._changed = true;
-
-        } else {
+        if (expressionParsed.result !== 'success') {
             emitValidationErrors(this, expressionParsed.value);
+            return;
         }
+
+        const expression = expressionParsed.value.expression;
+
+        const fragment = this.getFragmentById(importId);
+        fragment.options.set(key, expression);
+
+        for (const id of fragment._configDependentLayers) {
+            const layer = this.getLayer(id);
+            if (layer) {
+                layer.possiblyEvaluateVisibility();
+                this._updateLayer(layer);
+            }
+        }
+
+        // If the root style uses the lights from the updated fragment,
+        // update the configs in the corresponding light instances.
+        if (this.ambientLight && this.ambientLight.scope === importId) {
+            this.ambientLight.updateConfig(fragment.options);
+        }
+
+        if (this.directionalLight && this.directionalLight.scope === importId) {
+            this.directionalLight.updateConfig(fragment.options);
+        }
+
+        this._changed = true;
     }
 
     /**
@@ -1455,6 +1547,12 @@ class Style extends Evented {
         this._ownLayers[id] = layer;
 
         const sourceCache = this._getLayerSourceCache(layer);
+        const shadowsEnabled = !!this.directionalLight && this.directionalLight.shadowsEnabled();
+
+        if (sourceCache && layer.canCastShadows() && shadowsEnabled) {
+            sourceCache.castsShadows = true;
+        }
+
         if (this._removedLayers[id] && layer.source && sourceCache && layer.type !== 'custom') {
             // If, in the current batch, we have already removed this layer
             // and we are now re-adding it with a different `type`, then we
@@ -1551,6 +1649,20 @@ class Style extends Evented {
         delete this._updatedLayers[id];
         delete this._updatedPaintProps[id];
         this._configDependentLayers.delete(id);
+
+        const sourceCache = this._getLayerSourceCache(layer);
+
+        if (sourceCache && sourceCache.castsShadows) {
+            let shadowCastersLeft = false;
+            for (const key in this._ownLayers) {
+                if (this._layers[key].source === layer.source && this._layers[key].canCastShadows()) {
+                    shadowCastersLeft = true;
+                    break;
+                }
+            }
+
+            sourceCache.castsShadows = shadowCastersLeft;
+        }
 
         if (layer.onRemove) {
             layer.onRemove(this.map);
@@ -1811,8 +1923,12 @@ class Style extends Evented {
         return sourceCaches[0].getFeatureState(sourceLayer, target.id);
     }
 
+    setTransition(transition: TransitionSpecification | void) {
+        this._transition = extend({}, defaultTransition, this._transition, transition);
+    }
+
     getTransition(): TransitionSpecification {
-        return extend({duration: 300, delay: 0}, this.stylesheet && this.stylesheet.transition);
+        return extend({}, this._transition);
     }
 
     serialize(): StyleSpecification {
@@ -1830,6 +1946,7 @@ class Style extends Evented {
             metadata: this.stylesheet.metadata,
             imports: this.stylesheet.imports,
             light: this.stylesheet.light,
+            lights: this.stylesheet.lights,
             terrain: this.getTerrain() || undefined,
             fog: this.stylesheet.fog,
             center: this.stylesheet.center,
@@ -1857,7 +1974,6 @@ class Style extends Evented {
         }
         this._changed = true;
         layer.invalidateCompiledFilter();
-
     }
 
     _flattenAndSortRenderedFeatures(sourceResults: Array<any>): Array<mixed> {
@@ -2044,7 +2160,7 @@ class Style extends Evented {
         }
         if (!_update) return;
 
-        const parameters = this._getTransitionParameters({duration: 300, delay: 0});
+        const parameters = this._getTransitionParameters();
 
         this.light.setLight(lightOptions, id, options);
         this.light.updateTransitions(parameters);
@@ -2178,12 +2294,10 @@ class Style extends Evented {
         this._markersNeedUpdate = true;
     }
 
-    _getTransitionParameters(transitionOptions: Object): TransitionParameters {
+    _getTransitionParameters(transition: ?TransitionSpecification): TransitionParameters {
         return {
             now: browser.now(),
-            transition: extend(
-                transitionOptions,
-                this.stylesheet.transition)
+            transition: extend(this.getTransition(), transition)
         };
     }
 
@@ -2283,6 +2397,8 @@ class Style extends Evented {
         this.imageManager.setEventedParent(null);
         this.setEventedParent(null);
         this.dispatcher.remove();
+        delete this.ambientLight;
+        delete this.directionalLight;
     }
 
     _clearSource(id: string) {
@@ -2309,8 +2425,12 @@ class Style extends Evented {
     }
 
     _updateSources(transform: Transform) {
+        let lightDirection: ?Vec3;
+        if (this.directionalLight) {
+            lightDirection = shadowDirectionFromProperties(this.directionalLight);
+        }
         for (const id in this._sourceCaches) {
-            this._sourceCaches[id].update(transform);
+            this._sourceCaches[id].update(transform, undefined, undefined, lightDirection);
         }
     }
 
@@ -2327,6 +2447,7 @@ class Style extends Evented {
         let placementCommitted = false;
 
         const layerTiles = {};
+        const layerTilesInYOrder = {};
 
         for (const layerId of this._order) {
             const styleLayer = this._layers[layerId];
@@ -2335,9 +2456,10 @@ class Style extends Evented {
             if (!layerTiles[styleLayer.source]) {
                 const sourceCache = this._getLayerSourceCache(styleLayer);
                 if (!sourceCache) continue;
-                layerTiles[styleLayer.source] = sourceCache.getRenderableIds(true)
-                    .map((id) => sourceCache.getTileByID(id))
-                    .sort((a, b) => (b.tileID.overscaledZ - a.tileID.overscaledZ) || (a.tileID.isLessThan(b.tileID) ? -1 : 1));
+                const tiles = sourceCache.getRenderableIds(true).map((id) => sourceCache.getTileByID(id));
+                layerTilesInYOrder[styleLayer.source] = tiles.slice();
+                layerTiles[styleLayer.source] =
+                    tiles.sort((a, b) => (b.tileID.overscaledZ - a.tileID.overscaledZ) || (a.tileID.isLessThan(b.tileID) ? -1 : 1));
             }
 
             const layerBucketsChanged = this.crossTileSymbolIndex.addLayer(styleLayer, layerTiles[styleLayer.source], transform.center.lng, transform.projection);
@@ -2359,7 +2481,7 @@ class Style extends Evented {
 
         if (forceFullPlacement || !this.pauseablePlacement || (this.pauseablePlacement.isDone() && !this.placement.stillRecent(browser.now(), transform.zoom))) {
             const fogState = this.fog && transform.projection.supportsFog ? this.fog.state : null;
-            this.pauseablePlacement = new PauseablePlacement(transform, this._order, forceFullPlacement, showCollisionBoxes, fadeDuration, crossSourceCollisions, this.placement, fogState);
+            this.pauseablePlacement = new PauseablePlacement(transform, this._order, forceFullPlacement, showCollisionBoxes, fadeDuration, crossSourceCollisions, this.placement, fogState, this._buildingIndex);
             this._layerOrderChanged = false;
         }
 
@@ -2370,7 +2492,7 @@ class Style extends Evented {
             // render frame
             this.placement.setStale();
         } else {
-            this.pauseablePlacement.continuePlacement(this._order, this._layers, layerTiles);
+            this.pauseablePlacement.continuePlacement(this._order, this._layers, layerTiles, layerTilesInYOrder);
 
             if (this.pauseablePlacement.isDone()) {
                 this.placement = this.pauseablePlacement.commit(browser.now());

@@ -907,11 +907,11 @@ function addSymbol(bucket: SymbolBucket,
     const projectedAnchor = collisionFeatureAnchor;
 
     bucket.symbolInstances.emplaceBack(
+        anchor.x,
+        anchor.y,
         projectedAnchor.x,
         projectedAnchor.y,
         projectedAnchor.z,
-        anchor.x,
-        anchor.y,
         placedTextSymbolIndices.right >= 0 ? placedTextSymbolIndices.right : -1,
         placedTextSymbolIndices.center >= 0 ? placedTextSymbolIndices.center : -1,
         placedTextSymbolIndices.left >= 0 ? placedTextSymbolIndices.left : -1,
@@ -937,6 +937,7 @@ function addSymbol(bucket: SymbolBucket,
         textOffset0,
         textOffset1,
         collisionCircleDiameter,
+        0,
         hasIconTextFit ? 1 : 0
     );
 }

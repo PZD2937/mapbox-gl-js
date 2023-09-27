@@ -39,6 +39,7 @@ import type {Aabb} from '../util/primitives';
 const NUM_WORLD_COPIES = 3;
 export const DEFAULT_MIN_ZOOM = 0;
 export const DEFAULT_MAX_ZOOM = 25.5;
+export const MIN_LOD_PITCH = 60.0;
 
 type RayIntersectionResult = { p0: Vec4, p1: Vec4, t: number};
 type ElevationReference = "sea" | "ground";
@@ -821,6 +822,117 @@ class Transform {
         return result;
     }
 
+    isLODDisabled(checkPitch: boolean): boolean {
+        // No change of LOD behavior for pitch lower than 60 and when there is no top padding: return only tile ids from the requested zoom level
+        return (!checkPitch || this.pitch <= MIN_LOD_PITCH) && this._edgeInsets.top <= this._edgeInsets.bottom && !this._elevation && !this.projection.isReprojectedInTileSpace;
+    }
+
+    /**
+     * Extends tile coverage to include potential shadow caster tiles.
+     * @param {Array<OverscaledTileID>} coveringTiles tiles that are potential shadow receivers
+     * @param {Vec3} lightDir direction of the light (unit vector)
+     * @param {number} maxZoom maximum zoom level of shadow caster tiles
+     * @returns {Array<OverscaledTileID>} a set of potential shadow casters
+     */
+    extendTileCoverForShadows(coveringTiles: Array<OverscaledTileID>, lightDir: Vec3, maxZoom: number): Array<OverscaledTileID> {
+        let out = [];
+
+        if (lightDir[0] === 0.0 && lightDir[1] === 0.0) {
+            return out;
+        }
+
+        // Extra tile selection based on the direction of the light:
+        // For each tile we add neighbourgs that might cast shadows over the current tile
+        for (const id of coveringTiles) {
+            const tileId = id.canonical;
+            const overscaledZ = id.overscaledZ;
+            const tileWrap = id.wrap;
+            const tiles = 1 << tileId.z;
+
+            const xMaxInsideRange = tileId.x + 1 < tiles;
+            const xMinInsideRange = tileId.x > 0;
+
+            const yMaxInsideRange = tileId.y + 1 < tiles;
+            const yMinInsideRange = tileId.y > 0;
+
+            const leftWrap = id.wrap - (xMinInsideRange ? 0 : 1);
+            const rightWrap = id.wrap + (xMaxInsideRange ? 0 : 1);
+
+            const leftTileX = xMinInsideRange ? tileId.x - 1 : tiles - 1;
+            const rightTileX = xMaxInsideRange ? tileId.x + 1 : 0;
+
+            if (lightDir[0] < 0.0) {
+                out.push(new OverscaledTileID(overscaledZ, rightWrap, tileId.z, rightTileX, tileId.y));
+                if (lightDir[1] < 0.0 && yMaxInsideRange) {
+                    out.push(new OverscaledTileID(overscaledZ, tileWrap, tileId.z, tileId.x, tileId.y + 1));
+                    out.push(new OverscaledTileID(overscaledZ, rightWrap, tileId.z, rightTileX, tileId.y + 1));
+                }
+                if (lightDir[1] > 0.0 && yMinInsideRange) {
+                    out.push(new OverscaledTileID(overscaledZ, tileWrap, tileId.z, tileId.x, tileId.y - 1));
+                    out.push(new OverscaledTileID(overscaledZ, rightWrap, tileId.z, rightTileX, tileId.y - 1));
+                }
+            } else if (lightDir[0] > 0.0) {
+                out.push(new OverscaledTileID(overscaledZ, leftWrap, tileId.z, leftTileX, tileId.y));
+                if (lightDir[1] < 0.0 && yMaxInsideRange) {
+                    out.push(new OverscaledTileID(overscaledZ, tileWrap, tileId.z, tileId.x, tileId.y + 1));
+                    out.push(new OverscaledTileID(overscaledZ, leftWrap, tileId.z, leftTileX, tileId.y + 1));
+                }
+                if (lightDir[1] > 0.0 && yMinInsideRange) {
+                    out.push(new OverscaledTileID(overscaledZ, tileWrap, tileId.z, tileId.x, tileId.y - 1));
+                    out.push(new OverscaledTileID(overscaledZ, leftWrap, tileId.z, leftTileX, tileId.y - 1));
+                }
+            } else {
+                if (lightDir[1] < 0.0 && yMaxInsideRange) {
+                    out.push(new OverscaledTileID(overscaledZ, tileWrap, tileId.z, tileId.x, tileId.y + 1));
+                } else if (yMinInsideRange) {
+                    out.push(new OverscaledTileID(overscaledZ, tileWrap, tileId.z, tileId.x, tileId.y - 1));
+                }
+            }
+        }
+
+        // Remove duplicates from new ids
+        if (out.length > 1) {
+            out.sort((a, b) => {
+                return a.overscaledZ - b.overscaledZ ||
+                        a.wrap - b.wrap ||
+                        a.canonical.z - b.canonical.z ||
+                        a.canonical.x - b.canonical.x ||
+                        a.canonical.y - b.canonical.y;
+            });
+
+            let i = 0;
+            let j = 0;
+            while (j < out.length) {
+                if (!out[j].equals(out[i])) {
+                    out[++i] = out[j++];
+                } else {
+                    ++j;
+                }
+            }
+            out.length = i + 1;
+        }
+
+        // Remove higher zoom new IDs that overlap with other new IDs
+        const nonOverlappingIds = [];
+
+        for (const id of out) {
+            if (!out.some(ancestorCandidate => id.isChildOf(ancestorCandidate))) {
+                nonOverlappingIds.push(id);
+            }
+        }
+
+        // Remove new IDs that overlap with old IDs
+        out = nonOverlappingIds.filter(newId => !coveringTiles.some(oldId => {
+            if (newId.overscaledZ < maxZoom && oldId.isChildOf(newId)) {
+                return true;
+            }
+            // Remove identical IDs or children of existing IDs
+            return newId.equals(oldId) || newId.isChildOf(oldId);
+        }));
+
+        return out;
+    }
+
     /**
      * Return all coordinates that could cover this transform for a covering
      * zoom level.
@@ -878,8 +990,7 @@ class Transform {
         // 0.02 added to compensate for precision errors, see "coveringTiles for terrain" test in transform.test.js.
         const zoomSplitDistance = this.cameraToCenterDistance / options.tileSize * (options.roundZoom ? 1 : 0.502);
 
-        // No change of LOD behavior for pitch lower than 60 and when there is no top padding: return only tile ids from the requested zoom level
-        const minZoom = this.pitch <= 60.0 && this._edgeInsets.top <= this._edgeInsets.bottom && !this._elevation && !this.projection.isReprojectedInTileSpace ? z : 0;
+        const minZoom = this.isLODDisabled(true) ? z : 0;
 
         // When calculating tile cover for terrain, create deep AABB for nodes, to ensure they intersect frustum: for sources,
         // other than DEM, use minimum of visible DEM tiles and center altitude as upper bound (pitch is always less than 90°).

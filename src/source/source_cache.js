@@ -15,12 +15,12 @@ import {mercatorXfromLng} from '../geo/mercator_coordinate.js';
 import type {Source} from './source.js';
 import type {SourceSpecification} from '../style-spec/types.js';
 import type {default as MapboxMap} from '../ui/map.js';
-import type Style from '../style/style.js';
 import type Transform from '../geo/transform.js';
 import type {TileState} from './tile.js';
 import type {Callback} from '../types/callback.js';
 import type {FeatureStates} from './source_state.js';
 import type {QueryGeometry, TilespaceQueryGeometry} from '../style/query_geometry.js';
+import type {Vec3} from 'gl-matrix';
 
 /**
  * `SourceCache` is responsible for
@@ -36,7 +36,6 @@ import type {QueryGeometry, TilespaceQueryGeometry} from '../style/query_geometr
 class SourceCache extends Evented {
     id: string;
     map: MapboxMap;
-    style: Style;
 
     _source: Source;
     _sourceLoaded: boolean;
@@ -55,9 +54,11 @@ class SourceCache extends Evented {
     transform: Transform;
     used: boolean;
     usedForTerrain: boolean;
+    castsShadows: boolean;
     _state: SourceFeatureState;
     _loadedParentTiles: {[_: number | string]: ?Tile};
     _onlySymbols: ?boolean;
+    _shadowCasterTiles: {[_: number]: boolean};
 
     static maxUnderzooming: number;
     static maxOverzooming: number;
@@ -96,8 +97,10 @@ class SourceCache extends Evented {
         this._minTileCacheSize = source.minTileCacheSize;
         this._maxTileCacheSize = source.maxTileCacheSize;
         this._loadedParentTiles = {};
+        this.castsShadows = false;
 
         this._coveredTiles = {};
+        this._shadowCasterTiles = {};
         this._state = new SourceFeatureState();
         this._isRaster =
             this._source.type === 'raster' ||
@@ -148,6 +151,7 @@ class SourceCache extends Evented {
 
     _loadTile(tile: Tile, callback: Callback<void>): void {
         tile.isSymbolTile = this._onlySymbols;
+        tile.isExtraShadowCaster = this._shadowCasterTiles[tile.tileID.key];
         return this._source.loadTile(tile, callback);
     }
 
@@ -187,10 +191,10 @@ class SourceCache extends Evented {
         return values((this._tiles: any)).map((tile: Tile) => tile.tileID).sort(compareTileId).map(id => id.key);
     }
 
-    getRenderableIds(symbolLayer?: boolean): Array<number> {
+    getRenderableIds(symbolLayer?: boolean, includeShadowCasters?: boolean): Array<number> {
         const renderables: Array<Tile> = [];
         for (const id in this._tiles) {
-            if (this._isIdRenderable(+id, symbolLayer)) renderables.push(this._tiles[id]);
+            if (this._isIdRenderable(+id, symbolLayer, includeShadowCasters)) renderables.push(this._tiles[id]);
         }
         if (symbolLayer) {
             return renderables.sort((a_: Tile, b_: Tile) => {
@@ -212,9 +216,10 @@ class SourceCache extends Evented {
         return false;
     }
 
-    _isIdRenderable(id: number, symbolLayer?: boolean): boolean {
+    _isIdRenderable(id: number, symbolLayer?: boolean, includeShadowCasters?: boolean): boolean {
         return this._tiles[id] && this._tiles[id].hasData() &&
-            !this._coveredTiles[id] && (symbolLayer || !this._tiles[id].holdingForFade());
+            !this._coveredTiles[id] && (symbolLayer || !this._tiles[id].holdingForFade()) &&
+            (includeShadowCasters || !this._shadowCasterTiles[id]);
     }
 
     reload() {
@@ -489,7 +494,7 @@ class SourceCache extends Evented {
      * @param {tileSize} tileSize If needed to get lower resolution ideal cover,
      * override source.tileSize used in tile cover calculation.
      */
-    update(transform: Transform, tileSize?: number, updateForTerrain?: boolean) {
+    update(transform: Transform, tileSize?: number, updateForTerrain?: boolean, directionalLight?: Vec3) {
         this.transform = transform;
         if (!this._sourceLoaded || this._paused || this.transform.freezeTileCoverage) { return; }
         assert(!(updateForTerrain && !this.usedForTerrain));
@@ -503,11 +508,16 @@ class SourceCache extends Evented {
             this.handleWrapJump(this.transform.center.lng);
         }
 
+        // Tiles acting as shadow casters can be included in the ideal set
+        // even though they might not be visible on the screen.
+        this._shadowCasterTiles = {};
+
         // Covered is a list of retained tiles who's areas are fully covered by other,
         // better, retained tiles. They are not drawn separately.
         this._coveredTiles = {};
 
         let idealTileIDs;
+
         if (!this.used && !this.usedForTerrain) {
             idealTileIDs = [];
         } else if (this._source.tileID) {
@@ -526,6 +536,24 @@ class SourceCache extends Evented {
 
             if (this._source.hasTile) {
                 idealTileIDs = idealTileIDs.filter((coord) => (this._source.hasTile: any)(coord));
+            }
+        }
+
+        if (idealTileIDs.length > 0 && this.castsShadows &&
+            directionalLight && this.transform.projection.name !== 'globe' &&
+            !this.usedForTerrain && !isRasterType(this._source.type)) {
+            // compute desired max zoom level
+            const coveringZoom = transform.coveringZoomLevel({
+                tileSize: tileSize || this._source.tileSize,
+                roundZoom: this._source.roundZoom && !updateForTerrain
+            });
+            const idealZoom = Math.min(coveringZoom, this._source.maxzoom);
+
+            // find shadowCasterTiles
+            const shadowCasterTileIDs = transform.extendTileCoverForShadows(idealTileIDs, directionalLight, idealZoom);
+            for (const id of shadowCasterTileIDs) {
+                this._shadowCasterTiles[id.key] = true;
+                idealTileIDs.push(id);
             }
         }
 
@@ -746,8 +774,14 @@ class SourceCache extends Evented {
      */
     _addTile(tileID: OverscaledTileID): Tile {
         let tile: ?Tile = this._tiles[tileID.key];
-        if (tile) return tile;
-
+        const isExtraShadowCaster = this._shadowCasterTiles[tileID.key];
+        if (tile) {
+            if (tile.isExtraShadowCaster !== isExtraShadowCaster) {
+                // If the tile changed shadow visibility we need to relayout
+                this._reloadTile(tileID.key, 'reloading');
+            }
+            return tile;
+        }
         tile = this._cache.getAndRemove(tileID);
         if (tile) {
             this._setTileReloadTimer(tileID.key, tile);
@@ -910,8 +944,16 @@ class SourceCache extends Evented {
         return tileResults;
     }
 
+    getShadowCasterCoordinates(): Array<OverscaledTileID> {
+        return this._getRenderableCoordinates(false, true);
+    }
+
     getVisibleCoordinates(symbolLayer?: boolean): Array<OverscaledTileID> {
-        const coords = this.getRenderableIds(symbolLayer).map((id) => this._tiles[id].tileID);
+        return this._getRenderableCoordinates(symbolLayer);
+    }
+
+    _getRenderableCoordinates(symbolLayer?: boolean, includeShadowCasters?: boolean): Array<OverscaledTileID> {
+        const coords = this.getRenderableIds(symbolLayer, includeShadowCasters).map((id) => this._tiles[id].tileID);
         for (const coord of coords) {
             coord.projMatrix = this.transform.calculateProjMatrix(coord.toUnwrapped());
         }

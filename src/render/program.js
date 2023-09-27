@@ -19,6 +19,8 @@ import {terrainUniforms, globeUniforms} from '../terrain/terrain.js';
 import type {TerrainUniformsType, GlobeUniformsType} from '../terrain/terrain.js';
 import {fogUniforms} from './fog.js';
 import type {FogUniformsType} from './fog.js';
+import {cutoffUniforms} from './cutoff.js';
+import type {CutoffUniformsType} from './cutoff.js';
 import {lightsUniforms} from '../../3d-style/render/lights.js';
 import type {LightsUniformsType} from '../../3d-style/render/lights.js';
 import {shadowUniforms} from '../../3d-style/render/shadow_uniforms.js';
@@ -38,9 +40,9 @@ import type {Segment} from "../data/segment";
 import Color from '../style-spec/util/color.js';
 
 export type DrawMode =
-    | $PropertyType<WebGLRenderingContext, 'LINES'>
-    | $PropertyType<WebGLRenderingContext, 'TRIANGLES'>
-    | $PropertyType<WebGLRenderingContext, 'LINE_STRIP'>;
+    | $PropertyType<WebGL2RenderingContext, 'LINES'>
+    | $PropertyType<WebGL2RenderingContext, 'TRIANGLES'>
+    | $PropertyType<WebGL2RenderingContext, 'LINE_STRIP'>;
 
 type ShaderSource = {
     fragmentSource: string,
@@ -82,6 +84,7 @@ class Program<Us: UniformBindings> {
     failedToCreate: boolean;
     terrainUniforms: ?TerrainUniformsType;
     fogUniforms: ?FogUniformsType;
+    cutoffUniforms: ?CutoffUniformsType;
     lightsUniforms: ?LightsUniformsType;
     globeUniforms: ?GlobeUniformsType;
     shadowUniforms: ?ShadowUniformsType;
@@ -119,10 +122,10 @@ class Program<Us: UniformBindings> {
 
         let defines = configuration ? configuration.defines() : [];
         defines = defines.concat(fixedDefines.map((define) => `#define ${define}`));
-        const version = context.isWebGL2 ? '#version 300 es\n' : '';
+        const version = '#version 300 es\n';
 
         const fragmentSource = version + defines.concat(
-            context.extStandardDerivatives && version.length === 0 ? standardDerivativesExt.concat(preludeFragPrecisionQualifiers) : preludeFragPrecisionQualifiers,
+            version.length === 0 ? standardDerivativesExt.concat(preludeFragPrecisionQualifiers) : preludeFragPrecisionQualifiers,
             preludeFragPrecisionQualifiers,
             preludeCommonSource,
             preludeLightingSource,
@@ -190,6 +193,9 @@ class Program<Us: UniformBindings> {
         if (fixedDefines.includes('FOG')) {
             this.fogUniforms = fogUniforms(context);
         }
+        if (fixedDefines.includes('RENDER_CUTOFF')) {
+            this.cutoffUniforms = cutoffUniforms(context);
+        }
         if (fixedDefines.includes('LIGHTING_3D_MODE')) {
             this.lightsUniforms = lightsUniforms(context);
         }
@@ -238,6 +244,18 @@ class Program<Us: UniformBindings> {
         }
     }
 
+    setCutoffUniformValues(context: Context, cutoffUniformValues: UniformValues<CutoffUniformsType>) {
+        if (!this.cutoffUniforms) return;
+        const uniforms: CutoffUniformsType = this.cutoffUniforms;
+
+        if (this.failedToCreate) return;
+        context.program.set(this.program);
+
+        for (const name in cutoffUniformValues) {
+            uniforms[name].set(this.program, name, cutoffUniformValues[name]);
+        }
+    }
+
     setLightsUniformValues(context: Context, lightsUniformValues: UniformValues<LightsUniformsType>) {
         if (!this.lightsUniforms) return;
         const uniforms: LightsUniformsType = this.lightsUniforms;
@@ -274,11 +292,6 @@ class Program<Us: UniformBindings> {
         }
 
         const context = painter.context;
-
-        // Wireframe for WebGL2 only
-        if (!context.isWebGL2) {
-            return;
-        }
 
         const subjectForWireframe = (() => {
             // Terrain
@@ -410,10 +423,10 @@ class Program<Us: UniformBindings> {
             [gl.LINE_STRIP]: 1
         }[drawMode];
 
+        const vertexAttribDivisorValue = instanceCount && instanceCount > 0 ? 1 : undefined;
         for (const segment of segments.get()) {
             const vaos = segment.vaos || (segment.vaos = {});
             const vao: VertexArrayObject = vaos[layerID] || (vaos[layerID] = new VertexArrayObject());
-
             vao.bind(
                 context,
                 this,
@@ -421,13 +434,12 @@ class Program<Us: UniformBindings> {
                 configuration ? configuration.getPaintVertexBuffers() : [],
                 indexBuffer,
                 segment.vertexOffset,
-                dynamicLayoutBuffers ? dynamicLayoutBuffers : []
+                dynamicLayoutBuffers ? dynamicLayoutBuffers : [],
+                vertexAttribDivisorValue
             );
 
-            if (context.isWebGL2 && instanceCount && instanceCount > 1) {
-                /* $FlowFixMe[cannot-resolve-name] */ // Not adding dependency to webgl2 yet.
-                const gl2 = (gl: WebGL2RenderingContext);
-                gl2.drawElementsInstanced(
+            if (instanceCount && instanceCount > 1) {
+                gl.drawElementsInstanced(
                     drawMode,
                     segment.primitiveLength * primitiveSize,
                     gl.UNSIGNED_SHORT,

@@ -40,7 +40,6 @@ import type {UniformValues} from './uniform_binding.js';
 import type {SymbolSDFUniformsType} from '../render/program/symbol_program.js';
 import type {CrossTileID, VariableOffset} from '../symbol/placement.js';
 import type {InterpolatedSize} from '../symbol/symbol_size';
-
 export default drawSymbols;
 
 type SymbolTileRenderState = {
@@ -395,6 +394,9 @@ function drawLayerSymbols(painter: Painter, sourceCache: SourceCache, layer: Sym
         if (transitionProgress > 0.0) {
             baseDefines.push('ICON_TRANSITION');
         }
+        if (buffers.zOffsetVertexBuffer) {
+            baseDefines.push('Z_OFFSET');
+        }
 
         const hasHalo = isSDF && layer.paint.get(isText ? 'text-halo-width' : 'icon-halo-width').constantOr(1) !== 0;
 
@@ -471,7 +473,7 @@ function drawLayerSymbols(painter: Painter, sourceCache: SourceCache, layer: Sym
 
         painter.uploadCommonLightUniforms(painter.context, state.program);
 
-        if (context.isWebGL2 && state.hasHalo) {
+        if (state.hasHalo) {
             const uniformValues = ((state.uniformValues: any): UniformValues<SymbolSDFUniformsType>);
             uniformValues['u_is_halo'] = 1;
             drawSymbolElements(state.buffers, segmentState.segments, layer, painter, state.program, depthMode, stencilMode, colorMode, uniformValues, 2);
@@ -493,7 +495,7 @@ function drawLayerSymbols(painter: Painter, sourceCache: SourceCache, layer: Sym
 function drawSymbolElements(buffers: SymbolBuffers, segments: SegmentVector, layer: SymbolStyleLayer, painter: Painter, program: any, depthMode: DepthMode, stencilMode: StencilMode, colorMode: ColorMode, uniformValues: UniformValues<SymbolSDFUniformsType>, instanceCount: number) {
     const context = painter.context;
     const gl = context.gl;
-    const dynamicBuffers = [buffers.dynamicLayoutVertexBuffer, buffers.opacityVertexBuffer, buffers.iconTransitioningVertexBuffer, buffers.globeExtVertexBuffer];
+    const dynamicBuffers = [buffers.dynamicLayoutVertexBuffer, buffers.opacityVertexBuffer, buffers.iconTransitioningVertexBuffer, buffers.globeExtVertexBuffer, buffers.zOffsetVertexBuffer];
     program.draw(painter, gl.TRIANGLES, depthMode, stencilMode, colorMode, CullFaceMode.disabled,
         uniformValues, layer.id, buffers.layoutVertexBuffer,
         buffers.indexBuffer, segments, layer.paint,

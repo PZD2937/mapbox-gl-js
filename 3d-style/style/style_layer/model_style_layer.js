@@ -35,8 +35,16 @@ class ModelStyleLayer extends StyleLayer {
         return true;
     }
 
+    canCastShadows(): boolean {
+        return true;
+    }
+
     hasLightBeamPass(): boolean {
         return true;
+    }
+
+    cutoffRange(): number {
+        return this.paint.get('model-cutoff-fade-range');
     }
 
     // $FlowFixMe[method-unbinding]

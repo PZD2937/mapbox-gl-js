@@ -54,8 +54,11 @@ export type Material = {
     emissiveFactor: [number, number, number];
     alphaMode: string;
     alphaCutoff: number;
+    doubleSided: boolean;
     defined: boolean;
 }
+
+export const HEIGHTMAP_DIM = 64;
 
 export type Mesh = {
     // eslint-disable-next-line no-warning-comments
@@ -76,6 +79,7 @@ export type Mesh = {
     aabb: Aabb;
     segments: SegmentVector;
     centroid: Vec3;
+    heightmap: Float32Array;
 }
 
 export type Footprint = {
@@ -117,7 +121,6 @@ export const DefaultModelScale = [1, 1, 1];
 
 export default class Model {
     id: string;
-    uri: string;
     position: LngLat;
     orientation: [number, number, number];
     nodes: Array<Node>;
@@ -125,9 +128,8 @@ export default class Model {
     uploaded: boolean;
     aabb: Aabb;
 
-    constructor(id: string, uri: string, position: ?[number, number], orientation: ?[number, number, number], nodes: Array<Node>) {
+    constructor(id: string, position: ?[number, number], orientation: ?[number, number, number], nodes: Array<Node>) {
         this.id = id;
-        this.uri = uri;
         this.position = position != null ? new LngLat(position[0], position[1]) : new LngLat(0, 0);
 
         this.orientation = orientation != null ? orientation : [0, 0, 0];

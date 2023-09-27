@@ -7613,6 +7613,7 @@ window.dynamic = {
                 ]
             ],
             "layout": {
+                "symbol-z-elevate": true,
                 "text-size": [
                     "step",
                     [ "zoom" ],

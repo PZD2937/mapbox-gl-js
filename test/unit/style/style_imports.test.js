@@ -726,6 +726,17 @@ test('Style#addLayer', (t) => {
         style.loadJSON(initialStyle);
     });
 
+    t.test('Checks scope exist after adding layer', (t) => {
+        const style = new Style(new StubMap());
+
+        style.on('style.load', () => {
+            style.addLayer({type: 'custom', id: 'custom', render: () => {}});
+            t.equal(style.getLayer('custom').scope, style.scope);
+            t.end();
+        });
+        style.loadJSON(createStyleJSON());
+    });
+
     t.test('fire error on referencing before from different scope', (t) => {
         const map = new StubMap();
         const style = new Style(map);
@@ -1361,6 +1372,30 @@ test('Projection', (t) => {
     t.end();
 });
 
+test('Transition', (t) => {
+    t.test('Fallback to the fragment transition options', (t) => {
+        const style = new Style(new StubMap());
+
+        style.on('style.load', () => {
+            t.deepEqual(style.getTransition(), {duration: 900, delay: 200}, 'Returns the fragment transition options');
+
+            style.setTransition({duration: 0, delay: 0});
+            t.deepEqual(style.getTransition(), {duration: 0, delay: 0}, 'Returns the user-defined transition options');
+
+            t.end();
+        });
+
+        style.loadJSON(createStyleJSON({
+            transition: {duration: 600, delay: 100},
+            imports: [{id: 'standard', url: '/standard.json', data: createStyleJSON({
+                transition: {duration: 900, delay: 200},
+            })}]
+        }));
+    });
+
+    t.end();
+});
+
 test('Glyphs', (t) => {
     t.test('fallbacks to the default glyphs URL', (t) => {
         const style = new Style(new StubMap());
@@ -1651,4 +1686,37 @@ test('Style#setGeoJSONSourceData', (t) => {
 
         t.end();
     });
+});
+
+test('Style#setConfigProperty', (t) => {
+    t.test('Reevaluates layer visibility', (t) => {
+        const style = new Style(new StubMap());
+
+        const initialStyle = createStyleJSON({
+            imports: [{
+                id: 'standard',
+                url: '/standard.json',
+                config: {showBackground: false},
+                data: createStyleJSON({
+                    layers: [{
+                        id: 'background',
+                        type: 'background',
+                        layout: {visibility: ['case', ['config', 'showBackground'], 'visible', 'none']}}]
+                })
+            }]
+        });
+
+        style.on('style.load', () => {
+            t.equal(style.getLayer(makeFQID('background', 'standard')).getLayoutProperty('visibility'), 'none');
+
+            style.setConfigProperty('standard', 'showBackground', true);
+            t.equal(style.getLayer(makeFQID('background', 'standard')).getLayoutProperty('visibility'), 'visible');
+
+            t.end();
+        });
+
+        style.loadJSON(initialStyle);
+    });
+
+    t.end();
 });

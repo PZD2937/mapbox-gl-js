@@ -110,7 +110,11 @@ float flood_radiance = 0.0;
 #endif // LIGHTING_3D_MODE
 
 #ifdef FOG
-    color = fog_dither(fog_apply_premultiplied(color, v_fog_pos));
+    color = fog_dither(fog_apply_premultiplied(color, v_fog_pos, h));
+#endif
+
+#ifdef RENDER_CUTOFF
+    color *= v_cutoff_opacity;
 #endif
 
 #ifdef INDICATOR_CUTOUT

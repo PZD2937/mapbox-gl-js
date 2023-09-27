@@ -8,17 +8,25 @@ import type {TransitionParameters} from '../../src/style/properties.js';
 import type EvaluationParameters from '../../src/style/evaluation_parameters.js';
 
 class Lights<P: Object> extends Evented {
+    scope: string;
+    properties: PossiblyEvaluated<P>;
     _transitionable: Transitionable<P>;
     _transitioning: Transitioning<P>;
-    properties: PossiblyEvaluated<P>;
     _options: LightsSpecification;
 
-    constructor(options: LightsSpecification, properties: Properties<P>, configOptions?: ?Map<string, Expression>) {
+    constructor(options: LightsSpecification, properties: Properties<P>, scope: string, configOptions?: ?Map<string, Expression>) {
         super();
+        this.scope = scope;
         this._options = options;
-        this._transitionable = new Transitionable(properties, configOptions);
-        this._transitionable.setTransitionOrValue(options.properties);
+        this.properties = new PossiblyEvaluated(properties);
+
+        this._transitionable = new Transitionable(properties, new Map(configOptions));
+        this._transitionable.setTransitionOrValue<LightsSpecification['properties']>(options.properties);
         this._transitioning = this._transitionable.untransitioned();
+    }
+
+    updateConfig(configOptions?: ?Map<string, Expression>) {
+        this._transitionable.setTransitionOrValue<LightsSpecification['properties']>(this._options.properties, new Map(configOptions));
     }
 
     updateTransitions(parameters: TransitionParameters) {
@@ -36,6 +44,16 @@ class Lights<P: Object> extends Evented {
     get(): LightsSpecification {
         this._options.properties = (this._transitionable.serialize(): any);
         return this._options;
+    }
+
+    set(options: LightsSpecification, configOptions?: ?Map<string, Expression>) {
+        this._options = options;
+        this._transitionable.setTransitionOrValue<LightsSpecification['properties']>(options.properties, configOptions);
+    }
+
+    shadowsEnabled(): boolean {
+        if (!this.properties) return false;
+        return this.properties.get('cast-shadows') === true;
     }
 }
 

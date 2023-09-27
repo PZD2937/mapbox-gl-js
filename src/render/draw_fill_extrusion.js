@@ -35,7 +35,9 @@ import Texture from './texture.js';
 import type Painter from './painter.js';
 import type SourceCache from '../source/source_cache.js';
 import type FillExtrusionStyleLayer from '../style/style_layer/fill_extrusion_style_layer.js';
+import {Frustum} from '../util/primitives.js';
 import {mat4} from "gl-matrix";
+import {getCutoffParams} from './cutoff.js';
 
 export default draw;
 
@@ -47,6 +49,7 @@ function draw(painter: Painter, source: SourceCache, layer: FillExtrusionStyleLa
     const gl = context.gl;
     const terrain = painter.terrain;
     const rtt = terrain && terrain.renderingToTexture;
+    const cutoffFadeRange = layer.paint.get('fill-extrusion-cutoff-fade-range');
     if (opacity === 0) {
         return;
     }
@@ -82,11 +85,8 @@ function draw(painter: Painter, source: SourceCache, layer: FillExtrusionStyleLa
         if (!rtt) {
             const depthMode = new DepthMode(painter.context.gl.LEQUAL, DepthMode.ReadWrite, painter.depthRangeFor3D);
 
-            if (opacity === 1 && noPattern) {
-                const colorMode = painter.colorModeForRenderPass();
-
-                drawExtrusionTiles(painter, source, layer, coords, depthMode, StencilMode.disabled, colorMode, conflateLayer);
-
+            if (cutoffFadeRange === 0.0 && opacity === 1 && noPattern) {
+                drawExtrusionTiles(painter, source, layer, coords, depthMode, StencilMode.disabled, ColorMode.unblended, conflateLayer);
             } else {
                 // Draw transparent buildings in two passes so that only the closest surface is drawn.
                 // First draw all the extrusions into only the depth buffer. No colors are drawn.
@@ -113,9 +113,8 @@ function draw(painter: Painter, source: SourceCache, layer: FillExtrusionStyleLa
         const noTerrain = !terrain;
         const noGlobe = painter.transform.projection.name !== 'globe';
         const immediateMode = noTerrain && noGlobe;
-        const webGL2 = !!painter.context.isWebGL2;
 
-        if (webGL2 && lighting3DMode && noPattern && (immediateMode || rtt)) {
+        if (lighting3DMode && noPattern && (immediateMode || rtt)) {
             assert(immediateMode ? !rtt : !!rtt);
 
             const opacity = layer.paint.get('fill-extrusion-opacity');
@@ -254,6 +253,7 @@ function drawExtrusionTiles(painter: Painter, source: SourceCache, layer: FillEx
     const floodLightColor = (layer.paint.get('fill-extrusion-flood-light-color').toArray01().slice(0, 3): any);
     const floodLightIntensity = layer.paint.get('fill-extrusion-flood-light-intensity');
     const verticalScale = layer.paint.get('fill-extrusion-vertical-scale');
+    const cutoffParams = getCutoffParams(painter, layer.paint.get('fill-extrusion-cutoff-fade-range'));
     const baseDefines = ([]: any);
     if (isGlobeProjection) {
         baseDefines.push('PROJECTION_GLOBE_VIEW');
@@ -269,6 +269,9 @@ function drawExtrusionTiles(painter: Painter, source: SourceCache, layer: FillEx
     }
     if (floodLightIntensity > 0) {
         baseDefines.push('FLOOD_LIGHT');
+    }
+    if (cutoffParams.shouldRenderCutoff) {
+        baseDefines.push('RENDER_CUTOFF');
     }
 
     const isShadowPass = painter.renderPass === 'shadow';
@@ -327,6 +330,9 @@ function drawExtrusionTiles(painter: Painter, source: SourceCache, layer: FillEx
         const shouldUseVerticalGradient = layer.paint.get('fill-extrusion-vertical-gradient');
         let uniformValues;
         if (isShadowPass && shadowRenderer) {
+            if (frustumCullShadowCaster(tile.tileID, bucket, painter)) {
+                continue;
+            }
             const tileMatrix = shadowRenderer.calculateShadowPassMatrixFromTile(tile.tileID.toUnwrapped());
             uniformValues = fillExtrusionDepthUniformValues(tileMatrix, roofEdgeRadius, verticalScale);
         } else {
@@ -348,7 +354,7 @@ function drawExtrusionTiles(painter: Painter, source: SourceCache, layer: FillEx
             }
         }
 
-        painter.uploadCommonUniforms(context, program, coord.toUnwrapped());
+        painter.uploadCommonUniforms(context, program, coord.toUnwrapped(), null, cutoffParams);
 
         assert(!isGlobeProjection || bucket.layoutVertexExtBuffer);
 
@@ -382,6 +388,7 @@ function drawGroundEffect(painter: Painter, source: SourceCache, layer: FillExtr
     const tr = painter.transform;
     const zoom = painter.transform.zoom;
     const defines = ([]: any);
+    const cutoffParams = getCutoffParams(painter, layer.paint.get('fill-extrusion-cutoff-fade-range'));
     if (subpass === 'clear') {
         defines.push('CLEAR_SUBPASS');
         if (framebufferCopyTexture) {
@@ -395,6 +402,9 @@ function drawGroundEffect(painter: Painter, source: SourceCache, layer: FillExtr
     if (replacementActive) {
         defines.push('HAS_CENTROID');
     }
+    if (cutoffParams.shouldRenderCutoff) {
+        defines.push('RENDER_CUTOFF');
+    }
     const edgeRadius = layer.layout.get('fill-extrusion-edge-radius');
 
     const renderGroundEffectTile = (coord: OverscaledTileID, groundEffect: GroundEffect, segments: any, matrix: Float32Array, meterToTile: number) => {
@@ -403,12 +413,13 @@ function drawGroundEffect(painter: Painter, source: SourceCache, layer: FillExtr
 
         const ao = [aoIntensity, aoRadius * meterToTile];
         const edgeRadiusTile = zoom >= 17 ? 0 : edgeRadius * meterToTile;
-        const uniformValues = fillExtrusionGroundEffectUniformValues(painter, matrix, opacity, aoPass, meterToTile, ao, floodLightIntensity, floodLightColor, attenuation, edgeRadiusTile);
+        const fbSize = framebufferCopyTexture ? framebufferCopyTexture.size[0] : 0;
+        const uniformValues = fillExtrusionGroundEffectUniformValues(painter, matrix, opacity, aoPass, meterToTile, ao, floodLightIntensity, floodLightColor, attenuation, edgeRadiusTile, fbSize);
 
         const dynamicBuffers = [];
         if (replacementActive) dynamicBuffers.push(groundEffect.hiddenByLandmarkVertexBuffer);
 
-        painter.uploadCommonUniforms(context, program, coord.toUnwrapped());
+        painter.uploadCommonUniforms(context, program, coord.toUnwrapped(), null, cutoffParams);
 
         program.draw(painter, context.gl.TRIANGLES, depthMode, stencilMode, colorMode, cullFaceMode,
             uniformValues, layer.id, groundEffect.vertexBuffer, groundEffect.indexBuffer,
@@ -419,7 +430,7 @@ function drawGroundEffect(painter: Painter, source: SourceCache, layer: FillExtr
     for (const coord of coords) {
         const tile = source.getTile(coord);
         const bucket: ?FillExtrusionBucket = (tile.getBucket(layer): any);
-        if (!bucket || bucket.projection.name !== tr.projection.name || !bucket.groundEffect) continue;
+        if (!bucket || bucket.projection.name !== tr.projection.name || !bucket.groundEffect || (bucket.groundEffect && !bucket.groundEffect.hasData())) continue;
 
         const groundEffect: GroundEffect = (bucket.groundEffect: any);
         const meterToTile = 1 / bucket.tileToMeter;
@@ -441,7 +452,7 @@ function drawGroundEffect(painter: Painter, source: SourceCache, layer: FillExtr
                 if (!nTile) continue;
 
                 const nBucket: ?FillExtrusionBucket = (nTile.getBucket(layer): any);
-                if (!nBucket || nBucket.projection.name !== tr.projection.name || !nBucket.groundEffect) continue;
+                if (!nBucket || nBucket.projection.name !== tr.projection.name || !nBucket.groundEffect || (nBucket.groundEffect && !nBucket.groundEffect.hasData())) continue;
 
                 const nGroundEffect: GroundEffect = (nBucket.groundEffect: any);
                 assert(nGroundEffect.regionSegments);
@@ -704,4 +715,50 @@ function updateBorders(context: Context, source: SourceCache, coord: OverscaledT
     if (bucket.needsCentroidUpdate || (!bucket.centroidVertexBuffer && bucket.centroidVertexArray.length !== 0)) {
         bucket.uploadCentroid(context);
     }
+}
+
+const XAxis = [1, 0, 0];
+const YAxis = [0, 1, 0];
+const ZAxis = [0, 0, 1];
+
+function frustumCullShadowCaster(id: OverscaledTileID, bucket: FillExtrusionBucket, painter: Painter): boolean {
+    const transform = painter.transform;
+    const shadowRenderer = painter.shadowRenderer;
+    if (!shadowRenderer) {
+        return true;
+    }
+
+    const unwrappedId = id.toUnwrapped();
+
+    const ws = transform.tileSize * shadowRenderer._cascades[painter.currentShadowCascade].scale;
+
+    let height = bucket.maxHeight;
+    if (transform.elevation) {
+        const minmax = transform.elevation.getMinMaxForTile(id);
+        if (minmax) {
+            height += minmax.max;
+        }
+    }
+    const shadowDir = [...shadowRenderer.shadowDirection];
+    shadowDir[2] = -shadowDir[2];
+
+    const tileShadowVolume = shadowRenderer.computeSimplifiedTileShadowVolume(unwrappedId, height, ws, shadowDir);
+    if (!tileShadowVolume) {
+        return false;
+    }
+
+    // Projected shadow volume has 3-6 unique edge direction vectors.
+    // These are used for computing remaining separating axes for the intersection test
+    const edges = [XAxis, YAxis, ZAxis, shadowDir, [shadowDir[0], 0, shadowDir[2]], [0, shadowDir[1], shadowDir[2]]];
+    const isGlobe = transform.projection.name === 'globe';
+    const zoom = transform.scaleZoom(ws);
+    const cameraFrustum = Frustum.fromInvProjectionMatrix(transform.invProjMatrix, transform.worldSize, zoom, !isGlobe);
+    const cascadeFrustum = shadowRenderer.getCurrentCascadeFrustum();
+    if (cameraFrustum.intersectsPrecise(tileShadowVolume.vertices, tileShadowVolume.planes, edges) === 0) {
+        return true;
+    }
+    if (cascadeFrustum.intersectsPrecise(tileShadowVolume.vertices, tileShadowVolume.planes, edges) === 0) {
+        return true;
+    }
+    return false;
 }
