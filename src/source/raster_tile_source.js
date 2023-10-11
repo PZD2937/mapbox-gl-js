@@ -263,6 +263,7 @@ class RasterTileSource extends Evented implements Source {
             projection: this.projection,
             source: this.id,
             type: this.type,
+            scope: this.scope,
             reprojected: this.projection && this.projection !== 'WGS84',
             zoom: clamp(tile.tileID.canonical.z + this.zoomOffset, this.minzoom, this.maxzoom)
         }, (err, data) => {
@@ -286,7 +287,8 @@ class RasterTileSource extends Evented implements Source {
                     rbPixel: data.rbPixel,
                     tileID: tile.tileID.canonical,
                     source: this.id,
-                    type: this.type
+                    type: this.type,
+                    scope: this.scope
                 }, callback);
             } else {
                 tile.request = loadRasterTile.call(this, {requests, offset: data.offset}, (err, result) => {
