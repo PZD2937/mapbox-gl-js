@@ -107,12 +107,16 @@ class SourceCache extends Evented {
             this._source.type === 'raster-dem' ||
             // $FlowFixMe[prop-missing]
             (this._source.type === 'custom' && this._source._dataType === 'raster');
+
+        this._loadQueueTile = [];
+        this._mapIdle = this._mapIdle.bind(this);
     }
 
     onAdd(map: MapboxMap) {
         this.map = map;
         this._minTileCacheSize = this._minTileCacheSize === undefined && map ? map._minTileCacheSize : this._minTileCacheSize;
         this._maxTileCacheSize = this._maxTileCacheSize === undefined && map ? map._maxTileCacheSize : this._maxTileCacheSize;
+        this.map.on('idle', this._mapIdle);
     }
 
     /**
@@ -157,12 +161,14 @@ class SourceCache extends Evented {
 
     _unloadTile(tile: Tile): void {
         if (this._source.unloadTile)
-            return this._source.unloadTile(tile, () => {});
+            return this._source.unloadTile(tile, () => {
+            });
     }
 
     _abortTile(tile: Tile): void {
         if (this._source.abortTile)
-            return this._source.abortTile(tile, () => {});
+            return this._source.abortTile(tile, () => {
+            });
     }
 
     serialize(): SourceSpecification {
@@ -170,7 +176,7 @@ class SourceCache extends Evented {
     }
 
     prepare(context: Context) {
-        if  (this._source.prepare) {
+        if (this._source.prepare) {
             this._source.prepare();
         }
 
@@ -346,10 +352,10 @@ class SourceCache extends Evented {
      * @private
      */
     _retainLoadedChildren(
-        idealTiles: {[number | string]: OverscaledTileID},
+        idealTiles: { [number | string]: OverscaledTileID },
         zoom: number,
         maxCoveringZoom: number,
-        retain: {[number | string]: OverscaledTileID}
+        retain: { [number | string]: OverscaledTileID }
     ) {
         for (const id in this._tiles) {
             let tile = this._tiles[id];
@@ -502,6 +508,7 @@ class SourceCache extends Evented {
             // If source is used for both terrain and hillshade, don't update it twice.
             return;
         }
+        this._loadQueueTile.length = 0;
 
         this.updateCacheSize(transform, tileSize);
         if (this.transform.projection.name !== 'globe') {
@@ -524,15 +531,16 @@ class SourceCache extends Evented {
             idealTileIDs = transform.getVisibleUnwrappedCoordinates(this._source.tileID)
                 .map((unwrapped) => new OverscaledTileID(unwrapped.canonical.z, unwrapped.wrap, unwrapped.canonical.z, unwrapped.canonical.x, unwrapped.canonical.y, this._source.projection));
         } else {
-            idealTileIDs = transform.coveringTiles({
-                id: this._source.id,
-                tileSize: tileSize || this._source.tileSize,
-                minzoom: this._source.minzoom,
-                maxzoom: this._source.maxzoom,
-                roundZoom: this._source.roundZoom && !updateForTerrain,
-                reparseOverscaled: this._source.reparseOverscaled,
-                isTerrainDEM: this.usedForTerrain
-            });
+            // idealTileIDs = transform.coveringTiles({
+            //     id: this._source.id,
+            //     tileSize: tileSize || this._source.tileSize,
+            //     minzoom: this._source.minzoom,
+            //     maxzoom: this._source.maxzoom,
+            //     roundZoom: this._source.roundZoom && !updateForTerrain,
+            //     reparseOverscaled: this._source.reparseOverscaled,
+            //     isTerrainDEM: this.usedForTerrain
+            // });
+            idealTileIDs = this.map.style._surfaceTileManager.getCoveringTiles(tileSize || this._source.tileSize, this._source.minzoom, this._source.maxzoom)
 
             if (this._source.hasTile) {
                 idealTileIDs = idealTileIDs.filter((coord) => (this._source.hasTile: any)(coord));
@@ -562,64 +570,16 @@ class SourceCache extends Evented {
         // parent or child tiles that are *already* loaded.
         const retain = this._updateRetainedTiles(idealTileIDs);
 
-        if (isRasterType(this._source.type) && idealTileIDs.length !== 0) {
-            const parentsForFading: {[_: string | number]: OverscaledTileID} = {};
-            const fadingTiles = {};
-            const ids = Object.keys(retain);
-            for (const id of ids) {
-                const tileID = retain[id];
-                assert(tileID.key === +id);
-
-                const tile = this._tiles[id];
-                if (!tile || (tile.fadeEndTime && tile.fadeEndTime <= browser.now())) continue;
-
-                // if the tile is loaded but still fading in, find parents to cross-fade with it
-                const parentTile = this.findLoadedParent(tileID, Math.max(tileID.overscaledZ - SourceCache.maxOverzooming, this._source.minzoom));
-                if (parentTile) {
-                    this._addTile(parentTile.tileID);
-                    parentsForFading[parentTile.tileID.key] = parentTile.tileID;
-                }
-
-                fadingTiles[id] = tileID;
-            }
-
-            // for children tiles with parent tiles still fading in,
-            // retain the children so the parent can fade on top
-            const minZoom = idealTileIDs[idealTileIDs.length - 1].overscaledZ;
-            for (const id in this._tiles) {
-                const childTile = this._tiles[id];
-                if (retain[id] || !childTile.hasData()) {
-                    continue;
-                }
-
-                let parentID = childTile.tileID;
-                while (parentID.overscaledZ > minZoom) {
-                    parentID = parentID.scaledTo(parentID.overscaledZ - 1);
-                    const tile = this._tiles[parentID.key];
-                    if (tile && tile.hasData() && fadingTiles[parentID.key]) {
-                        retain[id] = childTile.tileID;
-                        break;
-                    }
-                }
-            }
-
-            for (const id in parentsForFading) {
-                if (!retain[id]) {
-                    // If a tile is only needed for fading, mark it as covered so that it isn't rendered on it's own.
-                    this._coveredTiles[id] = true;
-                    retain[id] = parentsForFading[id];
-                }
-            }
-        }
-
         for (const retainedId in retain) {
+            const tile = this._tiles[retainedId]
             // Make sure retained tiles always clear any existing fade holds
             // so that if they're removed again their fade timer starts fresh.
-            this._tiles[retainedId].clearFadeHold();
+            tile && tile.clearFadeHold();
         }
 
         // Remove the tiles we don't need anymore.
         const remove = keysDifference((this._tiles: any), (retain: any));
+        // console.log({retain, remove, idealTileIDs});
         for (const tileID of remove) {
             const tile = this._tiles[tileID];
             if (tile.hasSymbolBuckets && !tile.holdingForFade()) {
@@ -635,6 +595,27 @@ class SourceCache extends Evented {
         if (this._onlySymbols && this._source.afterUpdate) {
             this._source.afterUpdate();
         }
+    }
+
+    /*_getTileParent(idealTileIDs: OverscaledTileID[], zDifference: number) {
+        if (zDifference >= 0) return idealTileIDs;
+        const parentTiles = [], addedParentTiles = [];
+        for (let i = 0; i < idealTileIDs.length; i++) {
+            const tile = idealTileIDs[i];
+            const parentTile = tile.scaledTo(tile.overscaledZ + zDifference);
+            if (addedParentTiles.includes(parentTile.key)) continue;
+            parentTiles.push(parentTile);
+            addedParentTiles.push(parentTile.key)
+        }
+        return parentTiles
+    }*/
+
+    _mapIdle() {
+        const loadQueue = this._loadQueueTile;
+        for (let i = 0; i < loadQueue.length; i++) {
+            this._addTile(loadQueue[i]);
+        }
+        loadQueue.length = 0;
     }
 
     releaseSymbolFadeTiles() {
@@ -658,12 +639,18 @@ class SourceCache extends Evented {
 
         const missingTiles = {};
         for (const tileID of idealTileIDs) {
-            const tile = this._addTile(tileID);
+            const tile = this.getTile(tileID);
 
             // retain the tile even if it's not loaded because it's an ideal tile.
             retain[tileID.key] = tileID;
 
-            if (tile.hasData()) continue;
+            if (tile && tile.hasData()) {
+                this._addTile(tileID);
+                continue;
+            }
+            // this._tiles[tileID.key] =
+            // 理想图块没有数据时，等待空闲时渲染
+            this._loadQueueTile.push(tileID);
 
             if (minZoom < this._source.maxzoom) {
                 // save missing tiles that potentially have loaded children
@@ -677,7 +664,7 @@ class SourceCache extends Evented {
         for (const tileID of idealTileIDs) {
             let tile = this._tiles[tileID.key];
 
-            if (tile.hasData()) continue;
+            if (tile && tile.hasData()) continue;
 
             // The tile we require is not yet loaded or does not exist;
             // Attempt to find children that fully cover it.
@@ -705,7 +692,7 @@ class SourceCache extends Evented {
             // As we ascend up the tile pyramid of the ideal tile, we check whether the parent
             // tile has been previously requested (and errored because we only loop over tiles with no data)
             // in order to determine if we need to request its parent.
-            let parentWasRequested = tile.wasRequested();
+            // let parentWasRequested = tile && tile.wasRequested();
 
             for (let overscaledZ = tileID.overscaledZ - 1; overscaledZ >= minCoveringZoom; --overscaledZ) {
                 const parentId = tileID.scaledTo(overscaledZ);
@@ -715,14 +702,14 @@ class SourceCache extends Evented {
                 checked[parentId.key] = true;
 
                 tile = this.getTile(parentId);
-                if (!tile && parentWasRequested) {
+                if (!tile) {
                     tile = this._addTile(parentId);
                 }
                 if (tile) {
                     retain[parentId.key] = parentId;
                     // Save the current values, since they're the parent of the next iteration
                     // of the parent tile ascent loop.
-                    parentWasRequested = tile.wasRequested();
+                    // parentWasRequested = tile.wasRequested();
                     if (tile.hasData()) break;
                 }
             }
@@ -730,6 +717,91 @@ class SourceCache extends Evented {
 
         return retain;
     }
+
+
+    /*_updateRetainedTiles(idealTileIDs: Array<OverscaledTileID>): { [_: number | string]: OverscaledTileID } {
+        const retain: { [_: number | string]: OverscaledTileID } = {};
+        if (idealTileIDs.length === 0) {
+            return retain;
+        }
+
+        const checked: { [_: number | string]: boolean } = {};
+        const minZoom = idealTileIDs.reduce((min, id) => Math.min(min, id.overscaledZ), Infinity);
+        const maxZoom = idealTileIDs[0].overscaledZ;
+        assert(minZoom <= maxZoom);
+        const minCoveringZoom = Math.max(maxZoom - SourceCache.maxOverzooming, this._source.minzoom);
+        const maxCoveringZoom = Math.max(maxZoom + SourceCache.maxUnderzooming, this._source.minzoom);
+        // let parentWasRequested = false;
+
+        const missingTiles = {};
+        // console.log(idealTileIDs)
+        // console.log(retain)
+        for (const tileID of idealTileIDs) {
+            let tile = this.getTile(tileID);
+
+            // retain the tile even if it's not loaded because it's an ideal tile.
+            retain[tileID.key] = tileID;
+
+            if (tile && tile.hasData()) {
+                this._addTile(tileID);
+                continue;
+            }
+            // 理想图块没有数据时，等待空闲时渲染
+            this._loadQueueTile.push(tileID);
+
+            if (minZoom < this._source.maxzoom) {
+                // save missing tiles that potentially have loaded children
+                missingTiles[tileID.key] = tileID;
+            }
+
+            // The tile we require is not yet loaded or does not exist;
+            // Attempt to find children that fully cover it.
+
+            if (tileID.canonical.z >= this._source.maxzoom) {
+                // We're looking for an overzoomed child tile.
+                const childCoord = tileID.children(this._source.maxzoom)[0];
+                const childTile = this.getTile(childCoord);
+                if (!!childTile && childTile.hasData()) {
+                    retain[childCoord.key] = childCoord;
+                    continue; // tile is covered by overzoomed child
+                }
+            } else {
+                // Check if all 4 immediate children are loaded (in other words, the missing ideal tile is covered)
+                const children = tileID.children(this._source.maxzoom);
+
+                if (retain[children[0].key] &&
+                    retain[children[1].key] &&
+                    retain[children[2].key] &&
+                    retain[children[3].key]) continue; // tile is covered by children
+            }
+
+            // 暂时使用父图块替代显示
+            for (let overscaledZ = tileID.overscaledZ - 1; overscaledZ >= minCoveringZoom; --overscaledZ) {
+                const parentId = tileID.scaledTo(overscaledZ);
+
+                // Break parent tile ascent if this route has been previously checked by another child.
+                if (checked[parentId.key]) break;
+                checked[parentId.key] = true;
+
+                tile = this.getTile(parentId);
+                if (!tile) {
+                    tile = this._addTile(parentId);
+                }
+                if (tile) {
+                    retain[parentId.key] = parentId;
+                    // Save the current values, since they're the parent of the next iteration
+                    // of the parent tile ascent loop.
+                    // parentWasRequested = tile.wasRequested();
+                    if (tile.hasData()) break;
+                }
+            }
+
+        }
+
+        // retain any loaded children of ideal tiles up to maxCoveringZoom
+        // this._retainLoadedChildren(missingTiles, minZoom, maxCoveringZoom, _retain);
+        return retain;
+    }*/
 
     _updateLoadedParentTileCache() {
         this._loadedParentTiles = {};

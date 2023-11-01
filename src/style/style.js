@@ -103,6 +103,7 @@ import type {Source, SourceClass} from '../source/source.js';
 import type {TransitionParameters} from './properties.js';
 import ModelManager from '../../3d-style/render/model_manager.js';
 import type {Expression} from '../style-spec/expression/expression.js';
+import SurfaceTileManager from "./surface_tile_manager.js";
 
 const supportedDiffOperations = pick(diffOperations, [
     'addLayer',
@@ -354,6 +355,8 @@ class Style extends Evented {
                 }
             }
         });
+
+        this._surfaceTileManager = new SurfaceTileManager();
     }
 
     loadURL(url: string, options: {
@@ -2422,6 +2425,10 @@ class Style extends Evented {
                 source.reload();
             }
         }
+    }
+
+    _updateSurfaceTile() {
+        this._surfaceTileManager.update(this.map.transform);
     }
 
     _updateSources(transform: Transform) {

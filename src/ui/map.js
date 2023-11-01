@@ -3498,6 +3498,7 @@ class Map extends Camera {
         let averageElevationChanged = false;
         if (this.style && this._sourcesDirty) {
             this._sourcesDirty = false;
+            this.style._updateSurfaceTile();
             this.painter._updateFog(this.style);
             this._updateTerrain(); // Terrain DEM source updates here and skips update in style._updateSources.
             averageElevationChanged = this._updateAverageElevation(frameStartTime);

@@ -943,7 +943,7 @@ class Transform {
      * @param {boolean} options.roundZoom
      * @param {boolean} options.reparseOverscaled
      * @returns {Array<OverscaledTileID>} OverscaledTileIDs
-     * @private
+     * // @private
      */
     coveringTiles(
         options: {
