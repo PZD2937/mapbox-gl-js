@@ -15,6 +15,7 @@ import sky from './style_layer/sky_style_layer.js';
 import slot from './style_layer/slot_style_layer.js';
 import type {CustomLayerInterface} from './style_layer/custom_style_layer.js';
 import model from '../../3d-style/style/style_layer/model_style_layer.js';
+import windy from '../../windy-style/style/style_layer/raster_windy_style_layer.js';
 
 import type {LayerSpecification} from '../style-spec/types.js';
 import type {Expression} from '../style-spec/expression/expression.js';
@@ -31,7 +32,8 @@ const subclasses = {
     raster,
     sky,
     slot,
-    model
+    model,
+    windy
 };
 
 export default function createStyleLayer(layer: LayerSpecification | CustomLayerInterface, options?: ?Map<string, Expression>): StyleLayer | CustomStyleLayer {

@@ -85,6 +85,10 @@ import modelDepthFrag from '../../3d-style/shaders/model_depth.fragment.glsl';
 import preludeShadowVert from '../../3d-style/shaders/_prelude_shadow.vertex.glsl';
 import preludeShadowFrag from '../../3d-style/shaders/_prelude_shadow.fragment.glsl';
 
+// windy-style
+import windyVert from '../../windy-style/shaders/windy.vertex.glsl';
+import windyFrag from '../../windy-style/shaders/windy.fragment.glsl';
+
 export let preludeTerrain = {};
 export let preludeFog = {};
 export let preludeShadow = {};
@@ -181,7 +185,8 @@ export default {
     globeAtmosphere: compile(atmosphereFrag, atmosphereVert),
     model: compile(modelFrag, modelVert),
     modelDepth: compile(modelDepthFrag, modelDepthVert),
-    stars: compile(starsFrag, starsVert)
+    stars: compile(starsFrag, starsVert),
+    windy: compile(windyFrag, windyVert)
 };
 
 export function parseUsedPreprocessorDefines(source, defines) {

@@ -76,6 +76,8 @@ import type {Source} from '../source/source.js';
 import type {QueryFeature} from '../util/vectortile_to_geojson.js';
 import type {QueryResult} from '../data/feature_index.js';
 import type {EasingOptions} from './camera.js';
+import MercatorCoordinate from "../geo/mercator_coordinate.js";
+import {OverscaledTileID} from "../source/tile_id.js";
 
 export type ControlPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 /* eslint-disable no-use-before-define */
@@ -1829,6 +1831,45 @@ class Map extends Camera {
         }
 
         return this.style.queryRenderedFeatures(geometry, options, this.transform);
+    }
+
+    queryCloudColor(lnglat: LngLatLike, sourceId: string) {
+        const cache = this.style._getSourceCache(sourceId);
+        if (!cache) return null;
+        const source = cache.getSource();
+        if (!source) return null;
+        const point = MercatorCoordinate.fromLngLat(lnglat);
+        const z = source.maxzoom;
+        const tiles = 1 << z;
+        const wrap = Math.floor(point.x);
+        const px = point.x - wrap;
+        const tileID = new OverscaledTileID(z, wrap, z, Math.floor(px * tiles), Math.floor(point.y * tiles));
+        let tile = cache.getTile(tileID);
+        if (!tile || !tile.cloud) {
+            tile = cache.findLoadedParent(tileID, Math.floor(this.getZoom()));
+        }
+        if (!tile || !tile.cloud) return null;
+        const cloud = tile.cloud;
+        const tilesAtTileZoom = 1 << tile.tileID.canonical.z;
+        const x = (px * tilesAtTileZoom - tile.tileID.canonical.x) * cloud.width;
+        const y = (point.y * tilesAtTileZoom - tile.tileID.canonical.y) * cloud.height;
+        const i = Math.floor(x);
+        const j = Math.floor(y);
+        const index = (i + j * cloud.width) * 4;
+        if (source._isSea()) {
+            const island = source._isPngTile() ?
+                () => !(cloud.data[index + 3] && cloud.data[index + 7] && cloud.data[index + 1028 + 3] && cloud.data[index + 1028 + 7]) :
+                () => !!(192 & cloud.data[index + 2] || 192 & cloud.data[index + 6] || 192 & cloud.data[index + 1030] || 192 & cloud.data[index + 1034]);
+            if (island()) {
+                return NaN;
+            }
+        }
+        const pars = tile.headerPars;
+        return {
+            r: cloud.data[index] * pars[0] / 255 + pars[1],
+            g: cloud.data[index + 1] * pars[2] / 255 + pars[3],
+            b: cloud.data[index + 2] * pars[4] / 255 + pars[5]
+        };
     }
 
     /**

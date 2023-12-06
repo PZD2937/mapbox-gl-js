@@ -9,7 +9,6 @@ import EXTENT from '../style-spec/data/extent.js';
 import pixelsToTileUnits from '../source/pixels_to_tile_units.js';
 import SegmentVector from '../data/segment.js';
 import {PosArray, TileBoundsArray, TriangleIndexArray, LineStripIndexArray} from '../data/array_types.js';
-import {isMapAuthenticated} from '../util/mapbox.js';
 import posAttributes from '../data/pos_attributes.js';
 import boundsAttributes from '../data/bounds_attributes.js';
 import ProgramConfiguration from '../data/program_configuration.js';
@@ -56,6 +55,8 @@ import {ShadowRenderer} from '../../3d-style/render/shadow_renderer.js';
 
 import {WireframeDebugCache} from "./wireframe_cache.js";
 
+import windy from '../../windy-style/render/draw_windy.js';
+
 const draw = {
     symbol,
     circle,
@@ -69,7 +70,8 @@ const draw = {
     sky,
     debug,
     custom,
-    model
+    model,
+    windy
 };
 
 const upload = {
