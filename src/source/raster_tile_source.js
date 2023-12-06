@@ -238,10 +238,10 @@ class RasterTileSource extends Evented implements Source {
             tile._loadTime = Date.now() - tile._beiginTime;
             delete tile._beiginTime;
             if (this.showDebugTileLoadTime) {
-                console.log(tile._loadTime, this.id)
+                console.log(tile._loadTime, this.id);
             }
             callback(null);
-        }
+        };
 
         tile._beiginTime = Date.now();
         if (this.needRevise()) {
@@ -258,7 +258,7 @@ class RasterTileSource extends Evented implements Source {
             tile.actor = this.dispatcher.getActor();
         }
         // 计算覆盖的瓦片
-        tile.request = tile.actor.send(`${this.type}.getCoverTiles`, {
+        tile.actor.send(`${this.type}.getCoverTiles`, {
             tile: tile.tileID.canonical,
             projection: this.projection,
             source: this.id,
@@ -281,7 +281,7 @@ class RasterTileSource extends Evented implements Source {
                 };
             });
             if (offscreenCanvasSupported()) {
-                tile.request = tile.actor.send('loadTile', {
+                tile.actor.send('loadTile', {
                     requests,
                     ltPixel: data.ltPixel,
                     rbPixel: data.rbPixel,
@@ -292,9 +292,8 @@ class RasterTileSource extends Evented implements Source {
                 }, callback);
             } else {
                 tile.request = loadRasterTile.call(this, {requests, offset: data.offset}, (err, result) => {
-                    const offset = data.offset;
-                    if (tile.status === 'unloaded') return callback(null);
-                    callback(err, result)
+                    if (tile.state === 'unloaded') return callback(null);
+                    callback(err, result);
                 });
                 this.limitedStorage();
             }
