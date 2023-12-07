@@ -113,6 +113,14 @@
         .picker{
             font-size: 14px;
         }
+        .cross{
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 15px;
+        }
 
 
     </style>
@@ -162,6 +170,7 @@
         </div>
     </details>
 </div>
+<div class="cross">十</div>
 </body>
 <script>
 
@@ -218,21 +227,26 @@
         zoom: 2,
         useWebGL2: true,
         hash: true,
+        scrollZoom: {
+            around: 'center'
+        },
         projection: 'globe',
-        transformRequest: transformRequest
+        transformRequest,
     });
 
     const models = {}, modelMinifest = {};
-    let lastLayer, selectModel = null;
+    let lastLayer, selectModel = {};
 
     function transformRequest(url) {
         // console.log(url)
         // console.log(type)
-        url = url.replace('{directory}', selectModel.directory)
-            .replace('{refTime}', selectModel.refTime)
-            .replace('{level}', 'surface')
-            .replace('{path}', selectModel.now)
-            .replace('{acTime}', 'next3d')
+        if (url) {
+            url = url.replace('{directory}', selectModel.directory)
+                .replace('{refTime}', selectModel.refTime)
+                .replace('{level}', 'surface')
+                .replace('{path}', selectModel.now)
+                .replace('{acTime}', 'next3d')
+        }
         return {url}
     }
 
@@ -339,7 +353,7 @@
             });
         });
 
-        setLayer('wind');
+        // setLayer('wind');
         lastLayer = 'wind';
     });
 
