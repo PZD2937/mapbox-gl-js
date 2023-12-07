@@ -88,7 +88,7 @@
     }],
     "no-multiple-empty-lines": [ "error", {
         "max": 1
-    }],
+    }]
   },
   "settings": {
     "jsdoc":{
@@ -132,7 +132,7 @@
         "jsdoc/require-property-description": "off",
         "jsdoc/require-property-name": "off",
         "jsdoc/require-property-type": "off",
-        "jsdoc/require-returns-type": "off",
+        "jsdoc/require-returns-type": "off"
       }
     },
     {
@@ -148,7 +148,7 @@
         "src/geo/lng_lat.js",
         "src/geo/lng_lat_bounds.js",
         "src/geo/mercator_coordinate.js",
-        "src/source/**",
+        "src/source/**"
       ],
       "rules": {
         "jsdoc/check-param-names": "error",
@@ -174,7 +174,7 @@
         "jsdoc/require-property-description": "error",
         "jsdoc/require-property-name": "error",
         "jsdoc/require-property-type": "error",
-        "jsdoc/require-returns-type": "error",
+        "jsdoc/require-returns-type": "error"
       }
     }
   ],

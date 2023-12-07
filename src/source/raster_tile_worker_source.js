@@ -14,7 +14,7 @@ import type {Cancelable} from "../types/cancelable.js";
 import offscreenCanvasSupported from "../util/offscreen_canvas_supported.js";
 import window from "../util/window.js";
 
-let supportImageBitmap = typeof window.createImageBitmap === 'function'
+const supportImageBitmap = typeof window.createImageBitmap === 'function';
 
 type Request = {
     request: RequestParameters,
@@ -38,9 +38,9 @@ type LoadingTile = {
 
 function dataToTextureImage(data, cb: Callback) {
     if (data instanceof window.ArrayBuffer) {
-        arrayBufferToImage(data, cb)
+        arrayBufferToImage(data, cb);
     } else {
-        cb(null, data)
+        cb(null, data);
     }
 }
 
@@ -48,7 +48,7 @@ function canvasToImage(canvas: HTMLCanvasElement | OffscreenCanvas, callback: Ca
     if (supportImageBitmap) {
         // console.log(canvas.toDataURL())
         window.createImageBitmap(canvas).then(imageBitmap => {
-            callback(null, imageBitmap)
+            callback(null, imageBitmap);
         });
     } else {
         callback(null, canvas);
@@ -56,15 +56,14 @@ function canvasToImage(canvas: HTMLCanvasElement | OffscreenCanvas, callback: Ca
 }
 
 function tileChildren(tile: {x: number, y: number, z: number}, targetZ: number, targetChildren: []) {
-    if(tile.z > targetZ) return targetChildren.push(tile);
+    if (tile.z > targetZ) return targetChildren.push(tile);
     const x = tile.x << 1, y = tile.y << 1, z = tile.z + 1, dx = (tile.dx || 0) * 2, dy = (tile.dy || 0) * 2;
     const children = [{x, y, z, dx, dy}, {x: x + 1, y, z, dx: dx + 1, dy}, {x, y: y + 1, z, dx, dy: dy + 1}, {x: x + 1, y: y + 1, z, dx: dx + 1, dy: dy + 1}];
-    if(tile.z === targetZ) return targetChildren.push(...children);
+    if (tile.z === targetZ) return targetChildren.push(...children);
     for (let i = 0; i < 4; i++) {
         tileChildren(children[i], targetZ - 1, targetChildren);
     }
 }
-
 
 export function loadRasterTile(params: WorkerTileParameters, callback: Callback): Cancelable {
     const {requests, ltPixel, rbPixel} = params;
@@ -76,7 +75,7 @@ export function loadRasterTile(params: WorkerTileParameters, callback: Callback)
             request.cancel();
             cb();
         };
-    }
+    };
     let canvas, ctx, tileSize, dx, dy;
 
     const initConfig = (imageSize: number) => {
@@ -94,10 +93,10 @@ export function loadRasterTile(params: WorkerTileParameters, callback: Callback)
             canvas.height = size;
             ctx = canvas.getContext('2d', {willReadFrequently: true});
         }
-    }
+    };
     const draw = (data, x: number, y: number) => {
         ctx.drawImage(data, x * tileSize + dx, y * tileSize + dy, data.width, data.height);
-    }
+    };
 
     const cancels = [];
 
@@ -110,7 +109,7 @@ export function loadRasterTile(params: WorkerTileParameters, callback: Callback)
                     draw(textureImage, item.x, item.y);
                 }
                 cb(null);
-            })
+            });
         } else {
             const cancel = this.deduped.request(item.tile.key, null, makeRequest.bind(this, item.request), (error, data) => {
                 if (error) {
@@ -125,16 +124,16 @@ export function loadRasterTile(params: WorkerTileParameters, callback: Callback)
                             draw(textureImage, item.x, item.y);
                         }
                         cb(null);
-                    })
+                    });
                 }
             });
             cancels.push(cancel);
         }
     }, () => {
         if (canvas) {
-            canvasToImage(canvas, callback)
+            canvasToImage(canvas, callback);
         } else {
-            callback('image failed to load')
+            callback('image failed to load');
         }
     });
     return {
@@ -155,22 +154,9 @@ export default class RasterTileWorkerSource {
         this.loadRasterTile = loadRasterTile.bind(this);
     }
 
-    getCoverTiles(params: { projection: string, tile: CanonicalTileID, zoom: number, reprojected: boolean }, callback: Callback) {
-        const {tile, zoom, reprojected} = params;
-        const actualZ = zoom || tile.z;
+    getCoverTiles(params: { projection: string, tile: CanonicalTileID, zoom: number}, callback: Callback) {
         const coverTiles = [];
-
-        if (reprojected) {
-            return callback(null, this.reprojectedTile(params, coverTiles));
-        } else {
-            tile.z === zoom ? coverTiles.push({x: tile.x, y: tile.y, z: tile.z, dx: 0, dy: 0}) : tileChildren(tile, actualZ, coverTiles);
-            const size = 256 * (1 << actualZ - tile.z);
-            callback(null, {
-                coverTiles,
-                ltPixel: {x: 0, y: 0},
-                rbPixel: {x: size, y: size}
-            });
-        }
+        return callback(null, this.reprojectedTile(params, coverTiles));
     }
 
     reprojectedTile(params: { projection: string, tile: CanonicalTileID, zoom: number }, coverTiles: []) {
@@ -195,6 +181,7 @@ export default class RasterTileWorkerSource {
         const xMax = direction.x > 0 ? southeastTile.x : northwestTile.x;
         const yMin = direction.y > 0 ? northwestTile.y : southeastTile.y;
         const yMax = direction.y > 0 ? southeastTile.y : northwestTile.y;
+        // eslint-disable-next-line prefer-const
         let xRange = xMax - xMin, yRange = yMax - yMin;
         // 穿过子午线
         if (xMin > xMax) {
@@ -213,7 +200,7 @@ export default class RasterTileWorkerSource {
             coverTiles,
             ltPixel,
             rbPixel: {x: rbPoint.x + 256 * xRange, y: rbPoint.y + 256 * yRange}
-        }
+        };
     }
 
     loadTile(params: WorkerTileParameters, callback: Callback) {
@@ -221,7 +208,7 @@ export default class RasterTileWorkerSource {
         loading.request = this.loadRasterTile(params, (error, result) => {
             if (loading.status === 'unloaded') return callback(null);
             delete loading.request;
-            callback(error, result)
+            callback(error, result);
         });
         // console.log(Object.keys(this.loading).length, 'loading')
         // console.log(Object.keys(this.subLoading).length, 'subLoading')
@@ -254,6 +241,7 @@ export default class RasterTileWorkerSource {
         this.abortTile(params);
         if (loading) {
             // console.log(1111)
+            // eslint-disable-next-line no-unused-expressions
             loading.subTiles && loading.subTiles.forEach(tile => delete this.subLoading[tile]);
         }
     }
