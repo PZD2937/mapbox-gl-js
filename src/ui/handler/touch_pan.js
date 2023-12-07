@@ -36,12 +36,13 @@ export default class TouchPanHandler {
     }
 
     touchstart(e: TouchEvent, points: Array<Point>, mapTouches: Array<Touch>): ?HandlerResult {
+        this._active = points.length === 1;
         return this._calculateTransform(e, points, mapTouches);
     }
 
     touchmove(e: TouchEvent, points: Array<Point>, mapTouches: Array<Touch>): ?HandlerResult {
         if (!this._active || mapTouches.length < this._minTouches) return;
-
+        // console.log('TouchPanHandler_touchmove', e);
         // if cooperative gesture handling is set to true, require two fingers to touch pan
         if (this._map._cooperativeGestures && !this._map.isMoving()) {
             if (mapTouches.length === 1 && !isFullscreen()) {
@@ -74,8 +75,7 @@ export default class TouchPanHandler {
     }
 
     _calculateTransform(e: TouchEvent, points: Array<Point>, mapTouches: Array<Touch>): ?HandlerResult {
-        if (mapTouches.length > 0) this._active = true;
-
+        if (!this._active) return;
         const touches = indexTouches(mapTouches, points);
 
         const touchPointSum = new Point(0, 0);

@@ -15,6 +15,8 @@ class TwoTouchHandler {
     _startVector: ?Point;
     _aroundCenter: boolean;
 
+    _lastTriggerTime: number;
+
     constructor() {
         this.reset();
     }
@@ -53,6 +55,7 @@ class TwoTouchHandler {
         if (!a || !b) return;
         const pinchAround = this._aroundCenter ? null : a.add(b).div(2);
 
+        this._lastTriggerTime = e.timeStamp;
         // implemented by child classes
         return this._move([a, b], pinchAround, e);
 

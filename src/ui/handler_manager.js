@@ -257,10 +257,6 @@ class HandlerManager {
         // $FlowFixMe[method-unbinding]
         this._add('tapDragZoom', tapDragZoom);
 
-        const touchPitch = map.touchPitch = new TouchPitchHandler(map);
-        // $FlowFixMe[method-unbinding]
-        this._add('touchPitch', touchPitch);
-
         const mouseRotate = new MouseRotateHandler(options);
         const mousePitch = new MousePitchHandler(options);
         map.dragRotate = new DragRotateHandler(options, mouseRotate, mousePitch);
@@ -274,16 +270,19 @@ class HandlerManager {
         map.dragPan = new DragPanHandler(el, mousePan, touchPan);
         // $FlowFixMe[method-unbinding]
         this._add('mousePan', mousePan);
-        // $FlowFixMe[method-unbinding]
-        this._add('touchPan', touchPan, ['touchZoom', 'touchRotate']);
 
+        const touchPitch = map.touchPitch = new TouchPitchHandler(map);
         const touchRotate = new TouchRotateHandler();
         const touchZoom = new TouchZoomHandler();
         map.touchZoomRotate = new TouchZoomRotateHandler(el, touchZoom, touchRotate, tapDragZoom);
         // $FlowFixMe[method-unbinding]
+        this._add('touchPitch', touchPitch);
+        // $FlowFixMe[method-unbinding]
         this._add('touchRotate', touchRotate, ['touchPan', 'touchZoom']);
         // $FlowFixMe[method-unbinding]
         this._add('touchZoom', touchZoom, ['touchPan', 'touchRotate']);
+        // $FlowFixMe[method-unbinding]
+        this._add('touchPan', touchPan, ['touchZoom', 'touchRotate']);
 
         // $FlowFixMe[method-unbinding]
         this._add('blockableMapEvent', new BlockableMapEventHandler(map));
@@ -353,6 +352,20 @@ class HandlerManager {
         return false;
     }
 
+    _blockedByTouch(activeHandlers: { [string]: Handler }, myName: string, time: number): boolean {
+        if (myName === 'touchPan') {
+            for (const name in activeHandlers) {
+                if (name === myName) continue;
+                // 双指事件触发后 500ms内禁止触发 touchPan
+                // 这是防止中心缩放、旋转时会触发移动
+                if ((time - activeHandlers[name]._lastTriggerTime) < 500) {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
     handleWindowEvent(e: InputEvent) {
         this.handleEvent(e, `${e.type}Window`);
     }
@@ -394,7 +407,7 @@ class HandlerManager {
             if (!handler.isEnabled()) continue;
 
             let data: ?HandlerResult;
-            if (this._blockedByActive(activeHandlers, allowed, handlerName)) {
+            if (this._blockedByActive(activeHandlers, allowed, handlerName) || this._blockedByTouch(activeHandlers, handlerName, e.timeStamp)) {
                 handler.reset();
 
             } else {
