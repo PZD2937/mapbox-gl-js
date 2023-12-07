@@ -253,7 +253,7 @@ class RasterTileSource extends Evented implements Source {
             tile.actor = this.dispatcher.getActor();
         }
         // 计算覆盖的瓦片
-        tile.request = tile.actor.send(`${this.type}.getCoverTiles`, {
+        tile.actor.send(`${this.type}.getCoverTiles`, {
             tile: tile.tileID.canonical,
             projection: this.projection,
             source: this.id,
@@ -274,7 +274,7 @@ class RasterTileSource extends Evented implements Source {
                 };
             });
             if (offscreenCanvasSupported()) {
-                tile.request = tile.actor.send('loadTile', {
+                tile.actor.send('loadTile', {
                     requests,
                     ltPixel: data.ltPixel,
                     rbPixel: data.rbPixel,
@@ -285,7 +285,6 @@ class RasterTileSource extends Evented implements Source {
                 }, callback);
             } else {
                 tile.request = loadRasterTile.call(this, {requests, offset: data.offset}, (err, result) => {
-                    const offset = data.offset;
                     if (tile.status === 'unloaded') return callback(null);
                     callback(err, result)
                 });
