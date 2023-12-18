@@ -284,7 +284,7 @@ class RasterTileSource extends Evented implements Source {
                 }, callback);
             } else {
                 tile.request = loadRasterTile.call(this, {requests, offset: data.offset}, (err, result) => {
-                    if (tile.status === 'unloaded') return callback(null);
+                    if (tile.state === 'unloaded') return callback(null);
                     callback(err, result)
                 });
                 this.limitedStorage();
