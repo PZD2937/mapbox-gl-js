@@ -38,6 +38,7 @@ import type FillExtrusionStyleLayer from '../style/style_layer/fill_extrusion_st
 import {Frustum} from '../util/primitives.js';
 import {mat4} from "gl-matrix";
 import {getCutoffParams} from './cutoff.js';
+import {ZoomDependentExpression} from '../style-spec/expression/index.js';
 
 export default draw;
 
@@ -75,8 +76,19 @@ function draw(painter: Painter, source: SourceCache, layer: FillExtrusionStyleLa
 
     if (painter.renderPass === 'shadow' && painter.shadowRenderer) {
         const shadowRenderer = painter.shadowRenderer;
+        if (terrain) {
+            const noShadowCutoff = 0.65;
+            if (opacity < noShadowCutoff) {
+                const expression = layer._transitionablePaint._values['fill-extrusion-opacity'].value.expression;
+                if (expression instanceof ZoomDependentExpression) {
+                    // avoid rendering shadows during fade in / fade out on terrain
+                    return;
+                }
+            }
+        }
         const depthMode = shadowRenderer.getShadowPassDepthMode();
         const colorMode = shadowRenderer.getShadowPassColorMode();
+
         drawExtrusionTiles(painter, source, layer, coords, depthMode, StencilMode.disabled, colorMode, conflateLayer);
     } else if (painter.renderPass === 'translucent') {
 
@@ -274,6 +286,8 @@ function drawExtrusionTiles(painter: Painter, source: SourceCache, layer: FillEx
         baseDefines.push('RENDER_CUTOFF');
     }
 
+    let singleCascadeDefines;
+
     const isShadowPass = painter.renderPass === 'shadow';
     const shadowRenderer = painter.shadowRenderer;
     const drawDepth = isShadowPass && !!shadowRenderer;
@@ -286,16 +300,25 @@ function drawExtrusionTiles(painter: Painter, source: SourceCache, layer: FillEx
         if (directionalLight && ambientLight) {
             groundShadowFactor = calculateGroundShadowFactor(directionalLight, ambientLight);
         }
+
+        singleCascadeDefines = baseDefines.concat(['SHADOWS_SINGLE_CASCADE']);
     }
 
+    const programName = drawDepth ? 'fillExtrusionDepth' : (image ? 'fillExtrusionPattern' : 'fillExtrusion');
     for (const coord of coords) {
         const tile = source.getTile(coord);
         const bucket: ?FillExtrusionBucket = (tile.getBucket(layer): any);
         if (!bucket || bucket.projection.name !== tr.projection.name) continue;
 
-        // debugger;
+        let singleCascade = false;
+        if (shadowRenderer) {
+            singleCascade = shadowRenderer.getMaxCascadeForTile(coord.toUnwrapped()) === 0;
+        }
+
+        const affectedByFog = painter.isTileAffectedByFog(coord);
         const programConfiguration = bucket.programConfigurations.get(layer.id);
-        const program = painter.useProgram(drawDepth ? 'fillExtrusionDepth' : (image ? 'fillExtrusionPattern' : 'fillExtrusion'), programConfiguration, baseDefines);
+        const program = painter.getOrCreateProgram(programName,
+            {config: programConfiguration, defines: singleCascade ? singleCascadeDefines : baseDefines, overrideFog: affectedByFog});
 
         if (painter.terrain) {
             const terrain = painter.terrain;
@@ -317,7 +340,9 @@ function drawExtrusionTiles(painter: Painter, source: SourceCache, layer: FillEx
 
         if (image) {
             painter.context.activeTexture.set(gl.TEXTURE0);
-            tile.imageAtlasTexture.bind(gl.LINEAR, gl.CLAMP_TO_EDGE);
+            if (tile.imageAtlasTexture) {
+                tile.imageAtlasTexture.bind(gl.LINEAR, gl.CLAMP_TO_EDGE);
+            }
             programConfiguration.updatePaintBuffers();
         }
         const constantPattern = patternProperty.constantOr(null);
@@ -409,7 +434,8 @@ function drawGroundEffect(painter: Painter, source: SourceCache, layer: FillExtr
 
     const renderGroundEffectTile = (coord: OverscaledTileID, groundEffect: GroundEffect, segments: any, matrix: Float32Array, meterToTile: number) => {
         const programConfiguration = groundEffect.programConfigurations.get(layer.id);
-        const program = painter.useProgram('fillExtrusionGroundEffect', programConfiguration, defines);
+        const affectedByFog = painter.isTileAffectedByFog(coord);
+        const program = painter.getOrCreateProgram('fillExtrusionGroundEffect', {config: programConfiguration, defines, overrideFog: affectedByFog});
 
         const ao = [aoIntensity, aoRadius * meterToTile];
         const edgeRadiusTile = zoom >= 17 ? 0 : edgeRadius * meterToTile;

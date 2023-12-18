@@ -4,6 +4,7 @@ import type {CircleDefinesType} from './circle_program.js';
 import type {RasterDefinesType} from './raster_program.js';
 import type {SymbolDefinesType} from './symbol_program.js';
 import type {LineDefinesType} from './line_program.js';
+import type {HillshadeDefinesType} from "./hillshade_program.js";
 import {fillExtrusionDepthUniforms, fillExtrusionUniforms, fillExtrusionPatternUniforms, fillExtrusionGroundEffectUniforms} from './fill_extrusion_program.js';
 import {fillUniforms, fillPatternUniforms, fillOutlineUniforms, fillOutlinePatternUniforms} from './fill_program.js';
 import {circleUniforms} from './circle_program.js';
@@ -28,7 +29,8 @@ import {modelUniforms, modelDepthUniforms} from '../../../3d-style/render/progra
 import {groundShadowUniforms} from '../../../3d-style/render/program/ground_shadow_program.js';
 import {starsUniforms} from '../../terrain/stars_program.js';
 
-export type DynamicDefinesType = CircleDefinesType | SymbolDefinesType | LineDefinesType | HeatmapDefinesType | DebugDefinesType | GlobeDefinesType | RasterDefinesType;
+export type FogDefinesType = ['FOG', 'FOG_DITHERING'];
+export type DynamicDefinesType = CircleDefinesType | SymbolDefinesType | LineDefinesType | HeatmapDefinesType | DebugDefinesType | GlobeDefinesType | RasterDefinesType | FogDefinesType | HillshadeDefinesType;
 
 export const programUniforms = {
     fillExtrusion: fillExtrusionUniforms,

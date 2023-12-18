@@ -6,6 +6,7 @@ import type Map from '../../ui/map.js';
 import assert from 'assert';
 import type {ValidationErrors} from '../validate_style.js';
 import type {ProjectionSpecification} from '../../style-spec/types.js';
+import SourceCache from '../../source/source_cache.js';
 
 type CustomRenderMethod = (gl: WebGL2RenderingContext, matrix: Array<number>, projection: ?ProjectionSpecification, projectionToMercatorMatrix: ?Array<number>, projectionToMercatorTransition: ?number, centerInMercator: ?Array<number>, pixelsPerMeterRatio: ?number) => void;
 
@@ -153,6 +154,7 @@ type CustomRenderMethod = (gl: WebGL2RenderingContext, matrix: Array<number>, pr
 export type CustomLayerInterface = {
     id: string,
     type: "custom",
+    slot: ?string;
     renderingMode: "2d" | "3d",
     render: CustomRenderMethod,
     prerender: ?CustomRenderMethod,
@@ -196,6 +198,7 @@ class CustomStyleLayer extends StyleLayer {
     constructor(implementation: CustomLayerInterface) {
         super(implementation, {});
         this.implementation = implementation;
+        if (implementation.slot) this.slot = implementation.slot;
     }
 
     is3D(): boolean {
@@ -206,7 +209,8 @@ class CustomStyleLayer extends StyleLayer {
         return this.implementation.prerender !== undefined;
     }
 
-    isLayerDraped(): boolean {
+    // $FlowFixMe[method-unbinding]
+    isLayerDraped(_: ?SourceCache): boolean {
         return this.implementation.renderToTile !== undefined;
     }
 

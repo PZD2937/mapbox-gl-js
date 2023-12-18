@@ -6,6 +6,8 @@ import {register} from '../util/web_worker_transfer.js';
 import type {DEMSourceEncoding} from '../source/worker_source.js';
 import DemMinMaxQuadTree from './dem_tree.js';
 import assert from 'assert';
+import {CanonicalTileID} from '../source/tile_id.js';
+import browser from '../util/browser.js';
 
 export type DEMEncoding = DEMSourceEncoding | "float";
 
@@ -40,12 +42,14 @@ function unpackTerrarium(r: number, g: number, b: number): number {
 export default class DEMData {
     uid: number;
     pixels: Uint8Array;
-    pixelsMod: Uint8Array;
     stride: number;
     dim: number;
     encoding: DEMEncoding;
     borderReady: boolean;
     _tree: DemMinMaxQuadTree;
+    _modifiedForSources: {[string]: Array<CanonicalTileID>};
+    _timestamp: number;
+    floatView: Float32Array;
     get tree(): DemMinMaxQuadTree {
         if (!this._tree) this._buildQuadTree();
         return this._tree;
@@ -54,7 +58,7 @@ export default class DEMData {
     // RGBAImage data has uniform 1px padding on all sides: square tile edge size defines stride
     // and dim is calculated as stride - 2.
     constructor(uid: number, data: ImageData, sourceEncoding: DEMSourceEncoding,
-        convertToFloat: boolean, borderReady: boolean = false, buildQuadTree: boolean = false): void {
+        convertToFloat: boolean, borderReady: boolean = false): void {
         this.uid = uid;
         if (data.height !== data.width) throw new RangeError('DEM tiles must be square');
         if (sourceEncoding && sourceEncoding !== "mapbox" && sourceEncoding !== "terrarium") return warnOnce(
@@ -66,6 +70,7 @@ export default class DEMData {
         this.pixels = new Uint8Array(data.data.buffer);
         this.encoding = sourceEncoding || 'mapbox';
         this.borderReady = borderReady;
+        this._modifiedForSources = {};
 
         if (!borderReady) {
             // in order to avoid flashing seams between tiles, here we are initially populating a 1px border of pixels around the image
@@ -88,10 +93,6 @@ export default class DEMData {
             values[this._idx(dim, dim)] = values[this._idx(dim - 1, dim - 1)];
         }
 
-        if (buildQuadTree) {
-            this._buildQuadTree();
-        }
-
         if (convertToFloat) {
             const floatView = new Float32Array(data.data.buffer);
             const unpack = this.encoding === "terrarium" ? unpackTerrarium : unpackMapbox;
@@ -101,6 +102,7 @@ export default class DEMData {
             }
             this.encoding = "float";
         }
+        this._timestamp = browser.now();
     }
 
     _buildQuadTree() {
@@ -116,13 +118,35 @@ export default class DEMData {
         }
         const idx = this._idx(x, y);
         if (this.encoding === "float") {
-            const floatView = new Float32Array(this.pixels.buffer);
-            return floatView[idx];
+            if (!this.floatView) {
+                this.floatView = new Float32Array(this.pixels.buffer);
+            }
+            return this.floatView[idx];
         }
 
         const byteIndex = idx * 4;
         const unpack = this.encoding === "terrarium" ? unpackTerrarium : unpackMapbox;
         return unpack(this.pixels[byteIndex], this.pixels[byteIndex + 1], this.pixels[byteIndex + 2]);
+    }
+
+    set(x: number, y: number, v: number): number {
+        const idx = this._idx(x, y);
+        if (this.encoding === "float") {
+            if (!this.floatView) {
+                this.floatView = new Float32Array(this.pixels.buffer);
+            }
+            const p = this.floatView[idx];
+            this.floatView[idx] = v;
+            return v - p;
+        }
+        const byteIndex = idx * 4;
+        const unpack = this.encoding === "terrarium" ? unpackTerrarium : unpackMapbox;
+        const p = unpack(this.pixels[byteIndex], this.pixels[byteIndex + 1], this.pixels[byteIndex + 2]);
+        const packed = DEMData.pack(v, this.encoding === "terrarium" ? "terrarium" : "mapbox");
+        this.pixels[byteIndex] = packed[0];
+        this.pixels[byteIndex + 1] = packed[1];
+        this.pixels[byteIndex + 2] = packed[2];
+        return v - p;
     }
 
     static getUnpackVector(encoding: DEMEncoding): [number, number, number, number] {

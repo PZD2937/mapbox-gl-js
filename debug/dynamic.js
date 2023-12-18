@@ -1,3 +1,4 @@
+
 window.dynamic = {
     "version": 8,
     "name": "Mapbox Standard",
@@ -156,11 +157,33 @@ window.dynamic = {
         "3dbuildings": {
             "type": "batched-model",
             "url": "mapbox://mapbox.mapbox-3dbuildings-v1-beta"
+        },
+        "mapbox-dem": {
+            "type": "raster-dem",
+            "url": "mapbox://mapbox.mapbox-terrain-dem-v1",
+            "tileSize": 514,
+            "maxzoom": 11
         }
     },
     "sprite": "mapbox://sprites/mapbox/standard-beta/73jrw2iv9yt1v27bf6hw4p4cn",
     "glyphs": "mapbox://fonts/mapbox/{fontstack}/{range}.pbf",
     "projection": { "name": "globe" },
+    "terrain": {
+        "source": "mapbox-dem",
+        "exaggeration": [
+            "interpolate",
+            [ "linear" ],
+            [ "zoom" ],
+            6,
+            0,
+            7,
+            1,
+            13.0,
+            1,
+            13.7,
+            0
+        ]
+    },
     "layers": [
         {
             "id": "land",
@@ -434,7 +457,7 @@ window.dynamic = {
                         0.2
                     ],
                     12,
-                    [ "match", 
+                    [ "match",
                     [ "get", "class" ],
                     ["residential"],
                     0,
@@ -448,9 +471,21 @@ window.dynamic = {
                         0.5,
                         0.4,
                         1
-                    ] 
+                    ]
                     ]
                 ]
+            }
+        },
+        {
+            "id": "mapbox-dem-hillshade",
+            "type": "hillshade",
+            "source": "mapbox-dem",
+            "minzoom": 2,
+            "paint": {
+                "hillshade-illumination-anchor": "map",
+                "hillshade-shadow-color": "hsla(0, 100%, 0%,0.2)",
+                "hillshade-highlight-color": "hsla(0, 100%, 100%, 0.8)",
+                "hillshade-accent-color": "hsla(0, 100%, 100%, 1)"
             }
         },
         {
@@ -463,7 +498,7 @@ window.dynamic = {
             "layout": { },
             "paint": {
                 "fill-emissive-strength": 0.6,
-                "fill-color": 
+                "fill-color":
                 [
                     "interpolate",
                     [ "linear" ],
@@ -490,8 +525,8 @@ window.dynamic = {
                     "interpolate",
                     [ "linear" ],
                     [ "zoom" ],
-                    14,
-                    1,
+                    12,
+                    0.5,
                     16,
                     0
                 ],
@@ -1119,7 +1154,7 @@ window.dynamic = {
                 ],
                 [ "==", [ "geometry-type" ], "LineString" ]
             ],
-            "layout": { 
+            "layout": {
                 "line-cap":  [ "step", [ "zoom" ], "butt", 16, "round" ]
             },
             "paint": {
@@ -1152,7 +1187,7 @@ window.dynamic = {
                 [ "!=", [ "get", "type" ], "steps" ],
                 [ "==", [ "geometry-type" ], "LineString" ]
             ],
-            "layout": { 
+            "layout": {
                 "line-cap":  [ "step", [ "zoom" ], "butt", 16, "round" ]
             },
             "paint": {
@@ -1221,7 +1256,7 @@ window.dynamic = {
                 [ "==", [ "get", "class" ], "pedestrian" ],
                 [ "==", [ "geometry-type" ], "LineString" ]
             ],
-            "layout": { 
+            "layout": {
             "line-cap":  [ "step", [ "zoom" ], "butt", 16, "round" ]
             },
             "paint": {
@@ -1893,7 +1928,7 @@ window.dynamic = {
                 [ "match", [ "get", "structure" ], [ "none", "ford" ], true, false ],
                 [ "==", [ "geometry-type" ], "LineString" ]
             ],
-            "layout": { 
+            "layout": {
                 "line-cap":  [ "step", [ "zoom" ], "butt", 16, "round"],
                 "line-join": [ "step", [ "zoom" ], "miter", 16, "round" ]
             },
@@ -1966,7 +2001,7 @@ window.dynamic = {
                 [ "case", [ "has", "layer" ], [ ">=", [ "get", "layer" ], 0 ], true ],
                 [ "==", [ "geometry-type" ], "LineString" ]
             ],
-            "layout": { 
+            "layout": {
                 "line-cap":  [ "step", [ "zoom" ], "butt", 16, "round"],
                 "line-join": [ "step", [ "zoom" ], "miter", 16, "round" ]
             },
@@ -2016,7 +2051,7 @@ window.dynamic = {
                 [ "match", [ "get", "structure" ], [ "none", "ford" ], true, false ],
                 [ "==", [ "geometry-type" ], "LineString" ]
             ],
-            "layout": { 
+            "layout": {
                 "line-cap":  [ "step", [ "zoom" ], "butt", 16, "round" ],
                 "line-join": [ "step", [ "zoom" ], "miter", 16, "round" ]
             },
@@ -2073,7 +2108,7 @@ window.dynamic = {
                 [ "match", [ "get", "structure" ], [ "none", "ford" ], true, false ],
                 [ "==", [ "geometry-type" ], "LineString" ]
             ],
-            "layout": { 
+            "layout": {
                 "line-cap":  [ "step", [ "zoom" ], "butt", 16, "round" ],
                 "line-join": [ "step", [ "zoom" ], "miter", 16, "round" ]
             },
@@ -2162,7 +2197,7 @@ window.dynamic = {
                 [ "case", [ "has", "layer" ], [ ">=", [ "get", "layer" ], 0 ], true ],
                 [ "==", [ "geometry-type" ], "LineString" ]
             ],
-            "layout": { 
+            "layout": {
                 "line-cap":  [ "step", [ "zoom" ], "butt", 16, "round"],
                 "line-join": [ "step", [ "zoom" ], "miter", 16, "round" ]
             },
@@ -3655,7 +3690,7 @@ window.dynamic = {
                 ],
                 [ "==", [ "geometry-type" ], "LineString" ]
             ],
-            "layout": { 
+            "layout": {
                 "line-cap":  [ "step", [ "zoom" ], "butt", 16, "round" ]
             },
             "paint": {
@@ -3699,7 +3734,7 @@ window.dynamic = {
                 [ "!=", [ "get", "type" ], "steps" ],
                 [ "==", [ "geometry-type" ], "LineString" ]
             ],
-            "layout": { 
+            "layout": {
                 "line-cap":  [ "step", [ "zoom" ], "butt", 16, "round" ]
             },
             "paint": {
@@ -3790,7 +3825,7 @@ window.dynamic = {
                 [ "==", [ "get", "class" ], "pedestrian" ],
                 [ "==", [ "geometry-type" ], "LineString" ]
             ],
-            "layout": { 
+            "layout": {
             "line-cap":  [ "step", [ "zoom" ], "butt", 16, "round" ]
             },
             "paint": {
@@ -6695,7 +6730,7 @@ window.dynamic = {
                 "text-field": [ "coalesce", [ "get", "name_en" ], [ "get", "name" ] ]
             },
             "paint": {
-                "text-color": 
+                "text-color":
                 [
                     "interpolate",
                     [
@@ -6953,7 +6988,7 @@ window.dynamic = {
                 "text-field": [ "coalesce", [ "get", "name_en" ], [ "get", "name" ] ]
             },
             "paint": {
-                "text-color": 
+                "text-color":
                 [
                     "interpolate",
                     [
@@ -7052,7 +7087,7 @@ window.dynamic = {
                 ]
             },
             "paint": {
-                "text-color": 
+                "text-color":
                 [
                     "interpolate",
                     [

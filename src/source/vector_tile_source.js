@@ -10,6 +10,7 @@ import {ResourceType} from '../util/ajax.js';
 import browser from '../util/browser.js';
 import {cacheEntryPossiblyAdded} from '../util/tile_request_cache.js';
 import {DedupedRequest, loadVectorTile} from './vector_tile_worker_source.js';
+import {makeFQID} from '../util/fqid.js';
 
 import type {Source} from './source.js';
 import type {OverscaledTileID} from './tile_id.js';
@@ -159,7 +160,8 @@ class VectorTileSource extends Evented implements Source {
     // $FlowFixMe[method-unbinding]
     reload() {
         this.cancelTileJSONRequest();
-        this.load(() => this.map.style._clearSource(this.id));
+        const fqid = makeFQID(this.id, this.scope);
+        this.load(() => this.map.style.clearSource(fqid));
     }
 
     /**
@@ -316,10 +318,10 @@ class VectorTileSource extends Evented implements Source {
 
     // $FlowFixMe[method-unbinding]
     unloadTile(tile: Tile) {
-        tile.unloadVectorData();
         if (tile.actor) {
             tile.actor.send('removeTile', {uid: tile.uid, type: this.type, source: this.id, scope: this.scope});
         }
+        tile.destroy();
     }
 
     hasTransition(): boolean {

@@ -26,6 +26,7 @@ class StubMap extends Evented {
         this.transform = new Transform();
         this._requestManager = new RequestManager();
         this._markers = [];
+        this._triggerCameraUpdate = () => {};
         this._prioritizeAndUpdateProjection = () => {};
     }
 
@@ -61,7 +62,7 @@ test('Style#loadURL', (t) => {
         style.on('style.load', () => {
             t.equals(window.server.requests.length, 2);
 
-            const fragmentStyle = style.getFragmentById('streets');
+            const fragmentStyle = style.getFragmentStyle('streets');
             t.deepEqual(fragmentStyle.stylesheet.layers, fragment.layers);
             t.deepEqual(fragmentStyle.stylesheet.sources, fragment.sources);
 
@@ -88,7 +89,7 @@ test('Style#loadURL', (t) => {
         style.on('style.load', () => {
             t.equals(window.server.requests.length, 1);
 
-            const fragmentStyle = style.getFragmentById('streets');
+            const fragmentStyle = style.getFragmentStyle('streets');
             t.deepEqual(fragmentStyle.stylesheet.layers, fragment.layers);
             t.deepEqual(fragmentStyle.stylesheet.sources, fragment.sources);
 
@@ -162,13 +163,13 @@ test('Style#loadURL', (t) => {
         style.on('style.load', () => {
             t.equals(window.server.requests.length, 4);
 
-            const {id: parentStyleId, style: parentStyle} = style.imports[0];
+            const {id: parentStyleId, style: parentStyle} = style.fragments[0];
             t.equal(parentStyleId, expectedImport.id);
             t.deepEqual(parentStyle.stylesheet.layers, expectedImport.data.layers);
             t.deepEqual(parentStyle.stylesheet.sources, expectedImport.data.sources);
 
-            for (let i = 0; i < parentStyle.imports.length; i++) {
-                const {id: childStyleId, style: childStyle} = parentStyle.imports[i];
+            for (let i = 0; i < parentStyle.fragments.length; i++) {
+                const {id: childStyleId, style: childStyle} = parentStyle.fragments[i];
                 t.equal(childStyleId, expectedImport.data.imports[i].id);
                 t.deepEqual(childStyle.stylesheet.layers, expectedImport.data.imports[i].data.layers);
                 t.deepEqual(childStyle.stylesheet.sources, expectedImport.data.imports[i].data.sources);
@@ -329,7 +330,7 @@ test('Style#loadJSON', (t) => {
         style.on('style.load', () => {
             t.equals(window.server.requests.length, 1);
 
-            const fragmentStyle = style.getFragmentById('streets');
+            const fragmentStyle = style.getFragmentStyle('streets');
             t.deepEqual(fragmentStyle.stylesheet.layers, fragment.layers);
             t.deepEqual(fragmentStyle.stylesheet.sources, fragment.sources);
 
@@ -355,7 +356,7 @@ test('Style#loadJSON', (t) => {
         style.on('style.load', () => {
             t.equals(window.server.requests.length, 0);
 
-            const fragmentStyle = style.getFragmentById('streets');
+            const fragmentStyle = style.getFragmentStyle('streets');
             t.deepEqual(fragmentStyle.stylesheet.layers, fragment.layers);
             t.deepEqual(fragmentStyle.stylesheet.sources, fragment.sources);
 
@@ -381,12 +382,12 @@ test('Style#loadJSON', (t) => {
         style.on('style.load', () => {
             let nestedStyle = style;
             for (let i = 1; i < MAX_IMPORT_DEPTH; i++) {
-                nestedStyle = nestedStyle.getFragmentById(`streets-${i}`);
+                nestedStyle = nestedStyle.getFragmentStyle(`streets-${i}`);
                 t.ok(nestedStyle);
             }
 
             t.ok(stub.calledOnce);
-            t.equal(nestedStyle.imports.length, 0);
+            t.equal(nestedStyle.fragments.length, 0);
             t.end();
         });
 
@@ -506,13 +507,13 @@ test('Style#loadJSON', (t) => {
         const style = new Style(new StubMap());
 
         const initialStyle = createStyleJSON({
-            imports: [{id: 'streets', url: '/style.json', data: createStyleJSON({
+            imports: [{id: 'basemap', url: '/style.json', data: createStyleJSON({
                 sources: {mapbox: {type: 'vector', tiles: []}}
             })}],
         });
 
         style.on('style.load', () => {
-            t.ok(style.getSource(makeFQID('mapbox', 'streets')) instanceof VectorTileSource);
+            t.ok(style.getSource(makeFQID('mapbox', 'basemap')) instanceof VectorTileSource);
             t.end();
         });
 
@@ -557,13 +558,10 @@ test('Style#loadJSON', (t) => {
         style.on('style.load', () => {
             t.ok(style.getLayer('background') instanceof StyleLayer);
             t.ok(style.getSource('mapbox') instanceof VectorTileSource);
-            t.ok(style.getLayer(makeFQID('background', 'streets')) instanceof StyleLayer);
-            t.ok(style.getSource(makeFQID('mapbox', 'streets')) instanceof VectorTileSource);
-
-            t.ok(style.getOwnLayer('background') instanceof StyleLayer);
-            t.ok(style.getOwnSource('mapbox') instanceof VectorTileSource);
             t.notOk(style.getOwnLayer(makeFQID('background', 'streets')) instanceof StyleLayer);
             t.notOk(style.getOwnSource(makeFQID('mapbox', 'streets')) instanceof VectorTileSource);
+            t.ok(style.getLayer(makeFQID('background', 'streets')) instanceof StyleLayer);
+            t.ok(style.getSource(makeFQID('mapbox', 'streets')) instanceof VectorTileSource);
 
             t.end();
         });
@@ -649,7 +647,6 @@ test('Style#removeSource', (t) => {
         style.on('style.load', () => {
             style.removeSource('mapbox');
             t.notOk(style.getSource('mapbox'), 'source in parent style is removed');
-            t.notOk(style.getOwnSource('mapbox'), 'source in parent style is removed');
             t.ok(style.getSource(makeFQID('mapbox', 'streets')) instanceof VectorTileSource, 'source in child style is intact');
             t.end();
         });
@@ -676,7 +673,7 @@ test('Style#addLayer', (t) => {
         });
 
         map.on('error', (e) => {
-            t.deepEqual(e.layer, {id: makeFQID('background', 'streets')});
+            t.deepEqual(e.layer, {id: 'background'});
             t.ok(e.mapbox);
             t.end();
         });
@@ -712,7 +709,7 @@ test('Style#addLayer', (t) => {
         style.on('style.load', () => {
             style.addLayer({id: 'c', type: 'background'}, 'a');
 
-            t.deepEqual(style._order, [
+            t.deepEqual(style.order, [
                 makeFQID('a', 'streets'),
                 makeFQID('b', 'streets'),
                 'c',
@@ -780,7 +777,6 @@ test('Style#removeLayer', (t) => {
         style.on('style.load', () => {
             style.removeLayer('background');
             t.notOk(style.getLayer('background'), 'layer in parent style is removed');
-            t.notOk(style.getOwnLayer('background'), 'layer in parent style is removed');
             t.ok(style.getLayer(makeFQID('background', 'streets')), 'layer in child style is intact');
             t.end();
         });
@@ -802,7 +798,7 @@ test('Style#removeLayer', (t) => {
         });
 
         map.on('error', (error) => {
-            t.match(error.error, /does not exist in the map\'s style and cannot be removed/);
+            t.match(error.error, /does not exist in the map\'s style/);
             t.end();
         });
 
@@ -870,7 +866,7 @@ test('Style#moveLayer', (t) => {
 
         style.on('style.load', () => {
             style.on('error', ({error}) => {
-                t.match(error.message, /does not exist in the map\'s style and cannot be moved/);
+                t.match(error.message, /does not exist in the map\'s style/);
                 t.end();
             });
 
@@ -903,9 +899,12 @@ test('Style#_mergeLayers', (t) => {
         });
 
         style.on('style.load', () => {
+            style.addLayer({id: 'custom', type: 'custom', slot: 'below-water', render: () => {}});
+
             t.deepEqual(style.order, [
                 makeFQID('land', 'streets'),
                 makeFQID('national-park'),
+                makeFQID('custom'),
                 makeFQID('water', 'streets'),
             ]);
 
@@ -990,7 +989,7 @@ test('Style#_mergeLayers', (t) => {
 });
 
 test('Style#getLights', (t) => {
-    t.test('resolves lights from import', (t) => {
+    t.test('root style resolves lights from import', (t) => {
         const style = new Style(new StubMap());
 
         style.loadJSON(createStyleJSON({
@@ -1013,7 +1012,7 @@ test('Style#getLights', (t) => {
         });
     });
 
-    t.test('overrides lights in imports', (t) => {
+    t.test('root style overrides lights in imports', (t) => {
         const style = new Style(new StubMap());
 
         style.loadJSON(createStyleJSON({
@@ -1033,8 +1032,8 @@ test('Style#getLights', (t) => {
 
         style.on('style.load', () => {
             t.deepEqual(style.getLights(), [
-                {id: 'sun', type: 'directional', properties: {intensity: 0.6}},
-                {id: 'environment', type: 'ambient', properties: {intensity: 0.6}}
+                {id: 'sun', type: 'directional', properties: {intensity: 0.4}},
+                {id: 'environment', type: 'ambient', properties: {intensity: 0.4}}
             ]);
             t.end();
         });
@@ -1068,7 +1067,7 @@ test('Style#getLights', (t) => {
 });
 
 test('Style#getTerrain', (t) => {
-    t.test('resolves terrain from import', (t) => {
+    t.test('root style resolves terrain from import', (t) => {
         const style = new Style(new StubMap());
 
         style.loadJSON(createStyleJSON({
@@ -1095,7 +1094,7 @@ test('Style#getTerrain', (t) => {
         });
     });
 
-    t.test('overrides terrain in imports', (t) => {
+    t.test('root style overrides terrain in imports', (t) => {
         const style = new Style(new StubMap());
 
         style.loadJSON(createStyleJSON({
@@ -1132,7 +1131,7 @@ test('Style#getTerrain', (t) => {
         }));
 
         style.on('style.load', () => {
-            t.deepEqual(style.getTerrain(), {source: 'mapbox-dem', exaggeration: 1.5});
+            t.deepEqual(style.getTerrain(), {source: 'dem', exaggeration: 1});
             t.end();
         });
     });
@@ -1188,7 +1187,7 @@ test('Style#getFog', (t) => {
         });
     });
 
-    t.test('overrides fog in imports', (t) => {
+    t.test('root style overrides fog in imports', (t) => {
         const style = new Style(new StubMap());
 
         style.loadJSON(createStyleJSON({
@@ -1209,9 +1208,9 @@ test('Style#getFog', (t) => {
         style.on('style.load', () => {
             const fog = style.getFog();
             t.ok(fog);
-            t.equal(fog.color, 'blue');
-            t.deepEqual(fog.range, [0, 1]);
-            t.equal(fog['horizon-blend'], 0.5);
+            t.equal(fog.color, 'white');
+            t.deepEqual(fog.range, [1, 2]);
+            t.equal(fog['horizon-blend'], 0);
             t.end();
         });
     });
@@ -1255,12 +1254,12 @@ test('Camera', (t) => {
         }));
 
         style.on('style.load', () => {
-            t.deepEqual(style.stylesheet.camera, {'camera-projection': 'orthographic'});
+            t.deepEqual(style.camera, {'camera-projection': 'orthographic'});
             t.end();
         });
     });
 
-    t.test('overrides camera in imports', (t) => {
+    t.test('root style overrides camera in imports', (t) => {
         const style = new Style(new StubMap());
 
         style.loadJSON(createStyleJSON({
@@ -1279,7 +1278,26 @@ test('Camera', (t) => {
         }));
 
         style.on('style.load', () => {
-            t.deepEqual(style.stylesheet.camera, {'camera-projection': 'orthographic'});
+            t.deepEqual(style.camera, {'camera-projection': 'perspective'});
+            t.end();
+        });
+    });
+
+    t.test('camera set by user overrides camera in imports', (t) => {
+        const style = new Style(new StubMap());
+
+        style.loadJSON(createStyleJSON({
+            camera: {'camera-projection': 'perspective'},
+            imports: [{
+                id: 'first',
+                url: '/styles/streets-v12.json',
+                data: createStyleJSON()
+            }],
+        }));
+
+        style.on('style.load', () => {
+            style.setCamera({'camera-projection': 'orthographic'});
+            t.deepEqual(style.camera, {'camera-projection': 'orthographic'});
             t.end();
         });
     });
@@ -1297,7 +1315,7 @@ test('Camera', (t) => {
         }));
 
         style.on('style.load', () => {
-            t.deepEqual(style.stylesheet.camera, {'camera-projection': 'orthographic'});
+            t.deepEqual(style.camera, {'camera-projection': 'orthographic'});
             t.end();
         });
     });
@@ -1321,38 +1339,37 @@ test('Projection', (t) => {
         const spy = t.spy(map, '_prioritizeAndUpdateProjection');
 
         style.on('style.load', () => {
-            t.deepEqual(style.stylesheet.projection, {name: 'globe'});
+            t.deepEqual(style.projection, {name: 'globe'});
             t.deepEqual(spy.lastCall.args[1], {name: 'globe'});
             t.end();
         });
     });
 
-    t.test('overrides projection in imports', (t) => {
-        const style = new Style(new StubMap());
+    t.test('root style overrides projection in imports', (t) => {
+        const map = new StubMap();
+        const style = new Style(map);
 
         style.loadJSON(createStyleJSON({
+            projection: {name: 'globe'},
             imports: [{
-                id: 'first',
+                id: 'streets',
                 url: '/styles/streets-v12.json',
-                data: createStyleJSON({
-                    projection: {name: 'globe'},
-                    imports: [{
-                        id: 'second',
-                        url: '/styles/streets-v12.json',
-                        data: createStyleJSON({projection: {name: 'albers'}})
-                    }]
-                })
+                data: createStyleJSON({projection: {name: 'albers'}})
             }],
         }));
 
+        const spy = t.spy(map, '_prioritizeAndUpdateProjection');
+
         style.on('style.load', () => {
-            t.deepEqual(style.stylesheet.projection, {name: 'albers'});
+            t.deepEqual(style.projection, {name: 'globe'});
+            t.deepEqual(spy.lastCall.args[1], {name: 'globe'});
             t.end();
         });
     });
 
     t.test('empty projection in import does not override projection in root style', (t) => {
-        const style = new Style(new StubMap());
+        const map = new StubMap();
+        const style = new Style(map);
 
         style.loadJSON(createStyleJSON({
             projection: {name: 'albers'},
@@ -1363,8 +1380,11 @@ test('Projection', (t) => {
             }],
         }));
 
+        const spy = t.spy(map, '_prioritizeAndUpdateProjection');
+
         style.on('style.load', () => {
-            t.deepEqual(style.stylesheet.projection, {name: 'albers'});
+            t.deepEqual(style.projection, {name: 'albers'});
+            t.deepEqual(spy.lastCall.args[1], {name: 'albers'});
             t.end();
         });
     });
@@ -1373,15 +1393,30 @@ test('Projection', (t) => {
 });
 
 test('Transition', (t) => {
-    t.test('Fallback to the fragment transition options', (t) => {
+    t.test('resolves transition from import', (t) => {
         const style = new Style(new StubMap());
 
         style.on('style.load', () => {
-            t.deepEqual(style.getTransition(), {duration: 900, delay: 200}, 'Returns the fragment transition options');
+            t.deepEqual(style.transition, {duration: 900, delay: 200}, 'Returns the fragment transition options');
 
             style.setTransition({duration: 0, delay: 0});
-            t.deepEqual(style.getTransition(), {duration: 0, delay: 0}, 'Returns the user-defined transition options');
+            t.deepEqual(style.transition, {duration: 0, delay: 0}, 'Returns the user-defined transition options');
 
+            t.end();
+        });
+
+        style.loadJSON(createStyleJSON({
+            imports: [{id: 'standard', url: '/standard.json', data: createStyleJSON({
+                transition: {duration: 900, delay: 200},
+            })}]
+        }));
+    });
+
+    t.test('root style overrides transition in imports', (t) => {
+        const style = new Style(new StubMap());
+
+        style.on('style.load', () => {
+            t.deepEqual(style.transition, {duration: 600, delay: 100}, 'Returns the root transition options');
             t.end();
         });
 
@@ -1453,10 +1488,10 @@ test('Style#queryRenderedFeatures', (t) => {
     style.loadJSON(initialStyle);
 
     style.on('style.load', () => {
-        style._getSourceCache('mapbox').tilesIn = tilesInStub;
-        style._getSourceCache('mapbox').transform = transform;
-        style._getSourceCache(makeFQID('mapbox', 'streets')).tilesIn = tilesInStub;
-        style._getSourceCache(makeFQID('mapbox', 'streets')).transform = transform;
+        style.getOwnSourceCache('mapbox').tilesIn = tilesInStub;
+        style.getOwnSourceCache('mapbox').transform = transform;
+        style.getSourceCache(makeFQID('mapbox', 'streets')).tilesIn = tilesInStub;
+        style.getSourceCache(makeFQID('mapbox', 'streets')).transform = transform;
 
         t.test('returns features only from the root style', (t) => {
             const results = style.queryRenderedFeatures([0, 0], {}, transform);
@@ -1689,6 +1724,40 @@ test('Style#setGeoJSONSourceData', (t) => {
 });
 
 test('Style#setConfigProperty', (t) => {
+    t.test('Updates layers in scope', (t) => {
+        const style = new Style(new StubMap());
+
+        const initialStyle = createStyleJSON({
+            imports: [{
+                id: 'standard',
+                url: '/standard.json',
+                config: {showBackground: false},
+                data: createStyleJSON({
+                    layers: [{
+                        id: 'background',
+                        type: 'background',
+                        layout: {visibility: ['case', ['config', 'showBackground'], 'visible', 'none']}}]
+                })
+            }]
+        });
+
+        style.on('style.load', () => {
+            style.dispatcher.broadcast = function(key, value) {
+                t.equal(key, 'updateLayers');
+                t.equal(value.scope, 'standard');
+                t.deepEqual(value.removedIds, []);
+                t.deepEqual(value.options.get('showBackground').value, true);
+                t.deepEqual(value.layers.map(layer => layer.id), ['background']);
+                t.end();
+            };
+
+            style.setConfigProperty('standard', 'showBackground', true);
+            style.update({});
+        });
+
+        style.loadJSON(initialStyle);
+    });
+
     t.test('Reevaluates layer visibility', (t) => {
         const style = new Style(new StubMap());
 
@@ -1707,10 +1776,11 @@ test('Style#setConfigProperty', (t) => {
         });
 
         style.on('style.load', () => {
-            t.equal(style.getLayer(makeFQID('background', 'standard')).getLayoutProperty('visibility'), 'none');
+            const layer = style.getLayer(makeFQID('background', 'standard'));
+            t.equal(layer.getLayoutProperty('visibility'), 'none');
 
             style.setConfigProperty('standard', 'showBackground', true);
-            t.equal(style.getLayer(makeFQID('background', 'standard')).getLayoutProperty('visibility'), 'visible');
+            t.equal(layer.getLayoutProperty('visibility'), 'visible');
 
             t.end();
         });
@@ -1719,4 +1789,346 @@ test('Style#setConfigProperty', (t) => {
     });
 
     t.end();
+});
+
+test('Style#setState', (t) => {
+    t.beforeEach(() => {
+        window.useFakeXMLHttpRequest();
+        window.server.configure({respondImmediately: true});
+    });
+
+    t.afterEach(() => {
+        window.restore();
+    });
+
+    t.test('Adds fragment', async (t) => {
+        const style = new Style(new StubMap());
+
+        const initialStyle = createStyleJSON();
+        style.loadJSON(initialStyle);
+
+        await new Promise((resolve) => style.on('style.load', resolve));
+
+        const nextStyle = createStyleJSON({
+            imports: [{id: 'a', url: '', data: createStyleJSON()}]
+        });
+
+        style.setState(nextStyle);
+        await new Promise((resolve) => style.on('style.load', resolve));
+
+        t.deepEqual(style.serialize(), nextStyle);
+
+        t.end();
+    });
+
+    t.test('Adds fragment to the existing fragments', async (t) => {
+        const style = new Style(new StubMap());
+
+        const initialStyle = createStyleJSON({
+            imports: [{id: 'a', url: '', data: createStyleJSON()}]
+        });
+
+        style.loadJSON(initialStyle);
+        await new Promise((resolve) => style.on('style.load', resolve));
+
+        const nextStyle = createStyleJSON({
+            imports: [{id: 'a', url: '', data: createStyleJSON()}, {id: 'b', url: '', data: createStyleJSON()}]
+        });
+
+        style.setState(nextStyle);
+        await new Promise((resolve) => style.on('style.load', resolve));
+
+        t.deepEqual(style.serialize(), nextStyle);
+
+        t.end();
+    });
+
+    t.test('Adds fragment before another', async (t) => {
+        const style = new Style(new StubMap());
+
+        const initialStyle = createStyleJSON({
+            imports: [{id: 'b', url: '', data: createStyleJSON()}]
+        });
+
+        style.loadJSON(initialStyle);
+        await new Promise((resolve) => style.on('style.load', resolve));
+
+        const nextStyle = createStyleJSON({
+            imports: [{id: 'a', url: '', data: createStyleJSON()}, {id: 'b', url: '', data: createStyleJSON()}]
+        });
+
+        style.setState(nextStyle);
+        await new Promise((resolve) => style.on('style.load', resolve));
+
+        t.deepEqual(style.serialize(), nextStyle);
+
+        t.end();
+    });
+
+    t.test('Removes fragment', async (t) => {
+        const style = new Style(new StubMap());
+
+        const initialStyle = createStyleJSON({
+            imports: [{id: 'a', url: '', data: createStyleJSON()}, {id: 'b', url: '', data: createStyleJSON()}]
+        });
+
+        style.loadJSON(initialStyle);
+        await new Promise((resolve) => style.on('style.load', resolve));
+
+        const nextStyle = createStyleJSON({
+            imports: [{id: 'a', url: '', data: createStyleJSON()}]
+        });
+
+        style.setState(nextStyle);
+        t.deepEqual(style.serialize(), nextStyle);
+
+        t.end();
+    });
+
+    t.test('Removes 3D light independently', async (t) => {
+        const style = new Style(new StubMap());
+
+        const initialStyle = createStyleJSON({imports: [{id: 'basemap', url: '', data: createStyleJSON({
+            lights: [
+                {id: 'sun', type: 'directional', properties: {intensity: 0.5}},
+                {id: 'environment', type: 'ambient', properties: {intensity: 0.5}}
+            ]
+        })}]});
+
+        style.loadJSON(initialStyle);
+        await new Promise((resolve) => style.on('style.load', resolve));
+
+        t.ok(style.ambientLight);
+        t.ok(style.directionalLight);
+
+        const nextStyle = createStyleJSON({imports: [{id: 'basemap', url: '', data: createStyleJSON({
+            lights: [
+                {id: 'sun', type: 'directional', properties: {intensity: 0.5}},
+            ]
+        })}]});
+
+        style.setState(nextStyle);
+        t.deepEqual(style.serialize(), nextStyle);
+
+        t.notOk(style.ambientLight);
+        t.ok(style.directionalLight);
+
+        t.end();
+    });
+
+    t.test('Removes all fragments', async (t) => {
+        const style = new Style(new StubMap());
+
+        const fragmentStyle = createStyleJSON({
+            lights: [
+                {id: 'sun', type: 'directional', properties: {intensity: 0.5}},
+                {id: 'environment', type: 'ambient', properties: {intensity: 0.5}}
+            ],
+            fog: {range: [1, 2], color: 'white'},
+            terrain: {source: 'mapbox-dem', exaggeration: 1.5},
+            layers: [{id: 'land', type: 'background'}],
+            sources: {'mapbox-dem': {type: 'raster-dem', tiles: ['http://example.com/{z}/{x}/{y}.png']}},
+        });
+
+        const initialStyle = createStyleJSON({imports: [{id: 'a', url: '', data: fragmentStyle}]});
+
+        style.loadJSON(initialStyle);
+        await new Promise((resolve) => style.on('style.load', resolve));
+
+        const nextStyle = createStyleJSON({
+            sources: {mapbox: {type: 'vector', tiles: []}},
+            layers: [{id: 'land', type: 'background'}]
+        });
+
+        style.setState(nextStyle);
+        t.deepEqual(style.serialize(), nextStyle);
+
+        t.deepEqual(style.order, ['land']);
+        t.deepEqual(style.getSources().map((s) => s.id), ['mapbox']);
+
+        t.notOk(style.ambientLight);
+        t.notOk(style.directionalLight);
+        t.notOk(style.fog);
+        t.notOk(style.terrain);
+
+        t.end();
+    });
+
+    t.test('Moves fragment', async (t) => {
+        const style = new Style(new StubMap());
+
+        const initialStyle = createStyleJSON({
+            imports: [{id: 'a', url: '', data: createStyleJSON()}, {id: 'b', url: '', data: createStyleJSON()}]
+        });
+
+        style.loadJSON(initialStyle);
+        await new Promise((resolve) => style.on('style.load', resolve));
+
+        const nextStyle = createStyleJSON({
+            imports: [{id: 'b', url: '', data: createStyleJSON()}, {id: 'a', url: '', data: createStyleJSON()}]
+        });
+
+        style.setState(nextStyle);
+        await new Promise((resolve) => style.on('style.load', resolve));
+
+        t.deepEqual(style.serialize(), nextStyle);
+
+        t.end();
+    });
+
+    t.test('Updates fragment URL', async (t) => {
+        const style = new Style(new StubMap());
+
+        const initialStyle = createStyleJSON({
+            imports: [{id: 'a', url: '/style.json'}],
+            layers: [{id: 'b', type: 'background', paint: {'background-color': 'red'}}]
+        });
+
+        window.server.respondWith('/style.json', JSON.stringify(createStyleJSON()));
+
+        style.loadJSON(initialStyle);
+        await new Promise((resolve) => style.on('style.load', resolve));
+
+        const nextStyle = createStyleJSON({
+            imports: [{id: 'a', url: '/styles/streets-v12.json'}],
+            layers: [{id: 'b', type: 'background', paint: {'background-color': 'pink'}}]
+        });
+
+        const data = createStyleJSON({layers: [{id: 'a', type: 'background'}]});
+        window.server.respondWith('/styles/streets-v12.json', JSON.stringify(data));
+
+        style.setState(nextStyle);
+        t.equal(style._changes.updatedPaintProps.has('b'), true, 'Keeps previous changes intact');
+
+        await new Promise((resolve) => style.on('style.load', resolve));
+
+        t.deepEqual(style.serialize(), createStyleJSON({
+            imports: [{id: 'a', url: '/styles/streets-v12.json', data}],
+            layers: [{id: 'b', type: 'background', paint: {'background-color': 'pink'}}]
+        }));
+
+        t.end();
+    });
+
+    t.test('Updates fragment data', async (t) => {
+        const style = new Style(new StubMap());
+
+        const initialStyle = createStyleJSON({
+            imports: [{id: 'a', url: '', data: createStyleJSON({layers: [{id: 'a', type: 'background'}]})}]
+        });
+
+        style.loadJSON(initialStyle);
+        await new Promise((resolve) => style.on('style.load', resolve));
+
+        const nextStyle = createStyleJSON({
+            imports: [{id: 'a', url: '', data: createStyleJSON({layers: [{id: 'b', type: 'background'}]})}]
+        });
+
+        style.setState(nextStyle);
+        t.deepEqual(style.serialize(), nextStyle);
+
+        t.end();
+    });
+
+    t.test('Updates layer slot', async (t) => {
+        const style = new Style(new StubMap());
+
+        const initialStyle = createStyleJSON({
+            imports: [{
+                id: 'streets',
+                url: '/style.json',
+                data: createStyleJSON({
+                    sources: {mapbox: {type: 'geojson', data: {type: 'FeatureCollection', features: []}}},
+                    layers: [
+                        {id: 'land', type: 'background'},
+                        {id: 'middle', type: 'slot'},
+                        {id: 'water', type: 'background'},
+                        {id: 'top', type: 'slot'},
+                        {id: 'labels', type: 'symbol', source: 'mapbox'}
+                    ]
+                })
+            }],
+            layers: [{id: 'layer', type: 'background', slot: 'middle'}]
+        });
+
+        style.loadJSON(initialStyle);
+
+        await new Promise((resolve) => style.on('style.load', resolve));
+
+        t.deepEqual(style.order, [
+            makeFQID('land', 'streets'),
+            makeFQID('layer'),
+            makeFQID('water', 'streets'),
+            makeFQID('labels', 'streets'),
+        ]);
+
+        const nextStyle = createStyleJSON({
+            imports: [{
+                id: 'streets',
+                url: '/style.json',
+                data: createStyleJSON({
+                    sources: {mapbox: {type: 'geojson', data: {type: 'FeatureCollection', features: []}}},
+                    layers: [
+                        {id: 'land', type: 'background'},
+                        {id: 'middle', type: 'slot'},
+                        {id: 'water', type: 'background'},
+                        {id: 'top', type: 'slot'},
+                        {id: 'labels', type: 'symbol', source: 'mapbox'}
+                    ]
+                })
+            }],
+            layers: [{id: 'layer', type: 'background', slot: 'top'}]
+        });
+
+        style.setState(nextStyle);
+        t.deepEqual(style.serialize(), nextStyle);
+
+        t.deepEqual(style.order, [
+            makeFQID('land', 'streets'),
+            makeFQID('water', 'streets'),
+            makeFQID('layer'),
+            makeFQID('labels', 'streets'),
+        ]);
+
+        t.end();
+    });
+
+    t.end();
+});
+
+test('Style#serialize', (t) => {
+    const style = new Style(new StubMap());
+
+    const fragmentStyle = createStyleJSON({
+        fog: {range: [1, 2], color: 'white', 'horizon-blend': 0},
+        lights: [
+            {id: 'sun', type: 'directional', properties: {intensity: 0.4}},
+            {id: 'environment', type: 'ambient', properties: {intensity: 0.4}}
+        ],
+        camera: {'camera-projection': 'orthographic'},
+        sources: {'mapbox-dem': {type: 'raster-dem', tiles: ['http://example.com/{z}/{x}/{y}.png']}},
+        terrain: {source: 'mapbox-dem', exaggeration: 1.5},
+        projection: {name: 'globe'},
+        transition: {duration: 900, delay: 200}
+    });
+
+    const initialStyle = createStyleJSON({
+        imports: [{id: 'basemap', url: '', data: fragmentStyle}]
+    });
+
+    style.on('style.load', () => {
+        const serialized = style.serialize();
+
+        t.notOk(serialized.fog);
+        t.notOk(serialized.lights);
+        t.notOk(serialized.camera);
+        t.notOk(serialized.terrain);
+        t.notOk(serialized.projection);
+        t.notOk(serialized.transition);
+        t.deepEqual(serialized.sources, {});
+
+        t.end();
+    });
+
+    style.loadJSON(initialStyle);
 });

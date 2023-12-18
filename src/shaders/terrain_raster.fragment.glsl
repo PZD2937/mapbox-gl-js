@@ -1,3 +1,7 @@
+#include "_prelude_fog.fragment.glsl"
+#include "_prelude_shadow.fragment.glsl"
+#include "_prelude_lighting.glsl"
+
 uniform sampler2D u_image0;
 varying vec2 v_pos0;
 
@@ -45,7 +49,7 @@ void main() {
     color = apply_lighting(image_color, normal, mix(1.0, lighting_factor, cutoffOpacity));
 #endif // !LIGHTING_3D_ALPHA_EMISSIVENESS
 #else // RENDER_SHADOWS
-    float lighting_factor = calculate_NdotL(normal);
+    float lighting_factor = u_lighting_directional_dir.z;
     color = apply_lighting(image_color, normal, lighting_factor);
 #ifdef LIGHTING_3D_ALPHA_EMISSIVENESS
     color.rgb = mix(color.rgb, image_color.rgb, image_color.a);

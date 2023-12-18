@@ -84,11 +84,14 @@ function drawFillTiles(painter: Painter, sourceCache: SourceCache, layer: FillSt
         painter.prepareDrawTile();
 
         const programConfiguration = bucket.programConfigurations.get(layer.id);
-        const program = painter.useProgram(programName, programConfiguration);
+        const affectedByFog = painter.isTileAffectedByFog(coord);
+        const program = painter.getOrCreateProgram(programName, {config: programConfiguration, overrideFog: affectedByFog});
 
         if (image) {
             painter.context.activeTexture.set(gl.TEXTURE0);
-            tile.imageAtlasTexture.bind(gl.LINEAR, gl.CLAMP_TO_EDGE);
+            if (tile.imageAtlasTexture) {
+                tile.imageAtlasTexture.bind(gl.LINEAR, gl.CLAMP_TO_EDGE);
+            }
             programConfiguration.updatePaintBuffers();
         }
 

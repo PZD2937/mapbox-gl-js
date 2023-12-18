@@ -47,8 +47,21 @@ import type {ProjectionSpecification} from '../../style-spec/types.js';
 import type {TileTransform} from '../../geo/projection/tile_transform.js';
 import type {IVectorTileLayer} from '@mapbox/vector-tile';
 
+export const fillExtrusionDefaultDataDrivenProperties: Array<string> = [
+    'fill-extrusion-base',
+    'fill-extrusion-height',
+    'fill-extrusion-color',
+    'fill-extrusion-pattern',
+    'fill-extrusion-flood-light-wall-radius'
+];
+
+export const fillExtrusionGroundDataDrivenProperties: Array<string> = [
+    'fill-extrusion-flood-light-ground-radius'
+];
+
 const FACTOR = Math.pow(2, 13);
 const TANGENT_CUTOFF = 4;
+const NORM = Math.pow(2, 15) - 1;
 
 const QUAD_VERTS = 4;
 const QUAD_TRIS = 2;
@@ -102,7 +115,7 @@ class FootprintSegment {
     vertexCount: number;
     indexOffset: number;
     indexCount: number;
-
+    ringIndices: Array<number>;
     constructor() {
         this.vertexOffset = 0;
         this.vertexCount = 0;
@@ -269,7 +282,7 @@ function concavity(a: Point, b: Point) {
 }
 
 function tanAngleClamped(angle: number) {
-    return Math.min(TANGENT_CUTOFF, Math.max(-TANGENT_CUTOFF, Math.tan(angle))) / TANGENT_CUTOFF * FACTOR;
+    return Math.min(TANGENT_CUTOFF, Math.max(-TANGENT_CUTOFF, Math.tan(angle))) / TANGENT_CUTOFF * NORM;
 }
 
 function getAngularOffsetFactor(na: Point, nb: Point): number {
@@ -323,15 +336,15 @@ export class GroundEffect {
 
     hiddenByLandmarkVertexArray: FillExtrusionHiddenByLandmarkArray;
     hiddenByLandmarkVertexBuffer: VertexBuffer;
-    needsHiddenByLandmarkUpdate: boolean;
+    _needsHiddenByLandmarkUpdate: boolean;
 
     indexArray: TriangleIndexArray;
     indexBuffer: IndexBuffer;
 
     _segments: SegmentVector;
 
-    segmentToGroundQuads: {[number]: Array<GroundQuad>};
-    segmentToRegionTriCounts: {[number]: Array<number>};
+    _segmentToGroundQuads: {[number]: Array<GroundQuad>};
+    _segmentToRegionTriCounts: {[number]: Array<number>};
     regionSegments: {[number]: ?SegmentVector};
 
     programConfigurations: ProgramConfigurationSet<FillExtrusionStyleLayer>;
@@ -339,13 +352,16 @@ export class GroundEffect {
     constructor(options: BucketParameters<FillExtrusionStyleLayer>) {
         this.vertexArray = new FillExtrusionGroundLayoutArray();
         this.indexArray = new TriangleIndexArray();
-        this.programConfigurations = new ProgramConfigurationSet(options.layers, options.zoom);
+        const filtered = (property: string) => {
+            return fillExtrusionGroundDataDrivenProperties.includes(property);
+        };
+        this.programConfigurations = new ProgramConfigurationSet(options.layers, options.zoom, filtered);
         this._segments = new SegmentVector();
         this.hiddenByLandmarkVertexArray = new FillExtrusionHiddenByLandmarkArray();
-        this.segmentToGroundQuads = {};
-        this.segmentToGroundQuads[0] = [];
-        this.segmentToRegionTriCounts = {};
-        this.segmentToRegionTriCounts[0] = [0, 0, 0, 0, 0];
+        this._segmentToGroundQuads = {};
+        this._segmentToGroundQuads[0] = [];
+        this._segmentToRegionTriCounts = {};
+        this._segmentToRegionTriCounts[0] = [0, 0, 0, 0, 0];
         this.regionSegments = {};
         this.regionSegments[4] = new SegmentVector();
     }
@@ -356,19 +372,19 @@ export class GroundEffect {
 
     hasData(): boolean { return this.vertexArray.length !== 0; }
 
-    addData(polyline: Array<Point>, bounds: [Point, Point], maxRadius: number) {
+    addData(polyline: Array<Point>, bounds: [Point, Point], maxRadius: number, roundedEdges: boolean = false) {
         const n = polyline.length;
         if (n > 2) {
             let sid = Math.max(0, this._segments.get().length - 1);
             const numNewVerts = n * 4;
             const numExistingVerts = this.vertexArray.length;
-            const numExistingTris = this.segmentToGroundQuads[sid].length * QUAD_TRIS;
+            const numExistingTris = this._segmentToGroundQuads[sid].length * QUAD_TRIS;
             const segment = this._segments._prepareSegment(numNewVerts, numExistingVerts, numExistingTris);
             const newSegmentAdded = sid !== this._segments.get().length - 1;
             if (newSegmentAdded) {
                 sid++;
-                this.segmentToGroundQuads[sid] = [];
-                this.segmentToRegionTriCounts[sid] = [0, 0, 0, 0, 0];
+                this._segmentToGroundQuads[sid] = [];
+                this._segmentToRegionTriCounts[sid] = [0, 0, 0, 0, 0];
             }
             let prevFactor;
             {
@@ -394,7 +410,7 @@ export class GroundEffect {
                 const a1 = factor;
 
                 if (isEdgeOutsideBounds(pa, pb, bounds) ||
-                    (pointOutsideBounds(pa, bounds) && pointOutsideBounds(pb, bounds))) {
+                    (roundedEdges && pointOutsideBounds(pa, bounds) && pointOutsideBounds(pb, bounds))) {
                     prevFactor = factor;
                     continue;
                 }
@@ -410,11 +426,11 @@ export class GroundEffect {
                 // When a tile belongs to more than one region it needs to be duplicated for that region.
                 const regions = getTileRegions(pa, pb, na, maxRadius); // Note: mutates na
                 for (const rid of regions) {
-                    this.segmentToGroundQuads[sid].push({
+                    this._segmentToGroundQuads[sid].push({
                         id: idx,
                         region: rid
                     });
-                    this.segmentToRegionTriCounts[sid][rid] += QUAD_TRIS;
+                    this._segmentToRegionTriCounts[sid][rid] += QUAD_TRIS;
                     segment.primitiveLength += QUAD_TRIS;
                 }
                 prevFactor = factor;
@@ -425,14 +441,14 @@ export class GroundEffect {
     prepareBorderSegments() {
         if (!this.hasData()) return;
 
-        assert(this._segments && this.segmentToGroundQuads && this.segmentToRegionTriCounts);
+        assert(this._segments && this._segmentToGroundQuads && this._segmentToRegionTriCounts);
         assert(!this.indexArray.length);
 
         const segments = this._segments.get();
         // Sort the geometry in this order: left, right, top, bottom and default regions.
         const numSegments = segments.length;
         for (let i = 0; i < numSegments; i++) {
-            const groundQuads = this.segmentToGroundQuads[i];
+            const groundQuads = this._segmentToGroundQuads[i];
             groundQuads.sort((a: GroundQuad, b: GroundQuad) => {
                 return a.region - b.region;
             });
@@ -440,9 +456,9 @@ export class GroundEffect {
 
         // Populate the index array.
         for (let i = 0; i < numSegments; i++) {
-            const groundQuads = this.segmentToGroundQuads[i];
+            const groundQuads = this._segmentToGroundQuads[i];
             const segment = segments[i];
-            const regionTriCounts = this.segmentToRegionTriCounts[i];
+            const regionTriCounts = this._segmentToRegionTriCounts[i];
 
             const totalTriCount = regionTriCounts.reduce((acc: number, a: number) => { return acc + a; }, 0);
             assert(segment.primitiveLength === totalTriCount);
@@ -482,8 +498,8 @@ export class GroundEffect {
         }
 
         // Free up memory as we no longer need these.
-        this.segmentToGroundQuads = (null: any);
-        this.segmentToRegionTriCounts = (null: any);
+        this._segmentToGroundQuads = (null: any);
+        this._segmentToRegionTriCounts = (null: any);
         this._segments.destroy();
         this._segments = (null: any);
     }
@@ -520,11 +536,11 @@ export class GroundEffect {
         for (let i = offset; i < vertexArrayBounds; ++i) {
             this.hiddenByLandmarkVertexArray.emplace(i, hide);
         }
-        this.needsHiddenByLandmarkUpdate = true;
+        this._needsHiddenByLandmarkUpdate = true;
     }
 
     uploadHiddenByLandmark(context: Context) {
-        if (!this.hasData() || !this.needsHiddenByLandmarkUpdate) {
+        if (!this.hasData() || !this._needsHiddenByLandmarkUpdate) {
             return;
         }
         if (!this.hiddenByLandmarkVertexBuffer && this.hiddenByLandmarkVertexArray.length > 0) {
@@ -533,7 +549,7 @@ export class GroundEffect {
         } else if (this.hiddenByLandmarkVertexBuffer) {
             this.hiddenByLandmarkVertexBuffer.updateData(this.hiddenByLandmarkVertexArray);
         }
-        this.needsHiddenByLandmarkUpdate = false;
+        this._needsHiddenByLandmarkUpdate = false;
     }
 
     destroy() {
@@ -608,7 +624,7 @@ class FillExtrusionBucket implements Bucket {
         this.canonical = options.canonical;
         this.overscaling = options.overscaling;
         this.layers = options.layers;
-        this.layerIds = this.layers.map(layer => layer.id);
+        this.layerIds = this.layers.map(layer => layer.fqid);
         this.index = options.index;
         this.hasPattern = false;
         this.edgeRadius = 0;
@@ -623,7 +639,10 @@ class FillExtrusionBucket implements Bucket {
         this.layoutVertexArray = new FillExtrusionLayoutArray();
         this.centroidVertexArray = new FillExtrusionCentroidArray();
         this.indexArray = new TriangleIndexArray();
-        this.programConfigurations = new ProgramConfigurationSet(options.layers, options.zoom);
+        const filtered = (property: string) => {
+            return fillExtrusionDefaultDataDrivenProperties.includes(property);
+        };
+        this.programConfigurations = new ProgramConfigurationSet(options.layers, options.zoom, filtered);
         this.segments = new SegmentVector();
         this.stateDependentLayerIds = this.layers.filter((l) => l.isStateDependent()).map((l) => l.id);
         this.groundEffect = new GroundEffect(options);
@@ -751,6 +770,8 @@ class FillExtrusionBucket implements Bucket {
         const borderCentroidData = new BorderCentroidData();
         borderCentroidData.centroidDataIndex = this.centroidData.length;
         const centroid = new PartData();
+        const base = this.layers[0].paint.get('fill-extrusion-base').evaluate(feature, {}, canonical);
+        const onGround = base <= 0;
         const height = this.layers[0].paint.get('fill-extrusion-height').evaluate(feature, {}, canonical);
         centroid.height = height;
         centroid.vertexArrayOffset = this.layoutVertexArray.length;
@@ -818,6 +839,7 @@ class FillExtrusionBucket implements Bucket {
             const fpSegment = new FootprintSegment();
             fpSegment.vertexOffset = this.footprintVertices.length;
             fpSegment.indexOffset = this.footprintIndices.length * 3;
+            fpSegment.ringIndices = [];
 
             if (isPolygon) {
                 const flattened = [];
@@ -841,6 +863,11 @@ class FillExtrusionBucket implements Bucket {
                         const p1 = ring[1];
                         na = p1.sub(p0)._perp()._unit();
                     }
+
+                    // Store index to the end of this ring, we substract one because we don't add the last point to the
+                    // footprint as it's the same as the first one
+                    fpSegment.ringIndices.push(ring.length - 1);
+
                     for (let i = 1; i < ring.length; i++) {
                         const p1 = ring[i];
                         const p2 = ring[i === ring.length - 1 ? 1 : i + 1];
@@ -859,7 +886,7 @@ class FillExtrusionBucket implements Bucket {
                             na = nb;
                         }
 
-                        if ((edgeRadius === 0 || optimiseGround) && !isDuplicate(groundPolyline, q)) {
+                        if (onGround && (edgeRadius === 0 || optimiseGround) && !isDuplicate(groundPolyline, q)) {
                             groundPolyline.push(q);
                         }
 
@@ -879,7 +906,7 @@ class FillExtrusionBucket implements Bucket {
                         }
                     }
 
-                    if (edgeRadius === 0 || optimiseGround) {
+                    if (onGround && (edgeRadius === 0 || optimiseGround)) {
                         if (groundPolyline.length !== 0 && isDuplicate(groundPolyline, groundPolyline[0])) {
                             groundPolyline.pop();
                         }
@@ -982,7 +1009,7 @@ class FillExtrusionBucket implements Bucket {
 
                         na = nb;
 
-                        if (this.zoom >= 17) {
+                        if (onGround && this.zoom >= 17) {
                             if (!isDuplicate(groundPolyline, p0)) groundPolyline.push(p0);
                             if (!isDuplicate(groundPolyline, p1)) groundPolyline.push(p1);
                         }
@@ -1060,11 +1087,11 @@ class FillExtrusionBucket implements Bucket {
                     }
                 }
                 if (isPolygon) topIndex += (ring.length - 1);
-                if (edgeRadius && this.zoom >= 17) {
+                if (onGround && edgeRadius && this.zoom >= 17) {
                     if (groundPolyline.length !== 0 && isDuplicate(groundPolyline, groundPolyline[0])) {
                         groundPolyline.pop();
                     }
-                    this.groundEffect.addData(groundPolyline, bounds, maxRadius);
+                    this.groundEffect.addData(groundPolyline, bounds, maxRadius, edgeRadius > 0);
                 }
             }
             this.footprintSegments.push(fpSegment);
@@ -1241,22 +1268,29 @@ class FillExtrusionBucket implements Bucket {
         this.borderDoneWithNeighborZ = [-1, -1, -1, -1];
     }
 
-    footprintContainsPoint(x: number, y: number, seg: FootprintSegment): boolean {
+    footprintContainsPoint(x: number, y: number, centroid: PartData): boolean {
         let c = false;
-        for (let i = 0, j = seg.vertexCount - 1; i < seg.vertexCount; j = i++) {
-            const x1 = this.footprintVertices.int16[(i + seg.vertexOffset) * 2 + 0];
-            const y1 = this.footprintVertices.int16[(i + seg.vertexOffset) * 2 + 1];
-            const x2 = this.footprintVertices.int16[(j + seg.vertexOffset) * 2 + 0];
-            const y2 = this.footprintVertices.int16[(j + seg.vertexOffset) * 2 + 1];
-            if (((y1 > y) !== (y2 > y)) && (x < (x2 - x1) * (y - y1) / (y2 - y1) + x1)) {
-                c = !c;
+        for (let s = 0; s < centroid.footprintSegLen; s++) {
+            const seg = this.footprintSegments[centroid.footprintSegIdx + s];
+            let startRing = 0;
+            for (const endRing of seg.ringIndices) {
+                for (let i = startRing, j = endRing + startRing - 1; i < endRing + startRing; j = i++) {
+                    const x1 = this.footprintVertices.int16[(i + seg.vertexOffset) * 2 + 0];
+                    const y1 = this.footprintVertices.int16[(i + seg.vertexOffset) * 2 + 1];
+                    const x2 = this.footprintVertices.int16[(j + seg.vertexOffset) * 2 + 0];
+                    const y2 = this.footprintVertices.int16[(j + seg.vertexOffset) * 2 + 1];
+                    if (((y1 > y) !== (y2 > y)) && (x < ((x2 - x1) * (y - y1) / (y2 - y1) + x1))) {
+                        c = !c;
+                    }
+                }
+                startRing = endRing;
             }
         }
         return c;
     }
 
     getHeightAtTileCoord(x: number, y: number): ?{height: number, hidden: boolean} {
-        let height = 0;
+        let height = Number.NEGATIVE_INFINITY;
         let hidden = true;
         assert(x > -EXTENT && y > -EXTENT && x < 2 * EXTENT && y < 2 * EXTENT);
         const lookupKey = (x + EXTENT) * 4 * EXTENT + (y + EXTENT);
@@ -1271,18 +1305,15 @@ class FillExtrusionBucket implements Bucket {
                 continue;
             }
 
-            for (let i = 0; i < centroid.footprintSegLen; i++) {
-                const seg = this.footprintSegments[centroid.footprintSegIdx + i];
-                if (this.footprintContainsPoint(x, y, seg)) {
-                    if (centroid && centroid.height > height) {
-                        height = centroid.height;
-                        this.partLookup[lookupKey] = centroid;
-                        hidden = !!(centroid.flags & HIDDEN_BY_REPLACEMENT);
-                    }
+            if (this.footprintContainsPoint(x, y, centroid)) {
+                if (centroid && centroid.height > height) {
+                    height = centroid.height;
+                    this.partLookup[lookupKey] = centroid;
+                    hidden = !!(centroid.flags & HIDDEN_BY_REPLACEMENT);
                 }
             }
         }
-        if (height === undefined) {
+        if (height === Number.NEGATIVE_INFINITY) {
             // nothing found, cache that info too.
             this.partLookup[lookupKey] = undefined;
             return;

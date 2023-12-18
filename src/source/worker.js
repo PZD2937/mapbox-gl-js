@@ -11,7 +11,6 @@ import RasterTileWorkerSource from "./raster_tile_worker_source.js";
 import assert from 'assert';
 import {plugin as globalRTLTextPlugin} from './rtl_text_plugin.js';
 import {enforceCacheSizeLimit} from '../util/tile_request_cache.js';
-import {extend} from '../util/util.js';
 import {PerformanceUtils} from '../util/performance.js';
 import {Event} from '../util/evented.js';
 import {getProjection} from '../geo/projection/index.js';
@@ -42,14 +41,13 @@ export default class Worker {
     layerIndexes: {[mapId: string]: {[scope: string]: StyleLayerIndex }};
     availableImages: {[mapId: string]: {[scope: string]: Array<string>}};
     workerSourceTypes: {[_: string]: Class<WorkerSource> };
-    workerSources: {[_: string]: {[_: string]: {[_: string]: WorkerSource } } };
+    workerSources: {[mapId: string]: {[scope: string]: {[sourceType: string]: {[sourceId: string]: WorkerSource}}}};
     demWorkerSources: {[mapId: string]: {[scope: string]: {[sourceId: string]: RasterDEMTileWorkerSource }}};
     projections: {[_: string]: Projection };
     defaultProjection: Projection;
     isSpriteLoaded: {[mapId: string]: {[scope: string]: boolean}};
     referrer: ?string;
-    loadersUrl: ?string
-    terrain: ?boolean;
+    dracoUrl: ?string
     brightness: ?number;
 
     constructor(self: WorkerGlobalScopeInterface) {
@@ -71,7 +69,7 @@ export default class Worker {
             raster: RasterTileWorkerSource
         };
 
-        // [mapId][sourceType][sourceName] => worker source instance
+        // [mapId][scope][sourceType][sourceName] => worker source instance
         this.workerSources = {};
         this.demWorkerSources = {};
 
@@ -110,41 +108,46 @@ export default class Worker {
         this.referrer = referrer;
     }
 
-    spriteLoaded(mapId: string, params: {scope: string, isLoaded: boolean}) {
+    spriteLoaded(mapId: string, {scope, isLoaded}: {scope: string, isLoaded: boolean}) {
         if (!this.isSpriteLoaded[mapId])
             this.isSpriteLoaded[mapId] = {};
 
-        this.isSpriteLoaded[mapId][params.scope] = params.isLoaded;
-        for (const workerSource in this.workerSources[mapId]) {
-            const ws = this.workerSources[mapId][workerSource];
+        this.isSpriteLoaded[mapId][scope] = isLoaded;
+
+        if (!this.workerSources[mapId] || !this.workerSources[mapId][scope]) {
+            return;
+        }
+
+        for (const workerSource in this.workerSources[mapId][scope]) {
+            const ws = this.workerSources[mapId][scope][workerSource];
             for (const source in ws) {
                 if (ws[source] instanceof VectorTileWorkerSource) {
-                    ws[source].isSpriteLoaded = params.isLoaded;
+                    ws[source].isSpriteLoaded = isLoaded;
                     ws[source].fire(new Event('isSpriteLoaded'));
                 }
             }
         }
     }
 
-    setImages(mapId: string, params: {scope: string, images: Array<string>}, callback: WorkerTileCallback) {
-        const {scope, images} = params;
-
+    setImages(mapId: string, {scope, images}: {scope: string, images: Array<string>}, callback: WorkerTileCallback) {
         if (!this.availableImages[mapId]) {
             this.availableImages[mapId] = {};
         }
 
         this.availableImages[mapId][scope] = images;
-        for (const workerSource in this.workerSources[mapId]) {
-            const ws = this.workerSources[mapId][workerSource];
+
+        if (!this.workerSources[mapId] || !this.workerSources[mapId][scope]) {
+            callback();
+            return;
+        }
+
+        for (const workerSource in this.workerSources[mapId][scope]) {
+            const ws = this.workerSources[mapId][scope][workerSource];
             for (const source in ws) {
                 ws[source].availableImages = images;
             }
         }
-        callback();
-    }
 
-    enableTerrain(mapId: string, enable: boolean, callback: WorkerTileCallback) {
-        this.terrain = enable;
         callback();
     }
 
@@ -169,24 +172,18 @@ export default class Worker {
 
     loadTile(mapId: string, params: WorkerTileParameters & {type: string}, callback: WorkerTileCallback) {
         assert(params.type);
-        // $FlowFixMe[method-unbinding]
-        const p = this.enableTerrain ? extend({enableTerrain: this.terrain}, params) : params;
-        p.projection = this.projections[mapId] || this.defaultProjection;
-        this.getWorkerSource(mapId, params.type, params.source, params.scope).loadTile(p, callback);
+        params.projection = this.projections[mapId] || this.defaultProjection;
+        this.getWorkerSource(mapId, params.type, params.source, params.scope).loadTile(params, callback);
     }
 
     loadDEMTile(mapId: string, params: WorkerDEMTileParameters, callback: WorkerDEMTileCallback) {
-        // $FlowFixMe[method-unbinding]
-        const p = this.enableTerrain ? extend({buildQuadTree: this.terrain}, params) : params;
-        this.getDEMWorkerSource(mapId, params.source, params.scope).loadTile(p, callback);
+        this.getDEMWorkerSource(mapId, params.source, params.scope).loadTile(params, callback);
     }
 
     reloadTile(mapId: string, params: WorkerTileParameters & {type: string}, callback: WorkerTileCallback) {
         assert(params.type);
-        // $FlowFixMe[method-unbinding]
-        const p = this.enableTerrain ? extend({enableTerrain: this.terrain}, params) : params;
-        p.projection = this.projections[mapId] || this.defaultProjection;
-        this.getWorkerSource(mapId, params.type, params.source, params.scope).reloadTile(p, callback);
+        params.projection = this.projections[mapId] || this.defaultProjection;
+        this.getWorkerSource(mapId, params.type, params.source, params.scope).reloadTile(params, callback);
     }
 
     abortTile(mapId: string, params: TileParameters & {type: string}, callback: WorkerTileCallback) {
@@ -199,18 +196,20 @@ export default class Worker {
         this.getWorkerSource(mapId, params.type, params.source, params.scope).removeTile(params, callback);
     }
 
-    removeSource(mapId: string, params: {source: string} & {type: string}, callback: WorkerTileCallback) {
+    removeSource(mapId: string, params: {source: string, scope: string, type: string}, callback: WorkerTileCallback) {
         assert(params.type);
+        assert(params.scope);
         assert(params.source);
 
         if (!this.workerSources[mapId] ||
-            !this.workerSources[mapId][params.type] ||
-            !this.workerSources[mapId][params.type][params.source]) {
+            !this.workerSources[mapId][params.scope] ||
+            !this.workerSources[mapId][params.scope][params.type] ||
+            !this.workerSources[mapId][params.scope][params.type][params.source]) {
             return;
         }
 
-        const worker = this.workerSources[mapId][params.type][params.source];
-        delete this.workerSources[mapId][params.type][params.source];
+        const worker = this.workerSources[mapId][params.scope][params.type][params.source];
+        delete this.workerSources[mapId][params.scope][params.type][params.source];
 
         if (worker.removeSource !== undefined) {
             worker.removeSource(params, callback);
@@ -253,8 +252,8 @@ export default class Worker {
         }
     }
 
-    setLoadersUrl(map: string, loadersUrl: string) {
-        this.loadersUrl = loadersUrl;
+    setDracoUrl(map: string, dracoUrl: string) {
+        this.dracoUrl = dracoUrl;
     }
 
     getAvailableImages(mapId: string, scope: string): Array<string> {
@@ -280,6 +279,7 @@ export default class Worker {
 
         if (!layerIndex) {
             layerIndex = this.layerIndexes[mapId][scope] = new StyleLayerIndex();
+            layerIndex.scope = scope;
         }
 
         return layerIndex;
@@ -288,12 +288,14 @@ export default class Worker {
     getWorkerSource(mapId: string, type: string, source: string, scope: string): WorkerSource {
         if (!this.workerSources[mapId])
             this.workerSources[mapId] = {};
-        if (!this.workerSources[mapId][type])
-            this.workerSources[mapId][type] = {};
+        if (!this.workerSources[mapId][scope])
+            this.workerSources[mapId][scope] = {};
+        if (!this.workerSources[mapId][scope][type])
+            this.workerSources[mapId][scope][type] = {};
         if (!this.isSpriteLoaded[mapId])
             this.isSpriteLoaded[mapId] = {};
 
-        if (!this.workerSources[mapId][type][source]) {
+        if (!this.workerSources[mapId][scope][type][source]) {
             // use a wrapped actor so that we can attach a target mapId param
             // to any messages invoked by the WorkerSource
             const actor = {
@@ -302,7 +304,7 @@ export default class Worker {
                 },
                 scheduler: this.actor.scheduler
             };
-            this.workerSources[mapId][type][source] = new (this.workerSourceTypes[type]: any)(
+            this.workerSources[mapId][scope][type][source] = new (this.workerSourceTypes[type]: any)(
                 (actor: any),
                 this.getLayerIndex(mapId, scope),
                 this.getAvailableImages(mapId, scope),
@@ -311,7 +313,7 @@ export default class Worker {
                 this.brightness);
         }
 
-        return this.workerSources[mapId][type][source];
+        return this.workerSources[mapId][scope][type][source];
     }
 
     getDEMWorkerSource(mapId: string, source: string, scope: string): RasterDEMTileWorkerSource {

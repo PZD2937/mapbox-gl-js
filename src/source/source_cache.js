@@ -774,9 +774,9 @@ class SourceCache extends Evented {
      */
     _addTile(tileID: OverscaledTileID): Tile {
         let tile: ?Tile = this._tiles[tileID.key];
-        const isExtraShadowCaster = this._shadowCasterTiles[tileID.key];
+        const isExtraShadowCaster = !!this._shadowCasterTiles[tileID.key];
         if (tile) {
-            if (tile.isExtraShadowCaster !== isExtraShadowCaster) {
+            if (tile.isExtraShadowCaster === true && !isExtraShadowCaster) {
                 // If the tile changed shadow visibility we need to relayout
                 this._reloadTile(tileID.key, 'reloading');
             }
@@ -958,6 +958,27 @@ class SourceCache extends Evented {
             coord.projMatrix = this.transform.calculateProjMatrix(coord.toUnwrapped());
         }
         return coords;
+    }
+
+    sortCoordinatesByDistance(coords: Array<OverscaledTileID>): Array<OverscaledTileID> {
+        const sortedCoords = coords.slice();
+
+        const camPos = this.transform._camera.position;
+        const camFwd = this.transform._camera.forward();
+
+        const precomputedDistances: {[number]: number} = {};
+
+        // Precompute distances of tile center points to the camera plane
+        for (const id of sortedCoords) {
+            const invTiles = 1.0 / (1 << id.canonical.z);
+            const centerX = (id.canonical.x + 0.5) * invTiles + id.wrap;
+            const centerY = (id.canonical.y + 0.5) * invTiles;
+
+            precomputedDistances[id.key] = (centerX - camPos[0]) * camFwd[0] + (centerY - camPos[1]) * camFwd[1] - camPos[2] * camFwd[2];
+        }
+
+        sortedCoords.sort((a, b) => { return precomputedDistances[a.key] - precomputedDistances[b.key]; });
+        return sortedCoords;
     }
 
     hasTransition(): boolean {

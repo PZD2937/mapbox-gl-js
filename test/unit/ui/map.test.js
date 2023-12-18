@@ -16,6 +16,7 @@ import Color from '../../../src/style-spec/util/color.js';
 import {MAX_MERCATOR_LATITUDE} from '../../../src/geo/mercator_coordinate.js';
 import {performanceEvent_} from '../../../src/util/mapbox.js';
 import {makeFQID} from '../../../src/util/fqid.js';
+import styleSpec from '../../../src/style-spec/reference/latest.js';
 
 function createStyleSource() {
     return {
@@ -90,7 +91,7 @@ test('Map', (t) => {
         new Map({container: window.document.createElement('div'), testMode: false});
 
         t.ok(stub.calledOnce);
-        t.equal(stub.getCall(0).args[0], 'mapbox://styles/mapbox/standard-beta');
+        t.equal(stub.getCall(0).args[0], 'mapbox://styles/mapbox/standard');
 
         t.end();
     });
@@ -1011,9 +1012,9 @@ test('Map', (t) => {
             map.on('load', () => {
                 const fakeTileId = new OverscaledTileID(0, 0, 0, 0, 0);
                 map.addSource('geojson', createStyleSource());
-                map.style._getSourceCache('geojson')._tiles[fakeTileId.key] = new Tile(fakeTileId);
+                map.style.getOwnSourceCache('geojson')._tiles[fakeTileId.key] = new Tile(fakeTileId);
                 t.equal(map.areTilesLoaded(), false, 'returns false if tiles are loading');
-                map.style._getSourceCache('geojson')._tiles[fakeTileId.key].state = 'loaded';
+                map.style.getOwnSourceCache('geojson')._tiles[fakeTileId.key].state = 'loaded';
                 t.equal(map.areTilesLoaded(), true, 'returns true if tiles are loaded');
                 t.end();
             });
@@ -1034,8 +1035,8 @@ test('Map', (t) => {
                 map.addSource('geojson', createStyleSource());
                 const source = map.getSource('geojson');
                 const fakeTileId = new OverscaledTileID(0, 0, 0, 0, 0);
-                map.style._getSourceCache('geojson')._tiles[fakeTileId.key] = new Tile(fakeTileId);
-                map.style._getSourceCache('geojson')._tiles[fakeTileId.key].state = tileState;
+                map.style.getOwnSourceCache('geojson')._tiles[fakeTileId.key] = new Tile(fakeTileId);
+                map.style.getOwnSourceCache('geojson')._tiles[fakeTileId.key].state = tileState;
                 callback(map, source);
             });
         }
@@ -1137,9 +1138,16 @@ test('Map', (t) => {
                     "color": "blue"
                 };
                 map.setFog(fog);
-                t.deepEqual(map.getStyle(), extend(createStyle(), {
-                    fog
-                }));
+
+                const fogDefaults = Object
+                    .entries(styleSpec.fog)
+                    .reduce((acc, [key, value]) => {
+                        acc[key] = value.default;
+                        return acc;
+                    }, {});
+
+                const fogWithDefaults = extend({}, fogDefaults, fog);
+                t.deepEqual(map.getStyle(), extend(createStyle(), {fog: fogWithDefaults}));
                 t.ok(map.getFog());
                 t.end();
             });
@@ -2515,6 +2523,25 @@ test('Map', (t) => {
         t.end();
     });
 
+    t.test('#hasImage doesn\'t throw after map is removed', (t) => {
+        const map = createMap(t);
+        map.remove();
+        t.notOk(map.hasImage('image'));
+        t.end();
+    });
+
+    t.test('#updateImage doesn\'t throw after map is removed', (t) => {
+        const map = createMap(t);
+        map.remove();
+
+        const stub = t.stub(console, 'error');
+        map.updateImage('image', {});
+        t.ok(stub.calledOnce);
+        t.match(stub.getCall(0).args[0].message, 'The map has no image with that id');
+
+        t.end();
+    });
+
     t.test('#addControl', (t) => {
         const map = createMap(t);
         const control = {
@@ -2770,7 +2797,7 @@ test('Map', (t) => {
     });
 
     t.test('#queryRenderedFeatures', (t) => {
-
+        const defaultParams = {scope: '', availableImages: [], serializedLayers: {}};
         t.test('if no arguments provided', (t) => {
             createMap(t, {}, (err, map) => {
                 t.error(err);
@@ -2780,7 +2807,7 @@ test('Map', (t) => {
 
                 const args = map.style.queryRenderedFeatures.getCall(0).args;
                 t.ok(args[0]);
-                t.deepEqual(args[1], {availableImages: []});
+                t.deepEqual(args[1], defaultParams);
                 t.deepEqual(output, []);
 
                 t.end();
@@ -2796,7 +2823,7 @@ test('Map', (t) => {
 
                 const args = map.style.queryRenderedFeatures.getCall(0).args;
                 t.deepEqual(args[0], {x: 100, y: 100}); // query geometry
-                t.deepEqual(args[1], {availableImages: []}); // params
+                t.deepEqual(args[1], defaultParams); // params
                 t.deepEqual(args[2], map.transform); // transform
                 t.deepEqual(output, []);
 
@@ -2813,7 +2840,7 @@ test('Map', (t) => {
 
                 const args = map.style.queryRenderedFeatures.getCall(0).args;
                 t.ok(args[0]);
-                t.deepEqual(args[1], {availableImages: [], filter: ['all']});
+                t.deepEqual(args[1], {...defaultParams, filter: ['all']});
                 t.deepEqual(output, []);
 
                 t.end();
@@ -2829,7 +2856,7 @@ test('Map', (t) => {
 
                 const args = map.style.queryRenderedFeatures.getCall(0).args;
                 t.deepEqual(args[0], {x: 100, y: 100});
-                t.deepEqual(args[1], {availableImages: [], filter: ['all']});
+                t.deepEqual(args[1], {...defaultParams, filter: ['all']});
                 t.deepEqual(args[2], map.transform);
                 t.deepEqual(output, []);
 
@@ -3014,7 +3041,7 @@ test('Map', (t) => {
 
             map.on('style.load', () => {
                 map.on('error', ({error}) => {
-                    t.match(error.message, /does not exist in the map\'s style and cannot be styled/);
+                    t.match(error.message, /does not exist in the map\'s style/);
                     t.end();
                 });
                 map.setLayoutProperty('non-existant', 'text-transform', 'lowercase');
@@ -3274,7 +3301,7 @@ test('Map', (t) => {
 
             map.on('style.load', () => {
                 map.on('error', ({error}) => {
-                    t.match(error.message, /does not exist in the map\'s style and cannot be styled/);
+                    t.match(error.message, /does not exist in the map\'s style/);
                     t.end();
                 });
                 map.setPaintProperty('non-existant', 'background-color', 'red');
@@ -4092,7 +4119,7 @@ test('Map', (t) => {
         const version = map.version;
         t.test('returns version string', (t) => {
             t.ok(version);
-            t.match(version, /^3\.[0-9]+\.[0-9]+(-dev|-beta\.[1-9])?$/);
+            t.match(version, /^3\.[0-9]+\.[0-9]+(-(dev|beta|rc)\.[1-9])?$/);
             t.end();
         });
         t.test('cannot be set', (t) => {

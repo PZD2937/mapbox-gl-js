@@ -11,7 +11,6 @@ import {
 } from './../geo/projection/globe_util.js';
 import {atmosphereUniformValues} from '../terrain/globe_raster_program.js';
 import type Painter from './painter.js';
-import type {DynamicDefinesType} from '../render/program/program_uniforms.js';
 import {AtmosphereBuffer} from '../render/atmosphere_buffer.js';
 import {degToRad, mapValue, clamp} from '../util/util.js';
 import {mat3, vec3, mat4, quat} from 'gl-matrix';
@@ -24,6 +23,7 @@ import {TriangleIndexArray, StarsVertexArray} from '../data/array_types.js';
 import {starsLayout} from './stars_attributes.js';
 import {starsUniformValues} from '../terrain/stars_program.js';
 import {mulberry32} from '../style-spec/util/random.js';
+import type {DynamicDefinesType} from './program/program_uniforms.js';
 
 function generateUniformDistributedPointsOnSphere(pointsCount: number): Array<Vec3> {
     const sRand = mulberry32(30);
@@ -61,7 +61,7 @@ class Atmosphere {
             // Part of internal stlye spec, not exposed to gl-js
             const starsCount = 16000;
             const sizeRange = 100.0;
-            const intensityRange = 100.0;
+            const intensityRange = 200.0;
 
             const stars = generateUniformDistributedPointsOnSphere(starsCount);
             const sRand = mulberry32(300);
@@ -74,8 +74,8 @@ class Atmosphere {
 
                 const star = vec3.scale([], stars[i], 200.0);
 
-                const size = 1.0 + 0.01 * sizeRange * (-0.5 + 1.0 * sRand());
-                const intensity = 1.0 + 0.01 * intensityRange * (-0.5 + 1.0 * sRand());
+                const size = Math.max(0, 1.0 + 0.01 * sizeRange * (-0.5 + 1.0 * sRand()));
+                const intensity = Math.max(0, 1.0 + 0.01 * intensityRange * (-0.5 + 1.0 * sRand()));
 
                 vertices.emplaceBack(star[0], star[1], star[2], -1, -1, size, intensity);
                 vertices.emplaceBack(star[0], star[1], star[2], 1, -1, size, intensity);
@@ -140,7 +140,7 @@ class Atmosphere {
             if (alphaPass) {
                 defines.push("ALPHA_PASS");
             }
-            const program = painter.useProgram('globeAtmosphere', null, ((defines: any): DynamicDefinesType[]));
+            const program = painter.getOrCreateProgram('globeAtmosphere', {defines: ((defines: any): DynamicDefinesType[])});
 
             const uniforms = atmosphereUniformValues(
                 tr.frustumCorners.TL,
@@ -186,10 +186,10 @@ class Atmosphere {
         const gl = context.gl;
         const tr = painter.transform;
 
-        const program = painter.useProgram('stars');
+        const program = painter.getOrCreateProgram('stars');
 
         // Exposed in internal style spec for mobile
-        const sizeMultiplier = 0.2;
+        const sizeMultiplier = 0.15;
 
         const orientation = quat.identity([]);
 

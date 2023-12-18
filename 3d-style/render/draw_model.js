@@ -1,11 +1,12 @@
 // @flow
 
 import type Painter from '../../src/render/painter.js';
+import type {CreateProgramParams} from '../../src/render/painter.js';
 import type SourceCache from '../../src/source/source_cache.js';
 import type ModelStyleLayer from '../style/style_layer/model_style_layer.js';
 
 import {modelUniformValues, modelDepthUniformValues} from './program/model_program.js';
-import type {Mesh, Node} from '../data/model.js';
+import type {Mesh, Node, ModelTexture} from '../data/model.js';
 import {ModelTraits, DefaultModelScale} from '../data/model.js';
 import type {DynamicDefinesType} from '../../src/render/program/program_uniforms.js';
 
@@ -17,10 +18,10 @@ import DepthMode from '../../src/gl/depth_mode.js';
 import CullFaceMode from '../../src/gl/cull_face_mode.js';
 import {mat4, vec3} from 'gl-matrix';
 import type {Mat4} from 'gl-matrix';
-import {getMetersPerPixelAtLatitude} from '../../src/geo/mercator_coordinate.js';
+import {getMetersPerPixelAtLatitude, mercatorZfromAltitude} from '../../src/geo/mercator_coordinate.js';
 import TextureSlots from './texture_slots.js';
 import {convertModelMatrixForGlobe} from '../util/model_util.js';
-import {warnOnce} from '../../src/util/util.js';
+import {clamp, warnOnce} from '../../src/util/util.js';
 import ModelBucket from '../data/bucket/model_bucket.js';
 import type VertexBuffer from '../../src/gl/vertex_buffer.js';
 import Tiled3dModelBucket from '../data/bucket/tiled_3d_model_bucket.js';
@@ -29,6 +30,8 @@ import {DEMSampler} from '../../src/terrain/elevation.js';
 import {OverscaledTileID} from '../../src/source/tile_id.js';
 import {Aabb} from '../../src/util/primitives.js';
 import {getCutoffParams} from '../../src/render/cutoff.js';
+import {FOG_OPACITY_THRESHOLD} from '../../src/style/fog_helpers.js';
+import {ZoomDependentExpression} from '../../src/style-spec/expression/index.js';
 
 export default drawModels;
 
@@ -47,6 +50,7 @@ type SortedMesh = {
 
 type RenderData = {
     shadowUniformsInitialized: boolean;
+    useSingleShadowCascade: boolean;
     tileMatrix: Float64Array;
     shadowTileMatrix: Float32Array;
     aabb: Aabb;
@@ -66,54 +70,28 @@ function fogMatrixForModel(modelMatrix: Mat4, transform: Transform): Mat4 {
 // Collect defines and dynamic buffers (colors, normals, uv) and bind textures. Used for single mesh and instanced draw.
 function setupMeshDraw(definesValues: Array<string>, dynamicBuffers: Array<?VertexBuffer>, mesh: Mesh, painter: Painter) {
     const material = mesh.material;
-    const pbr = material.pbrMetallicRoughness;
     const context = painter.context;
 
+    const {baseColorTexture, metallicRoughnessTexture} = material.pbrMetallicRoughness;
+    const {normalTexture, occlusionTexture, emissionTexture} = material;
+
+    function setupTexture(texture: ?ModelTexture, define: string, slot: number) {
+        if (!texture) return;
+
+        definesValues.push(define);
+        context.activeTexture.set(context.gl.TEXTURE0 + slot);
+        if (texture.gfxTexture) {
+            const {minFilter, magFilter, wrapS, wrapT} = texture.sampler;
+            texture.gfxTexture.bindExtraParam(minFilter, magFilter, wrapS, wrapT);
+        }
+    }
+
     // Textures
-    if (pbr.baseColorTexture) {
-        definesValues.push('HAS_TEXTURE_u_baseColorTexture');
-        context.activeTexture.set(context.gl.TEXTURE0 + TextureSlots.BaseColor);
-        const sampler = pbr.baseColorTexture.sampler;
-        if (pbr.baseColorTexture.gfxTexture) {
-            pbr.baseColorTexture.gfxTexture.bindExtraParam(sampler.minFilter, sampler.magFilter, sampler.wrapS, sampler.wrapT);
-        }
-    }
-
-    if (pbr.metallicRoughnessTexture) {
-        definesValues.push('HAS_TEXTURE_u_metallicRoughnessTexture');
-        context.activeTexture.set(context.gl.TEXTURE0 + TextureSlots.MetallicRoughness);
-        const sampler = pbr.metallicRoughnessTexture.sampler;
-        if (pbr.metallicRoughnessTexture.gfxTexture) {
-            pbr.metallicRoughnessTexture.gfxTexture.bindExtraParam(sampler.minFilter, sampler.magFilter, sampler.wrapS, sampler.wrapT);
-        }
-    }
-
-    if (material.normalTexture) {
-        definesValues.push('HAS_TEXTURE_u_normalTexture');
-        context.activeTexture.set(context.gl.TEXTURE0 + TextureSlots.Normal);
-        const sampler = material.normalTexture.sampler;
-        if (material.normalTexture.gfxTexture) {
-            material.normalTexture.gfxTexture.bindExtraParam(sampler.minFilter, sampler.magFilter, sampler.wrapS, sampler.wrapT);
-        }
-    }
-
-    if (material.occlusionTexture) {
-        definesValues.push('HAS_TEXTURE_u_occlusionTexture');
-        context.activeTexture.set(context.gl.TEXTURE0 + TextureSlots.Occlusion);
-        const sampler = material.occlusionTexture.sampler;
-        if (material.occlusionTexture.gfxTexture) {
-            material.occlusionTexture.gfxTexture.bindExtraParam(sampler.minFilter, sampler.magFilter, sampler.wrapS, sampler.wrapT);
-        }
-    }
-
-    if (material.emissionTexture) {
-        definesValues.push('HAS_TEXTURE_u_emissionTexture');
-        context.activeTexture.set(context.gl.TEXTURE0 + TextureSlots.Emission);
-        const sampler = material.emissionTexture.sampler;
-        if (material.emissionTexture.gfxTexture) {
-            material.emissionTexture.gfxTexture.bindExtraParam(sampler.minFilter, sampler.magFilter, sampler.wrapS, sampler.wrapT);
-        }
-    }
+    setupTexture(baseColorTexture, 'HAS_TEXTURE_u_baseColorTexture', TextureSlots.BaseColor);
+    setupTexture(metallicRoughnessTexture, 'HAS_TEXTURE_u_metallicRoughnessTexture', TextureSlots.MetallicRoughness);
+    setupTexture(normalTexture, 'HAS_TEXTURE_u_normalTexture', TextureSlots.Normal);
+    setupTexture(occlusionTexture, 'HAS_TEXTURE_u_occlusionTexture', TextureSlots.Occlusion);
+    setupTexture(emissionTexture, 'HAS_TEXTURE_u_emissionTexture', TextureSlots.Emission);
 
     if (mesh.texcoordBuffer) {
         definesValues.push('HAS_ATTRIBUTE_a_uv_2f');
@@ -152,10 +130,12 @@ function drawMesh(sortedMesh: SortedMesh, painter: Painter, layer: ModelStyleLay
     assert(opacity > 0);
     const context = painter.context;
     const depthMode = new DepthMode(painter.context.gl.LEQUAL, DepthMode.ReadWrite, painter.depthRangeFor3D);
+    const tr = painter.transform;
 
     const mesh = sortedMesh.mesh;
     const material = mesh.material;
     const pbr = material.pbrMetallicRoughness;
+    const fog = painter.style.fog;
 
     let lightingMatrix;
     if (painter.transform.projection.zAxisUnit === "pixels") {
@@ -180,26 +160,36 @@ function drawMesh(sortedMesh: SortedMesh, painter: Painter, layer: ModelStyleLay
         material,
         layer);
 
-    const definesValues = [];
+    const programOptions: CreateProgramParams = {
+        defines: []
+    };
+
     // Extra buffers (colors, normals, texCoords)
     const dynamicBuffers = [];
 
-    setupMeshDraw(definesValues, dynamicBuffers, mesh, painter);
+    setupMeshDraw(((programOptions.defines: any): Array<string>), dynamicBuffers, mesh, painter);
     const shadowRenderer = painter.shadowRenderer;
     if (shadowRenderer) { shadowRenderer.useNormalOffset = false; }
 
     let fogMatrixArray = null;
-    if (painter.style.fog) {
+    if (fog) {
         const fogMatrix = fogMatrixForModel(sortedMesh.nodeModelMatrix, painter.transform);
-        definesValues.push('FOG', 'FOG_DITHERING');
         fogMatrixArray = new Float32Array(fogMatrix);
+
+        if (tr.projection.name !== 'globe') {
+            const min = mesh.aabb.min;
+            const max = mesh.aabb.max;
+            const [minOpacity, maxOpacity] = fog.getOpacityForBounds(fogMatrix, min[0], min[1], max[0], max[1]);
+            programOptions.overrideFog = minOpacity >= FOG_OPACITY_THRESHOLD || maxOpacity >= FOG_OPACITY_THRESHOLD;
+        }
     }
 
     const cutoffParams = getCutoffParams(painter, layer.paint.get('model-cutoff-fade-range'));
     if (cutoffParams.shouldRenderCutoff) {
-        definesValues.push('RENDER_CUTOFF');
+        (programOptions.defines: any).push('RENDER_CUTOFF');
     }
-    const program = painter.useProgram('model', null, ((definesValues: any): DynamicDefinesType[]));
+
+    const program = painter.getOrCreateProgram('model', programOptions);
 
     painter.uploadCommonUniforms(context, program, null, fogMatrixArray, cutoffParams);
 
@@ -278,7 +268,7 @@ function drawShadowCaster(mesh: Mesh, matrix: Mat4, painter: Painter, layer: Mod
     const shadowMatrix = shadowRenderer.calculateShadowPassMatrixFromMatrix(matrix);
     const uniformValues = modelDepthUniformValues(shadowMatrix);
     const definesValues = ['DEPTH_TEXTURE'];
-    const program = painter.useProgram('modelDepth', null, ((definesValues: any): DynamicDefinesType[]));
+    const program = painter.getOrCreateProgram('modelDepth', {defines: ((definesValues: any): DynamicDefinesType[])});
     const context = painter.context;
     program.draw(painter, context.gl.TRIANGLES, depthMode, StencilMode.disabled, colorMode, CullFaceMode.backCCW,
             uniformValues, layer.id, mesh.vertexBuffer, mesh.indexBuffer, mesh.segments, layer.paint, painter.transform.zoom,
@@ -295,8 +285,20 @@ function drawModels(painter: Painter, sourceCache: SourceCache, layer: ModelStyl
         return;
     }
     const castShadows = layer.paint.get('model-cast-shadows');
-    if (painter.renderPass === 'shadow' && !castShadows) {
-        return;
+    if (painter.renderPass === 'shadow') {
+        if (!castShadows) {
+            return;
+        }
+        if (painter.terrain) {
+            const noShadowCutoff = 0.65;
+            if (opacity < noShadowCutoff) {
+                const expression = layer._transitionablePaint._values['model-opacity'].value.expression;
+                if (expression instanceof ZoomDependentExpression) {
+                    // avoid rendering shadows during fade in / fade out on terrain
+                    return;
+                }
+            }
+        }
     }
     const shadowRenderer = painter.shadowRenderer;
     const receiveShadows = layer.paint.get('model-receive-shadows');
@@ -320,12 +322,14 @@ function drawModels(painter: Painter, sourceCache: SourceCache, layer: ModelStyl
         return;
     }
 
-    if (!modelSource.loaded()) return;
     if (modelSource.type === 'vector' || modelSource.type === 'geojson') {
         drawInstancedModels(painter, sourceCache, layer, coords);
         cleanup();
         return;
     }
+
+    if (!modelSource.loaded()) return;
+
     if (modelSource.type === 'batched-model') {
         drawBatchedModels(painter, sourceCache, layer, coords);
         cleanup();
@@ -403,7 +407,7 @@ function drawModels(painter: Painter, sourceCache: SourceCache, layer: ModelStyl
 }
 
 // If terrain changes, update elevations (baked in translation).
-function updateModelBucketsElevation(painter: Painter, bucket: ModelBucket, bucketTileID: OverscaledTileID) {
+function updateModelBucketsElevation(painter: Painter, bucket: ModelBucket, bucketTileID: OverscaledTileID): boolean {
     let exaggeration = painter.terrain ? painter.terrain.exaggeration() : 0;
     let dem: ?DEMSampler;
     if (painter.terrain && exaggeration > 0) {
@@ -422,8 +426,8 @@ function updateModelBucketsElevation(painter: Painter, bucket: ModelBucket, buck
     }
 
     if (exaggeration === bucket.validForExaggeration &&
-        (exaggeration === 0 || (dem && dem._demTile && dem._demTile.tileID === bucket.validForDEMTile))) {
-        return;
+        (exaggeration === 0 || (dem && dem._demTile && dem._demTile.tileID === bucket.validForDEMTile.id && dem._dem._timestamp === bucket.validForDEMTile.timestamp))) {
+        return false;
     }
 
     let elevationMin: ?number;
@@ -446,18 +450,60 @@ function updateModelBucketsElevation(painter: Painter, bucket: ModelBucket, buck
     bucket.terrainElevationMax = elevationMax ? elevationMax : 0;
 
     bucket.validForExaggeration = exaggeration;
-    bucket.validForDEMTile = dem && dem._demTile ? dem._demTile.tileID : undefined;
-    bucket.uploaded = false;
-    bucket.upload(painter.context);
+    bucket.validForDEMTile = dem && dem._demTile ? {id: dem._demTile.tileID, timestamp: dem._dem._timestamp} : {id: undefined, timestamp: 0};
+
+    return true;
+}
+
+function updateModelBucketData(painter: Painter, bucket: ModelBucket, bucketTileID: OverscaledTileID) {
+    const bucketContentsUpdatedByZoom = bucket.updateZoomBasedPaintProperties();
+    const bucketContentsUpdatedByElevation = updateModelBucketsElevation(painter, bucket, bucketTileID);
+
+    if (bucketContentsUpdatedByZoom || bucketContentsUpdatedByElevation) {
+        bucket.uploaded = false;
+        bucket.upload(painter.context);
+    }
 }
 
 // preallocate structure used to reduce re-allocation during rendering and flow checks
 const renderData: RenderData = {
     shadowUniformsInitialized: false,
+    useSingleShadowCascade: false,
     tileMatrix: new Float64Array(16),
     shadowTileMatrix: new Float32Array(16),
     aabb: new Aabb([0, 0, 0], [EXTENT, EXTENT, 0])
 };
+
+function calculateTileZoom(id: OverscaledTileID, tr: Transform): number {
+    const tiles = 1 << id.canonical.z;
+    const cameraPos = (tr.getFreeCameraOptions().position: any);
+    const elevation = tr.elevation;
+
+    // Compute tile zoom from the distance between the camera and
+    // the closest point on either tile's bottom plane or on a plane
+    // elevated to center altitude, whichever is higher. Using center altitude
+    // allows us to compensate tall tiles that have high variance in
+    // instance placement on z-axis.
+    const minx = id.canonical.x / tiles;
+    const maxx = (id.canonical.x + 1) / tiles;
+    const miny = id.canonical.y / tiles;
+    const maxy = (id.canonical.y + 1) / tiles;
+    let height = tr._centerAltitude;
+
+    if (elevation) {
+        const minmax = elevation.getMinMaxForTile(id);
+
+        if (minmax && minmax.max > height) {
+            height = minmax.max;
+        }
+    }
+
+    const distx = clamp(cameraPos.x, minx, maxx) - cameraPos.x;
+    const disty = clamp(cameraPos.y, miny, maxy) - cameraPos.y;
+    const distz = mercatorZfromAltitude(height, tr.center.lat) - cameraPos.z;
+
+    return tr._zoomFromMercatorZ(Math.sqrt(distx * distx + disty * disty + distz * distz));
+}
 
 function drawInstancedModels(painter: Painter, source: SourceCache, layer: ModelStyleLayer, coords: Array<OverscaledTileID>) {
     const tr = painter.transform;
@@ -467,14 +513,9 @@ function drawInstancedModels(painter: Painter, source: SourceCache, layer: Model
     }
 
     const mercCameraPos = (tr.getFreeCameraOptions().position: any);
-    //  LOD computation done in 2D space (terrain not taken into account).
-    const mercCameraPosVec = [mercCameraPos.x, mercCameraPos.y, mercCameraPos.z - tr.pixelsPerMeter / tr.worldSize * tr._centerAltitude];
-    const forward = painter.transform._camera.forward();
-    const distanceXYZ = [0, 0, 0];
-    const tilePos = [0, 0, 0];
-
     if (!painter.modelManager) return;
     const modelManager = painter.modelManager;
+    const shadowRenderer = painter.shadowRenderer;
     if (!layer._unevaluatedLayout._values.hasOwnProperty('model-id')) return;
     const modelIdUnevaluatedProperty = layer._unevaluatedLayout._values['model-id'];
     const evaluationParameters = {...layer.layout.get("model-id").parameters};
@@ -483,27 +524,14 @@ function drawInstancedModels(painter: Painter, source: SourceCache, layer: Model
         const tile = source.getTile(coord);
         const bucket: ?ModelBucket = (tile.getBucket(layer): any);
         if (!bucket || bucket.projection.name !== tr.projection.name) continue;
-        let tileZoom = bucket.zoom;
-        // Distance from camera plane to point of a tile closest to camera to calculate effective zoom.
-        // To be more aggressive on zooms just above integer zooms, selected point it not the corner but
-        // a point between center and tile corner
-        tilePos[0] = coord.wrap + (coord.canonical.x + (painter.transform.bearing < 0 ? 0.75 : 0.25)) / (1 << coord.canonical.z);
-        tilePos[1] = (coord.canonical.y + (Math.abs(painter.transform.bearing) < 90 ? 0.75 : 0.25)) / (1 << coord.canonical.z);
-        vec3.sub(distanceXYZ, tilePos, mercCameraPosVec);
-        const dist = Math.max(0., vec3.dot(distanceXYZ, forward));
-        tileZoom = painter.transform._zoomFromMercatorZ(dist);
-        const largeTileCutoff = 400;
-        if (painter.transform.pitch > 30 && tileZoom < painter.transform.zoom && bucket.instanceCount > largeTileCutoff) {
-            tileZoom -= 0.5; // further reduce LOD for large tiles further above the center
-        }
+        const tileZoom = calculateTileZoom(coord, tr);
         evaluationParameters.zoom = tileZoom;
         const modelIdProperty = modelIdUnevaluatedProperty.possiblyEvaluate(evaluationParameters);
-
-        updateModelBucketsElevation(painter, bucket, coord);
+        updateModelBucketData(painter, bucket, coord);
 
         renderData.shadowUniformsInitialized = false;
-        if (painter.renderPass === 'shadow' && painter.shadowRenderer) {
-            const shadowRenderer = painter.shadowRenderer;
+        renderData.useSingleShadowCascade = !!shadowRenderer && shadowRenderer.getMaxCascadeForTile(coord.toUnwrapped()) === 0;
+        if (painter.renderPass === 'shadow' && shadowRenderer) {
             if (painter.currentShadowCascade === 1 && bucket.isInsideFirstShadowMapFrustum) continue;
 
             const tileMatrix = tr.calculatePosMatrix(coord.toUnwrapped(), tr.worldSize);
@@ -516,9 +544,12 @@ function drawInstancedModels(painter: Painter, source: SourceCache, layer: Model
         }
 
         // camera position in the tile coordinates
-        let cameraPos = vec3.scale([], mercCameraPosVec, (1 << coord.canonical.z));
-        cameraPos = [(cameraPos[0] - coord.canonical.x - coord.wrap * (1 << coord.canonical.z)) * EXTENT,
-            (cameraPos[1] - coord.canonical.y) * EXTENT, cameraPos[2] * EXTENT];
+        const tiles = 1 << coord.canonical.z;
+        const cameraPos = [
+            ((mercCameraPos.x - coord.wrap) * tiles - coord.canonical.x) * EXTENT,
+            (mercCameraPos.y * tiles - coord.canonical.y) * EXTENT,
+            mercCameraPos.z * tiles * EXTENT
+        ];
 
         for (let modelId in bucket.instancesPerModel) {
             // From effective tile zoom (distance to camera) and calculate model to use.
@@ -527,7 +558,7 @@ function drawInstancedModels(painter: Painter, source: SourceCache, layer: Model
                 modelId = modelIdProperty.evaluate(modelInstances.features[0].feature, {});
             }
             const model = modelManager.getModel(modelId, layer.scope);
-            if (!model) continue;
+            if (!model || !model.uploaded) continue;
             for (const node of model.nodes) {
                 drawInstancedNode(painter, layer, node, modelInstances, cameraPos, coord, renderData);
             }
@@ -538,10 +569,13 @@ function drawInstancedModels(painter: Painter, source: SourceCache, layer: Model
 const minimumInstanceCount = 20;
 
 function drawInstancedNode(painter: Painter, layer: ModelStyleLayer, node: Node, modelInstances: any, cameraPos: [number, number, number], coord: OverscaledTileID, renderData: RenderData) {
+
+    // console.log(`LAYER: ${JSON.stringify(layer.paint.get('model-scale'))}`);
     const context = painter.context;
     const isShadowPass = painter.renderPass === 'shadow';
     const shadowRenderer = painter.shadowRenderer;
     const depthMode = isShadowPass && shadowRenderer ? shadowRenderer.getShadowPassDepthMode() : new DepthMode(context.gl.LEQUAL, DepthMode.ReadWrite, painter.depthRangeFor3D);
+    const affectedByFog = painter.isTileAffectedByFog(coord);
 
     if (node.meshes) {
         for (const mesh of node.meshes) {
@@ -560,12 +594,12 @@ function drawInstancedNode(painter: Painter, layer: ModelStyleLayer, node: Node,
                 definesValues.push('RENDER_CUTOFF');
             }
             if (isShadowPass && shadowRenderer) {
-                program = painter.useProgram('modelDepth', null, ((definesValues: any): DynamicDefinesType[]));
+                program = painter.getOrCreateProgram('modelDepth', {defines: ((definesValues: any): DynamicDefinesType[])});
                 uniformValues = modelDepthUniformValues(renderData.shadowTileMatrix, renderData.shadowTileMatrix, Float32Array.from(node.matrix));
                 colorMode = shadowRenderer.getShadowPassColorMode();
             } else {
                 setupMeshDraw(definesValues, dynamicBuffers, mesh, painter);
-                program = painter.useProgram('model', null, ((definesValues: any): DynamicDefinesType[]));
+                program = painter.getOrCreateProgram('model', {defines: ((definesValues: any): DynamicDefinesType[]), overrideFog: affectedByFog});
                 const material = mesh.material;
                 const pbr = material.pbrMetallicRoughness;
                 const layerOpacity = layer.paint.get('model-opacity');
@@ -639,7 +673,7 @@ function prepareBatched(painter: Painter, source: SourceCache, layer: ModelStyle
         bucket.evaluateScale(painter, layer);
         // Compute elevation
         if (painter.terrain && exaggeration > 0) {
-            bucket.elevationUpdate(painter.terrain, exaggeration, coord);
+            bucket.elevationUpdate(painter.terrain, exaggeration, coord, layer.source);
         }
         if (bucket.needsReEvaluation(painter, zoom, layer)) {
             bucket.evaluate(layer);
@@ -650,6 +684,8 @@ function prepareBatched(painter: Painter, source: SourceCache, layer: ModelStyle
 function drawBatchedModels(painter: Painter, source: SourceCache, layer: ModelStyleLayer, coords: Array<OverscaledTileID>) {
     const context = painter.context;
     const tr = painter.transform;
+    const fog = painter.style.fog;
+    const shadowRenderer = painter.shadowRenderer;
     if (tr.projection.name !== 'mercator') {
         warnOnce(`Drawing 3D landmark models for ${tr.projection.name} projection is not yet implemented`);
         return;
@@ -674,6 +710,11 @@ function drawBatchedModels(painter: Painter, source: SourceCache, layer: ModelSt
             const tile = source.getTile(coord);
             const bucket: ?Tiled3dModelBucket = (tile.getBucket(layer): any);
             if (!bucket || !bucket.uploaded) continue;
+
+            let singleCascade = false;
+            if (shadowRenderer) {
+                singleCascade = shadowRenderer.getMaxCascadeForTile(coord.toUnwrapped()) === 0;
+            }
             const tileMatrix = tr.calculatePosMatrix(coord.toUnwrapped(), tr.worldSize);
             const modelTraits = bucket.modelTraits;
 
@@ -725,12 +766,18 @@ function drawBatchedModels(painter: Painter, source: SourceCache, layer: ModelSt
                         continue;
                     }
 
-                    const definesValues = [];
+                    const programOptions: CreateProgramParams = {
+                        defines: []
+                    };
                     const dynamicBuffers = [];
-                    setupMeshDraw(definesValues, dynamicBuffers, mesh, painter);
+                    setupMeshDraw(((programOptions.defines: any): Array<string>), dynamicBuffers, mesh, painter);
 
                     if (!(modelTraits & ModelTraits.HasMapboxMeshFeatures)) {
-                        definesValues.push('DIFFUSE_SHADED');
+                        (programOptions.defines: any).push('DIFFUSE_SHADED');
+                    }
+
+                    if (singleCascade) {
+                        (programOptions.defines: any).push('SHADOWS_SINGLE_CASCADE');
                     }
 
                     const isShadowPass = painter.renderPass === 'shadow';
@@ -740,14 +787,19 @@ function drawBatchedModels(painter: Painter, source: SourceCache, layer: ModelSt
                     }
 
                     let fogMatrixArray = null;
-                    if (painter.style.fog) {
+                    if (fog) {
                         const fogMatrix = fogMatrixForModel(modelMatrix, painter.transform);
-                        definesValues.push('FOG', 'FOG_DITHERING');
                         fogMatrixArray = new Float32Array(fogMatrix);
-                    }
-                    const program = painter.useProgram('model', null, ((definesValues: any): DynamicDefinesType[]));
 
-                    const shadowRenderer = painter.shadowRenderer;
+                        if (tr.projection.name !== 'globe') {
+                            const min = mesh.aabb.min;
+                            const max = mesh.aabb.max;
+                            const [minOpacity, maxOpacity] = fog.getOpacityForBounds(fogMatrix, min[0], min[1], max[0], max[1]);
+                            programOptions.overrideFog = minOpacity >= FOG_OPACITY_THRESHOLD || maxOpacity >= FOG_OPACITY_THRESHOLD;
+                        }
+                    }
+
+                    const program = painter.getOrCreateProgram('model', programOptions);
 
                     if (!isShadowPass && shadowRenderer) {
                         shadowRenderer.useNormalOffset = !!mesh.normalBuffer;

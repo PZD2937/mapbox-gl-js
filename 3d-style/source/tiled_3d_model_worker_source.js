@@ -11,13 +11,14 @@ import type {
     TileParameters,
     WorkerTileResult
 } from '../../src/source/worker_source.js';
-import {convertB3dm} from './model_loader.js';
+import {process3DTile} from './model_loader.js';
 import {tileToMeter} from '../../src/geo/mercator_coordinate.js';
 import Tiled3dModelBucket from '../data/bucket/tiled_3d_model_bucket.js';
 import type {Bucket} from '../../src/data/bucket.js';
 import {CanonicalTileID, OverscaledTileID} from '../../src/source/tile_id.js';
 import type Projection from '../../src/geo/projection/projection.js';
 import {load3DTile} from '../util/loaders.js';
+import EvaluationParameters from '../../src/style/evaluation_parameters.js';
 
 class Tiled3dWorkerTile {
     tileID: OverscaledTileID;
@@ -29,7 +30,6 @@ class Tiled3dWorkerTile {
     tileSize: number;
     source: string;
     overscaling: number;
-    enableTerrain: boolean;
     projection: Projection;
     status: 'parsing' | 'done';
     reloadCallback: ?WorkerTileCallback;
@@ -45,12 +45,11 @@ class Tiled3dWorkerTile {
         this.tileSize = params.tileSize;
         this.source = params.source;
         this.overscaling = this.tileID.overscaleFactor();
-        this.enableTerrain = !!params.enableTerrain;
         this.projection = params.projection;
         this.brightness = brightness;
     }
 
-    async parse(data: ArrayBuffer, layerIndex: StyleLayerIndex, params: WorkerTileParameters, callback: WorkerTileCallback): Promise<void> {
+    parse(data: ArrayBuffer, layerIndex: StyleLayerIndex, params: WorkerTileParameters, callback: WorkerTileCallback): Promise<void> {
         this.status = 'parsing';
         const tileID = new OverscaledTileID(params.tileID.overscaledZ, params.tileID.wrap, params.tileID.canonical.z, params.tileID.canonical.x, params.tileID.canonical.y);
         const buckets: {[_: string]: Bucket} = {};
@@ -58,24 +57,31 @@ class Tiled3dWorkerTile {
         const featureIndex = new FeatureIndex(tileID, params.promoteId);
         featureIndex.bucketLayerIDs = [];
 
-        const b3dm = await load3DTile(data).catch((err) => callback(new Error(err.message)));
-        if (!b3dm) return callback(new Error('Could not parse tile'));
-
-        const nodes = convertB3dm(b3dm.gltf, 1.0 / tileToMeter(params.tileID.canonical));
-        const hasMapboxMeshFeatures = b3dm.gltf.json.extensionsUsed && b3dm.gltf.json.extensionsUsed.includes('MAPBOX_mesh_features');
-        for (const sourceLayerId in layerFamilies) {
-            for (const family of layerFamilies[sourceLayerId]) {
-                const layer = family[0];
-                const extensions = b3dm.gltf.json.extensionsUsed;
-                const bucket = new Tiled3dModelBucket(nodes, tileID, extensions && extensions.includes("MAPBOX_mesh_features"), this.brightness);
-                // Upload to GPU without waiting for evaluation if we are in diffuse path
-                if (!hasMapboxMeshFeatures) bucket.needsUpload = true;
-                buckets[layer.id] = bucket;
-            }
-        }
-        this.status = 'done';
-        // $FlowFixMe flow is complaining about missing properties and buckets not being of type Array
-        callback(null, {buckets, featureIndex});
+        return load3DTile(data)
+            .then(gltf => {
+                if (!gltf) return callback(new Error('Could not parse tile'));
+                const nodes = process3DTile(gltf, 1.0 / tileToMeter(params.tileID.canonical));
+                const hasMapboxMeshFeatures = gltf.json.extensionsUsed && gltf.json.extensionsUsed.includes('MAPBOX_mesh_features');
+                const parameters = new EvaluationParameters(this.zoom, {brightness: this.brightness});
+                for (const sourceLayerId in layerFamilies) {
+                    for (const family of layerFamilies[sourceLayerId]) {
+                        const layer = family[0];
+                        const extensions = gltf.json.extensionsUsed;
+                        layer.recalculate(parameters, []);
+                        const bucket = new Tiled3dModelBucket(nodes, tileID, extensions && extensions.includes("MAPBOX_mesh_features"), this.brightness);
+                        // Upload to GPU without waiting for evaluation if we are in diffuse path
+                        if (!hasMapboxMeshFeatures) bucket.needsUpload = true;
+                        buckets[layer.fqid] = bucket;
+                        // do the first evaluation in the worker to avoid stuttering
+                        // $FlowIgnore[incompatible-call] layer here is always a ModelStyleLayer
+                        bucket.evaluate(layer);
+                    }
+                }
+                this.status = 'done';
+                // $FlowFixMe flow is complaining about missing properties and buckets not being of type Array
+                callback(null, {buckets, featureIndex});
+            })
+            .catch((err) => callback(new Error(err.message)));
     }
 }
 
@@ -137,7 +143,6 @@ class Tiled3dModelWorkerSource implements WorkerSource {
         const uid = params.uid;
         if (loaded && loaded[uid]) {
             const workerTile = loaded[uid];
-            workerTile.enableTerrain = !!params.enableTerrain;
             workerTile.projection = params.projection;
             workerTile.brightness = params.brightness;
 

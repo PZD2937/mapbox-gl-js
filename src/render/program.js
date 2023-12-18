@@ -4,12 +4,8 @@ import {
     prelude,
     preludeFragPrecisionQualifiers,
     preludeVertPrecisionQualifiers,
-    preludeTerrain,
-    preludeFog,
-    preludeShadow,
     preludeCommonSource,
-    preludeLightingSource,
-    standardDerivativesExt
+    includeMap
 } from '../shaders/shaders.js';
 import assert from 'assert';
 import ProgramConfiguration from '../data/program_configuration.js';
@@ -48,7 +44,9 @@ type ShaderSource = {
     fragmentSource: string,
     vertexSource: string,
     staticAttributes: Array<string>,
-    usedDefines: Array<string>
+    usedDefines: Array<string>,
+    vertexIncludes: Array<string>,
+    fragmentIncludes: Array<string>
 };
 
 function getTokenizedAttributes(array: Array<string>): Array<string> {
@@ -124,24 +122,23 @@ class Program<Us: UniformBindings> {
         defines = defines.concat(fixedDefines.map((define) => `#define ${define}`));
         const version = '#version 300 es\n';
 
-        const fragmentSource = version + defines.concat(
-            version.length === 0 ? standardDerivativesExt.concat(preludeFragPrecisionQualifiers) : preludeFragPrecisionQualifiers,
+        let fragmentSource = version + defines.concat(
             preludeFragPrecisionQualifiers,
             preludeCommonSource,
-            preludeLightingSource,
-            prelude.fragmentSource,
-            preludeFog.fragmentSource,
-            preludeShadow.fragmentSource,
-            source.fragmentSource).join('\n');
-        const vertexSource = version + defines.concat(
+            prelude.fragmentSource).join('\n');
+        for (const include of source.fragmentIncludes) {
+            fragmentSource += `\n${includeMap[include]}`;
+        }
+        fragmentSource += `\n${source.fragmentSource}`;
+
+        let vertexSource = version + defines.concat(
             preludeVertPrecisionQualifiers,
             preludeCommonSource,
-            preludeLightingSource,
-            prelude.vertexSource,
-            preludeFog.vertexSource,
-            preludeShadow.vertexSource,
-            preludeTerrain.vertexSource,
-            source.vertexSource).join('\n');
+            prelude.vertexSource).join('\n');
+        for (const include of source.vertexIncludes) {
+            vertexSource += `\n${includeMap[include]}`;
+        }
+        vertexSource += `\n${source.vertexSource}`;
 
         const fragmentShader = ((gl.createShader(gl.FRAGMENT_SHADER): any): WebGLShader);
         if (gl.isContextLost()) {
@@ -283,7 +280,7 @@ class Program<Us: UniformBindings> {
         stencilMode: $ReadOnly<StencilMode>,
         colorMode: $ReadOnly<ColorMode>,
         indexBuffer: IndexBuffer, segment: Segment,
-        currentProperties: any, zoom: ?number, configuration: ?ProgramConfiguration) {
+        currentProperties: any, zoom: ?number, configuration: ?ProgramConfiguration, instanceCount: ?number) {
 
         const wireframe = painter.options.wireframe;
 
@@ -331,8 +328,8 @@ class Program<Us: UniformBindings> {
 
         const debugDefines = [...this.fixedDefines];
         debugDefines.push("DEBUG_WIREFRAME");
-        // $FlowIgnore[incompatible-call] defines are saved as string whereas useProgram has restrictions
-        const debugProgram = painter.useProgram(this.name, this.configuration, debugDefines);
+        // $FlowIgnore[incompatible-call] defines are saved as string whereas getOrCreateProgram has restrictions
+        const debugProgram = painter.getOrCreateProgram(this.name, {config: this.configuration, defines: debugDefines});
 
         context.program.set(debugProgram.program);
 
@@ -365,12 +362,24 @@ class Program<Us: UniformBindings> {
         context.setDepthMode(new DepthMode(depthMode.func === gl.LESS ? gl.LEQUAL : depthMode.func, DepthMode.ReadOnly, depthMode.range));
         context.setStencilMode(StencilMode.disabled);
 
-        gl.drawElements(
-            gl.LINES,
-            segment.primitiveLength * 3 * 2, // One triangle corresponds to 3 lines (each has 2 indices)
-            gl.UNSIGNED_SHORT,
-            segment.primitiveOffset * 3 * 2 * 2 // One triangles corresponds to 3 lines (2 indices * 2 bytes per index)
-        );
+        const count = segment.primitiveLength * 3 * 2; // One triangle corresponds to 3 lines (each has 2 indices)
+        const offset = segment.primitiveOffset * 3 * 2 * 2; // One triangles corresponds to 3 lines (2 indices * 2 bytes per index)
+
+        if (instanceCount && instanceCount > 1) {
+            gl.drawElementsInstanced(
+                gl.LINES,
+                count,
+                gl.UNSIGNED_SHORT,
+                offset,
+                instanceCount);
+        } else {
+            gl.drawElements(
+                gl.LINES,
+                count,
+                gl.UNSIGNED_SHORT,
+                offset
+            );
+        }
 
         // Revert to non-wireframe parameters
         indexBuffer.bind();
@@ -455,7 +464,7 @@ class Program<Us: UniformBindings> {
             if (drawMode === gl.TRIANGLES) {
                 // Handle potential wireframe rendering for current draw call
                 this._drawDebugWireframe(painter, depthMode, stencilMode, colorMode, indexBuffer, segment,
-                    currentProperties, zoom, configuration);
+                    currentProperties, zoom, configuration, instanceCount);
             }
         }
     }

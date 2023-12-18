@@ -39,6 +39,9 @@ export default function drawLine(painter: Painter, sourceCache: SourceCache, lay
     const capProperty = layer.layout.get('line-cap');
     const patternProperty = layer.paint.get('line-pattern');
     const image = patternProperty.constantOr((1: any));
+    const hasPattern = layer.paint.get('line-pattern').constantOr((1: any));
+    const hasOpacity = layer.paint.get('line-opacity').constantOr(1.0) !== 1.0;
+    let useStencilMaskRenderPass = (!hasPattern && hasOpacity);
 
     const gradient = layer.paint.get('line-gradient');
 
@@ -47,8 +50,7 @@ export default function drawLine(painter: Painter, sourceCache: SourceCache, lay
     const context = painter.context;
     const gl = context.gl;
 
-    const definesValues = lineDefinesValues(layer);
-    let useStencilMaskRenderPass = definesValues.includes('RENDER_LINE_ALPHA_DISCARD');
+    const definesValues = ((lineDefinesValues(layer): any): DynamicDefinesType[]);
     if (painter.terrain && painter.terrain.clipOrMaskOverlapStencilType()) {
         useStencilMaskRenderPass = false;
     }
@@ -62,7 +64,8 @@ export default function drawLine(painter: Painter, sourceCache: SourceCache, lay
         painter.prepareDrawTile();
 
         const programConfiguration = bucket.programConfigurations.get(layer.id);
-        const program = painter.useProgram(programId, programConfiguration, ((definesValues: any): DynamicDefinesType[]));
+        const affectedByFog = painter.isTileAffectedByFog(coord);
+        const program = painter.getOrCreateProgram(programId, {config: programConfiguration, defines: definesValues, overrideFog: affectedByFog});
 
         const constantPattern = patternProperty.constantOr(null);
         if (constantPattern && tile.imageAtlas) {
@@ -138,12 +141,16 @@ export default function drawLine(painter: Painter, sourceCache: SourceCache, lay
         }
         if (dasharray) {
             context.activeTexture.set(gl.TEXTURE0);
-            tile.lineAtlasTexture.bind(gl.LINEAR, gl.REPEAT);
+            if (tile.lineAtlasTexture) {
+                tile.lineAtlasTexture.bind(gl.LINEAR, gl.REPEAT);
+            }
             programConfiguration.updatePaintBuffers();
         }
         if (image) {
             context.activeTexture.set(gl.TEXTURE0);
-            tile.imageAtlasTexture.bind(gl.LINEAR, gl.CLAMP_TO_EDGE);
+            if (tile.imageAtlasTexture) {
+                tile.imageAtlasTexture.bind(gl.LINEAR, gl.CLAMP_TO_EDGE);
+            }
             programConfiguration.updatePaintBuffers();
         }
 

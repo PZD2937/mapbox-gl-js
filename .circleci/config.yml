@@ -92,26 +92,6 @@ workflows:
           filters:
             tags:
               only: /.*/
-      - collect-stats:
-          requires:
-            - build
-            - install-mbx-ci
-          filters:
-            tags:
-              ignore: /.*/
-            branches:
-              only: main
-      - deploy-benchmarks:
-          requires:
-            - install-mbx-ci
-            - build
-          filters:
-            tags:
-              only: /v[0-9]+.[0-9]+.[0-9]+(-.+)?/
-            branches:
-              only:
-                - main
-                - /release-.*/
       - deploy-release:
           requires:
             - install-mbx-ci
@@ -171,6 +151,13 @@ workflows:
           filters:
             tags:
               only: /.*/
+      - trigger-performance-tests:
+          context:
+            - "sdk-cicd/circleci-api"
+          filters:
+            branches:
+              only:
+                  - internal
 
 linux-defaults: &linux-defaults
   docker:
@@ -178,7 +165,7 @@ linux-defaults: &linux-defaults
   working_directory: ~/mapbox-gl-js
 
 mac-defaults: &mac-defaults
-  resource_class: macos.x86.medium.gen2
+  resource_class: macos.m1.medium.gen1
   macos:
     # https://circleci.com/docs/using-macos/#supported-xcode-versions
     xcode: 14.3.0 # macOS 13.2 (Ventura)
@@ -204,7 +191,6 @@ jobs:
             - v0-linux-yarn-{{ .Branch }}-
             - v0-linux-yarn-
       - run: yarn --frozen-lockfile --cache-folder ~/.cache/yarn
-      - run: yarn run build-loaders
       - run: yarn run build-dev
       - save_cache:
           key: v0-linux-yarn-{{ .Branch }}-{{ checksum "yarn.lock" }}
@@ -341,20 +327,6 @@ jobs:
             yarn run codegen
             git add -A && git diff --staged --exit-code | tee check.patch
 
-  collect-stats:
-    <<: *linux-defaults
-    steps:
-      - attach_workspace:
-          at: ~/
-      - browser-tools/install-chrome
-      - run:
-          name: Collect performance stats
-          command: node bench/gl-stats.js
-      - aws-cli/install
-      - run:
-          name: Upload performance stats
-          command: aws s3 cp data.json.gz s3://mapbox-loading-dock/raw/gl_js.perf_metrics_staging/ci/`git show -s --date=short --format=%cd-%h HEAD`.json.gz
-
   test-browser:
     <<: *linux-defaults
     steps:
@@ -382,22 +354,6 @@ jobs:
       - attach_workspace:
           at: ~/
       - run: yarn run test-expressions
-
-  deploy-benchmarks:
-    <<: *linux-defaults
-    steps:
-      - attach_workspace:
-          at: ~/
-      - run:
-          name: Build
-          command: BENCHMARK_VERSION="${CIRCLE_TAG:-$CIRCLE_BRANCH} $(git rev-parse --short=7 HEAD)" yarn run build-benchmarks
-      - aws-cli/install
-      - run:
-          name: Upload benchmark
-          command: aws s3 cp --acl public-read --content-type application/javascript bench/versions/benchmarks_generated.js s3://mapbox-gl-js/${CIRCLE_TAG:-$CIRCLE_BRANCH}/benchmarks.js
-      - run:
-          name: Upload source maps
-          command: aws s3 cp --acl public-read --content-type application/javascript bench/versions/benchmarks_generated.js.map s3://mapbox-gl-js/${CIRCLE_TAG:-$CIRCLE_BRANCH}/benchmarks.js.map
 
   deploy-release:
     <<: *linux-defaults
@@ -485,7 +441,6 @@ jobs:
           key: v0-mac-yarn-{{ .Branch }}-{{ checksum "yarn.lock" }}
           paths:
            - ~/.cache/yarn
-      - run: yarn run build-loaders
       - run: yarn run build-dev
       - persist_to_workspace:
           root: ~/
@@ -511,7 +466,6 @@ jobs:
 
   test-render-mac-safari-dev:
     <<: *mac-defaults
-    resource_class: macos.m1.large.gen1
     steps:
       - attach_workspace:
           at: ~/
@@ -533,7 +487,6 @@ jobs:
             nvm use $nodeVersion
             npm install -g yarn
       - run: yarn --frozen-lockfile
-      - run: yarn run build-loaders
       - run: yarn run build-dev
       - run:
           name: Clean up workspace to persist faster
@@ -588,3 +541,13 @@ jobs:
           path: test/integration/render-tests
       - store_artifacts:
           path: "test/integration/render-tests/index.html"
+
+  trigger-performance-tests:
+    <<: *linux-defaults
+    steps:
+      - checkout
+      - run:
+          name: Trigger SLA performance tests
+          command: |
+            sha=$(git rev-parse HEAD)
+            curl --location --request POST 'https://circleci.com/api/v2/project/github/mapbox/mapbox-gl-js-performance-internal/pipeline' --header 'Content-Type: application/json' -u $CIRCLECI_API_TOKEN: -d "{ \"parameters\": { \"setup_sha\": \"$sha\", \"setup_source_branch\": \"internal\" } }"

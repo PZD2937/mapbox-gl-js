@@ -1,3 +1,5 @@
+#include "_prelude_fog.vertex.glsl"
+
 attribute highp vec4 a_pos_end;
 attribute highp float a_angular_offset_factor;
 attribute highp float a_hidden_by_landmark;
@@ -22,30 +24,33 @@ uniform highp float u_edge_radius; // in tile coords
 uniform highp vec2 u_ao;
 
 #pragma mapbox: define highp float flood_light_ground_radius
-#pragma mapbox: define highp float base
 
 const float TANGENT_CUTOFF = 4.0;
+const float NORM = 32767.0;
 
 void main() {
     #pragma mapbox: initialize highp float flood_light_ground_radius
-    #pragma mapbox: initialize highp float base
 
     vec2 p = a_pos_end.xy;
     vec2 q = floor(a_pos_end.zw * 0.5);
     vec2 start_bottom = a_pos_end.zw - q * 2.0;
 
-    float flood_radius_tile = flood_light_ground_radius * u_meter_to_tile;
+    float fl_ground_radius = flood_light_ground_radius;
+#ifdef FORCE_ABS_FL_GROUND_RADIUS
+    fl_ground_radius = abs(flood_light_ground_radius);
+#endif
+    float flood_radius_tile = fl_ground_radius * u_meter_to_tile;
     vec2 v = normalize(q - p);
     float ao_radius = u_ao.y / 3.5; // adjust AO radius slightly
     float effect_radius = mix(flood_radius_tile, ao_radius, u_ao_pass) + u_edge_radius;
 
-    float angular_offset_factor = a_angular_offset_factor / EXTENT * TANGENT_CUTOFF;
+    float angular_offset_factor = a_angular_offset_factor / NORM * TANGENT_CUTOFF;
     float angular_offset = angular_offset_factor * effect_radius;
 
     float top = 1.0 - start_bottom.y;
 
     float side = (0.5 - start_bottom.x) * 2.0;
-    vec2 extrusion_parallel = v * side * mix(effect_radius / 10.0, angular_offset, top);
+    vec2 extrusion_parallel = v * side * mix(1.0, angular_offset, top);
 
     vec2 perp = vec2(v.y, -v.x);
     vec2 extrusion_perp = perp * effect_radius * top;
@@ -72,9 +77,8 @@ void main() {
     hidden_by_landmark = a_hidden_by_landmark;
 #endif
 
-    float isFloodlit = float(flood_light_ground_radius > 0.0 && u_flood_light_intensity > 0.0);
+    float isFloodlit = float(fl_ground_radius > 0.0 && u_flood_light_intensity > 0.0);
     float hidden = mix(1.0 - isFloodlit, isFloodlit, u_ao_pass);
-    hidden += float(base > 0.0); // vertex base is above ground.
     hidden += hidden_by_landmark;
 
     gl_Position = mix(u_matrix * vec4(pos, 1.0), AWAY, float(hidden > 0.0));

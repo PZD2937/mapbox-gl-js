@@ -56,7 +56,7 @@ import type {QueryResult} from '../data/feature_index.js';
 import type Painter from '../render/painter.js';
 import type {QueryFeature} from '../util/vectortile_to_geojson.js';
 import type {Vec3} from 'gl-matrix';
-import type {TextureImage} from '../render/texture.js';
+import type {UserManagedTexture, TextureImage} from '../render/texture.js';
 import type {VectorTileLayer} from '@mapbox/vector-tile';
 
 const CLOCK_SKEW_RETRY_TIMEOUT = 30000;
@@ -102,11 +102,11 @@ class Tile {
     latestFeatureIndex: ?FeatureIndex;
     latestRawTileData: ?ArrayBuffer;
     imageAtlas: ?ImageAtlas;
-    imageAtlasTexture: Texture;
+    imageAtlasTexture: ?Texture;
     lineAtlas: ?LineAtlas;
-    lineAtlasTexture: Texture;
+    lineAtlasTexture: ?Texture;
     glyphAtlasImage: ?AlphaImage;
-    glyphAtlasTexture: Texture;
+    glyphAtlasTexture: ?Texture;
     expirationTime: any;
     expiredRequestCount: number;
     state: TileState;
@@ -129,8 +129,8 @@ class Tile {
     needsHillshadePrepare: ?boolean;
     needsDEMTextureUpload: ?boolean;
     request: ?Cancelable;
-    texture: any;
-    fbo: ?Framebuffer;
+    texture: ?Texture | ?UserManagedTexture;
+    hillshadeFBO: ?Framebuffer;
     demTexture: ?Texture;
     refreshedUponExpiration: boolean;
     reloadCallback: any;
@@ -223,7 +223,7 @@ class Tile {
      * @returns {undefined}
      * @private
      */
-    loadVectorData(data: ?WorkerTileResult, painter: any, justReloaded: ?boolean) {
+    loadVectorData(data: ?WorkerTileResult, painter: Painter, justReloaded: ?boolean) {
         this.unloadVectorData();
 
         this.state = 'loaded';
@@ -280,7 +280,10 @@ class Tile {
         this.queryPadding = 0;
         for (const id in this.buckets) {
             const bucket = this.buckets[id];
-            this.queryPadding = Math.max(this.queryPadding, painter.style.getLayer(id).queryRadius(bucket));
+            const layer = painter.style.getOwnLayer(id);
+            if (!layer) continue;
+            const queryRadius = layer.queryRadius(bucket);
+            this.queryPadding = Math.max(this.queryPadding, queryRadius);
         }
 
         if (data.imageAtlas) {
@@ -378,7 +381,7 @@ class Tile {
     }
 
     getBucket(layer: StyleLayer): Bucket {
-        return this.buckets[layer.id];
+        return this.buckets[layer.fqid];
     }
 
     upload(context: Context) {
@@ -407,7 +410,7 @@ class Tile {
     }
 
     prepare(imageManager: ImageManager, painter: ?Painter, scope: string) {
-        if (this.imageAtlas) {
+        if (this.imageAtlas && this.imageAtlasTexture) {
             this.imageAtlas.patchUpdatedImages(imageManager, this.imageAtlasTexture, scope);
         }
 
@@ -607,12 +610,12 @@ class Tile {
             const imagePositions: SpritePositions = (this.imageAtlas && this.imageAtlas.patternPositions) || {};
             bucket.update(sourceLayerStates, sourceLayer, availableImages, imagePositions, brightness);
             if (bucket instanceof LineBucket || bucket instanceof FillBucket) {
-                const sourceCache = painter.style._getSourceCache(bucket.layers[0].source);
+                const sourceCache = painter.style.getOwnSourceCache(bucket.layers[0].source);
                 if (painter._terrain && painter._terrain.enabled && sourceCache && bucket.programConfigurations.needsUpload) {
                     painter._terrain._clearRenderCacheForTile(sourceCache.id, this.tileID);
                 }
             }
-            const layer = painter && painter.style && painter.style.getLayer(id);
+            const layer = painter && painter.style && painter.style.getOwnLayer(id);
             if (layer) {
                 this.queryPadding = Math.max(this.queryPadding, layer.queryRadius(bucket));
             }
@@ -639,7 +642,7 @@ class Tile {
         const context = painter.context;
         const gl = context.gl;
         this.texture = this.texture || painter.getTileTexture(img.width);
-        if (this.texture) {
+        if (this.texture && this.texture instanceof Texture) {
             this.texture.update(img, {useMipmap: true});
         } else {
             this.texture = new Texture(context, img, gl.RGBA, {useMipmap: true});
@@ -870,6 +873,113 @@ class Tile {
         this._tileDebugTextBuffer = context.createVertexBuffer(vertices, posAttributes.members);
         this._globeTileDebugTextBuffer = context.createVertexBuffer(extraGlobe, posAttributesGlobeExt.members);
         this._tileDebugTextSegments = SegmentVector.simpleSegment(0, 0, totalVertices, totalTriangles);
+    }
+
+    /**
+     * Release data and WebGL resources referenced by this tile.
+     * @returns {undefined}
+     * @private
+     */
+    destroy(preserveTexture: boolean = false) {
+        for (const id in this.buckets) {
+            this.buckets[id].destroy();
+        }
+
+        this.buckets = {};
+
+        if (this.imageAtlas) {
+            this.imageAtlas = null;
+        }
+
+        if (this.lineAtlas) {
+            this.lineAtlas = null;
+        }
+
+        if (this.imageAtlasTexture) {
+            this.imageAtlasTexture.destroy();
+            delete this.imageAtlasTexture;
+        }
+
+        if (this.glyphAtlasTexture) {
+            this.glyphAtlasTexture.destroy();
+            delete this.glyphAtlasTexture;
+        }
+
+        if (this.lineAtlasTexture) {
+            this.lineAtlasTexture.destroy();
+            delete this.lineAtlasTexture;
+        }
+
+        if (this._tileBoundsBuffer) {
+            this._tileBoundsBuffer.destroy();
+            this._tileBoundsIndexBuffer.destroy();
+            this._tileBoundsSegments.destroy();
+            this._tileBoundsBuffer = null;
+        }
+
+        if (this._tileDebugBuffer) {
+            this._tileDebugBuffer.destroy();
+            this._tileDebugSegments.destroy();
+            this._tileDebugBuffer = null;
+        }
+
+        if (this._tileDebugIndexBuffer) {
+            this._tileDebugIndexBuffer.destroy();
+            this._tileDebugIndexBuffer = null;
+        }
+
+        if (this._globeTileDebugBorderBuffer) {
+            this._globeTileDebugBorderBuffer.destroy();
+            this._globeTileDebugBorderBuffer = null;
+        }
+
+        if (this._tileDebugTextBuffer) {
+            this._tileDebugTextBuffer.destroy();
+            this._tileDebugTextSegments.destroy();
+            this._tileDebugTextIndexBuffer.destroy();
+            this._tileDebugTextBuffer = null;
+        }
+
+        if (this._globeTileDebugTextBuffer) {
+            this._globeTileDebugTextBuffer.destroy();
+            this._globeTileDebugTextBuffer = null;
+        }
+
+        if (!preserveTexture && this.texture && this.texture instanceof Texture) {
+            this.texture.destroy();
+            delete this.texture;
+        }
+
+        if (this.hillshadeFBO) {
+            this.hillshadeFBO.destroy();
+            delete this.hillshadeFBO;
+        }
+
+        if (this.dem) {
+            delete this.dem;
+        }
+
+        if (this.neighboringTiles) {
+            delete this.neighboringTiles;
+        }
+
+        if (this.demTexture) {
+            this.demTexture.destroy();
+            delete this.demTexture;
+        }
+
+        Debug.run(() => {
+            if (this.queryGeometryDebugViz) {
+                this.queryGeometryDebugViz.unload();
+                delete this.queryGeometryDebugViz;
+            }
+            if (this.queryBoundsDebugViz) {
+                this.queryBoundsDebugViz.unload();
+                delete this.queryBoundsDebugViz;
+            }
+        });
+        this.latestFeatureIndex = null;
+        this.state = 'unloaded';
     }
 }
 

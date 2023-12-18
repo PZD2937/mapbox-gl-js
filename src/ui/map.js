@@ -216,7 +216,7 @@ const defaultOptions = {
  * @param {number} [options.maxZoom=22] The maximum zoom level of the map (0-24).
  * @param {number} [options.minPitch=0] The minimum pitch of the map (0-85).
  * @param {number} [options.maxPitch=85] The maximum pitch of the map (0-85).
- * @param {Object | string} [options.style='mapbox://styles/mapbox/standard-beta'] The map's Mapbox style. This must be an a JSON object conforming to
+ * @param {Object | string} [options.style='mapbox://styles/mapbox/standard'] The map's Mapbox style. This must be an a JSON object conforming to
  *     the schema described in the [Mapbox Style Specification](https://mapbox.com/mapbox-gl-style-spec/), or a URL
  *     to such JSON. Can accept a null value to allow adding a style manually.
  *
@@ -224,7 +224,7 @@ const defaultOptions = {
  *     where `:owner` is your Mapbox account name and `:style` is the style ID. You can also use a
  *     [Mapbox-owned style](https://docs.mapbox.com/api/maps/styles/#mapbox-styles):
  *
- *     * `mapbox://styles/mapbox/standard-beta`
+ *     * `mapbox://styles/mapbox/standard`
  *     * `mapbox://styles/mapbox/streets-v12`
  *     * `mapbox://styles/mapbox/outdoors-v12`
  *     * `mapbox://styles/mapbox/light-v11`
@@ -1145,7 +1145,7 @@ class Map extends Camera {
         if (!this.style || newLanguage === this._language) return this;
         this._language = newLanguage;
 
-        this.style._reloadSources();
+        this.style.clearSources();
 
         for (const control of this._controls) {
             if (control._setLanguage) {
@@ -1188,7 +1188,7 @@ class Map extends Camera {
         if (!this.style || worldview === this._worldview) return this;
 
         this._worldview = worldview;
-        this.style._reloadSources();
+        this.style.clearSources();
 
         return this;
     }
@@ -1246,8 +1246,7 @@ class Map extends Camera {
         }
 
         this._useExplicitProjection = !!projection;
-        const stylesheetProjection = this.style.stylesheet ? this.style.stylesheet.projection : null;
-        return this._prioritizeAndUpdateProjection(projection, stylesheetProjection);
+        return this._prioritizeAndUpdateProjection(projection, this.style.projection);
     }
 
     _updateProjectionTransition() {
@@ -1297,9 +1296,8 @@ class Map extends Camera {
 
         if (projectionHasChanged) {
             this.painter.clearBackgroundTiles();
-            for (const id in this.style._sourceCaches) {
-                this.style._sourceCaches[id].clearTiles();
-            }
+            this.style.clearSources();
+
             this._update(true);
             this._forceMarkerAndPopupUpdate(true);
         }
@@ -2293,6 +2291,7 @@ class Map extends Camera {
      */
     updateImage(id: string,
         image: HTMLImageElement | ImageBitmap | ImageData | {width: number, height: number, data: Uint8Array | Uint8ClampedArray} | StyleImageInterface) {
+        this._lazyInitEmptyStyle();
 
         const existingImage = this.style.getImage(id);
         if (!existingImage) {
@@ -2344,6 +2343,8 @@ class Map extends Camera {
             this.fire(new ErrorEvent(new Error('Missing required image id')));
             return false;
         }
+
+        if (!this.style) return false;
 
         return !!this.style.getImage(id);
     }
@@ -2401,7 +2402,10 @@ class Map extends Camera {
         return this.style.listImages();
     }
 
-    /** @section {Models} */
+    /**
+     * @section {Models}
+     * @private
+     */
 
     // eslint-disable-next-line jsdoc/require-returns
     /**
@@ -2425,6 +2429,8 @@ class Map extends Camera {
      *         "model-id": "tree"
      *     }
      *});
+     *
+     * @private
      */
     addModel(id: string, url: string) {
         this._lazyInitEmptyStyle();
@@ -2442,6 +2448,8 @@ class Map extends Camera {
      * // Check if a model with the ID 'tree' exists in
      * // the style.
      * const treeModelExists = map.hasModel('tree');
+     *
+     * @private
      */
     hasModel(id: string): boolean {
         if (!id) {
@@ -2461,6 +2469,8 @@ class Map extends Camera {
      * // If an model with the ID 'tree' exists in
      * // the style, remove it.
      * if (map.hasModel('tree')) map.removeModel('tree');
+     *
+     * @private
      */
     removeModel(id: string) {
         this.style.removeModel(id);
@@ -2474,6 +2484,8 @@ class Map extends Camera {
     *
     * @example
     * const allModels = map.listModels();
+    *
+    * @private
     */
     listModels(): Array<string> {
         return this.style.listModels();
@@ -2642,65 +2654,6 @@ class Map extends Camera {
 
         this.style.removeLayer(id);
         return this._update(true);
-    }
-
-    /**
-     * Adds a set of Mapbox style light to the map's style.
-     *
-     * _Note: This light is not to confuse with our legacy light API used through {@link Map#setLight} and {@link Map#getLight}_.
-     *
-     * @param {Array<LightsSpecification>} lights An array of lights to add, conforming to the Mapbox Style Specification's light definition.
-     * @returns {Map} Returns itself to allow for method chaining.
-     *
-     * @example
-     * // Add a directional light
-     * map.setLights([{
-     *     "id": "sun_light",
-     *     "type": "directional",
-     *     "properties": {
-     *         "color": "rgba(255.0, 0.0, 0.0, 1.0)",
-     *         "intensity": 0.4,
-     *         "direction": [200.0, 40.0],
-     *         "cast-shadows": true,
-     *         "shadow-intensity": 0.2
-     *     }
-     * }]);
-     */
-    setLights(lights: ?Array<LightsSpecification>): this {
-        this._lazyInitEmptyStyle();
-        if (lights && lights.length === 1 && lights[0].type === "flat") {
-            const flatLight: FlatLightSpecification = lights[0];
-            if (!flatLight.properties) {
-                this.style.setFlatLight({}, "flat");
-            } else {
-                this.style.setFlatLight(flatLight.properties, flatLight.id, {});
-            }
-        } else {
-            this.style.setLights(lights);
-            if (this.painter.terrain) {
-                this.painter.terrain.invalidateRenderCache = true;
-            }
-        }
-        return this._update(true);
-    }
-
-    /**
-     * Returns the lights added to the map.
-     *
-     * @returns {Array<LightSpecification>} Lights added to the map.
-     * @example
-     * const lights = map.getLights();
-     */
-    getLights(): ?Array<LightsSpecification> {
-        const lights = this.style.getLights() || [];
-        if (lights.length === 0) {
-            lights.push({
-                "id": this.style.light.id,
-                "type": "flat",
-                "properties": this.style.getFlatLight()
-            });
-        }
-        return lights;
     }
 
     /**
@@ -2891,6 +2844,8 @@ class Map extends Camera {
         return this.style.getLayoutProperty(layerId, name);
     }
 
+    /** @section {Style properties} */
+
     /**
      * Sets the value of a configuration property in the currently set style.
      *
@@ -2899,14 +2854,71 @@ class Map extends Camera {
      * @param {*} value The value of the configuration property. Must be of a type appropriate for the property, as defined by the style configuration schema.
      * @returns {Map} Returns itself to allow for method chaining.
      * @example
-     * map.setConfigProperty('showLabels', false);
+     * map.setConfigProperty('basemap', 'showLabels', false);
      */
     setConfigProperty(importId: string, configName: string, value: any): this {
         this.style.setConfigProperty(importId, configName, value);
         return this._update(true);
     }
 
-    /** @section {Style properties} */
+    /**
+     * Adds a set of Mapbox style light to the map's style.
+     *
+     * _Note: This light is not to confuse with our legacy light API used through {@link Map#setLight} and {@link Map#getLight}_.
+     *
+     * @param {Array<LightsSpecification>} lights An array of lights to add, conforming to the Mapbox Style Specification's light definition.
+     * @returns {Map} Returns itself to allow for method chaining.
+     *
+     * @example
+     * // Add a directional light
+     * map.setLights([{
+     *     "id": "sun_light",
+     *     "type": "directional",
+     *     "properties": {
+     *         "color": "rgba(255.0, 0.0, 0.0, 1.0)",
+     *         "intensity": 0.4,
+     *         "direction": [200.0, 40.0],
+     *         "cast-shadows": true,
+     *         "shadow-intensity": 0.2
+     *     }
+     * }]);
+     */
+    setLights(lights: ?Array<LightsSpecification>): this {
+        this._lazyInitEmptyStyle();
+        if (lights && lights.length === 1 && lights[0].type === "flat") {
+            const flatLight: FlatLightSpecification = lights[0];
+            if (!flatLight.properties) {
+                this.style.setFlatLight({}, "flat");
+            } else {
+                this.style.setFlatLight(flatLight.properties, flatLight.id, {});
+            }
+        } else {
+            this.style.setLights(lights);
+            if (this.painter.terrain) {
+                this.painter.terrain.invalidateRenderCache = true;
+            }
+        }
+        return this._update(true);
+    }
+
+    /**
+     * Returns the lights added to the map.
+     *
+     * @returns {Array<LightSpecification>} Lights added to the map.
+     * @example
+     * const lights = map.getLights();
+     */
+    getLights(): ?Array<LightsSpecification> {
+        const lights = this.style.getLights() || [];
+        if (lights.length === 0) {
+            lights.push({
+                "id": this.style.light.id,
+                "type": "flat",
+                "properties": this.style.getFlatLight()
+            });
+        }
+        return lights;
+    }
 
     /**
      * Sets the any combination of light values.
@@ -3030,8 +3042,12 @@ class Map extends Camera {
      * });
      */
     setCamera(camera: CameraSpecification): this {
-        this.style.stylesheet.camera = camera;
-        return this._update(this.transform.setOrthographicProjectionAtLowPitch(camera["camera-projection"] === "orthographic"));
+        this.style.setCamera(camera);
+        return this._triggerCameraUpdate(camera);
+    }
+
+    _triggerCameraUpdate(camera: CameraSpecification): this {
+        return this._update(this.transform.setOrthographicProjectionAtLowPitch(camera['camera-projection'] === 'orthographic'));
     }
 
     /**
@@ -3041,8 +3057,8 @@ class Map extends Camera {
      * @example
      * const camera = map.getCamera();
      */
-    getCamera(): ?CameraSpecification {
-        return this.style.stylesheet.camera;
+    getCamera(): CameraSpecification {
+        return this.style.camera;
     }
 
     /**
@@ -3440,13 +3456,15 @@ class Map extends Camera {
         this.transform._paintStartTimeStamp = paintStartTimeStamp;
 
         const m = PerformanceUtils.beginMeasure('render');
+        this.fire(new Event('renderstart'));
 
         let gpuTimer;
         const extTimerQuery = this.painter.context.extTimerQuery;
         const frameStartTime = browser.now();
+        const gl = this.painter.context.gl;
         if (this.listens('gpu-timing-frame')) {
-            gpuTimer = extTimerQuery.createQueryEXT();
-            extTimerQuery.beginQueryEXT(extTimerQuery.TIME_ELAPSED_EXT, gpuTimer);
+            gpuTimer = gl.createQuery();
+            gl.beginQuery(extTimerQuery.TIME_ELAPSED_EXT, gpuTimer);
         }
 
         // A custom layer may have used the context asynchronously. Mark the state as dirty.
@@ -3481,7 +3499,7 @@ class Map extends Camera {
                 now,
                 fadeDuration,
                 pitch,
-                transition: this.style.getTransition()
+                transition: this.style.transition
             });
 
             this.style.update(parameters);
@@ -3501,7 +3519,7 @@ class Map extends Camera {
             this.painter._updateFog(this.style);
             this._updateTerrain(); // Terrain DEM source updates here and skips update in style._updateSources.
             averageElevationChanged = this._updateAverageElevation(frameStartTime);
-            this.style._updateSources(this.transform);
+            this.style.updateSources(this.transform);
             // Update positions of markers and popups on enabling/disabling terrain
             this._forceMarkerAndPopupUpdate();
         } else {
@@ -3555,10 +3573,10 @@ class Map extends Camera {
 
         if (gpuTimer) {
             const renderCPUTime = browser.now() - frameStartTime;
-            extTimerQuery.endQueryEXT(extTimerQuery.TIME_ELAPSED_EXT, gpuTimer);
+            gl.endQuery(extTimerQuery.TIME_ELAPSED_EXT);
             setTimeout(() => {
-                const renderGPUTime = extTimerQuery.getQueryObjectEXT(gpuTimer, extTimerQuery.QUERY_RESULT_EXT) / (1000 * 1000);
-                extTimerQuery.deleteQueryEXT(gpuTimer);
+                const renderGPUTime = gl.getQueryParameter(gpuTimer, gl.QUERY_RESULT) / (1000 * 1000);
+                gl.deleteQuery(gpuTimer);
                 this.fire(new Event('gpu-timing-frame', {
                     cpuTime: renderCPUTime,
                     gpuTime: renderGPUTime
@@ -3687,14 +3705,14 @@ class Map extends Camera {
             return false;
         }
 
+        const exaggerationChanged = this.transform.elevation && this.transform.elevation.exaggeration() !== this._averageElevationExaggeration;
         const timeoutElapsed = ignoreTimeout || timeStamp - this._averageElevationLastSampledAt > AVERAGE_ELEVATION_SAMPLING_INTERVAL;
 
-        if (timeoutElapsed && !this._averageElevation.isEasing(timeStamp)) {
+        if (exaggerationChanged || (timeoutElapsed && !this._averageElevation.isEasing(timeStamp))) {
             const currentElevation = this.transform.averageElevation;
             let newElevation = this.transform.sampleAverageElevation();
-            let exaggerationChanged = false;
+
             if (this.transform.elevation) {
-                exaggerationChanged = this.transform.elevation.exaggeration() !== this._averageElevationExaggeration;
                 // $FlowIgnore[incompatible-use]
                 this._averageElevationExaggeration = this.transform.elevation.exaggeration();
             }

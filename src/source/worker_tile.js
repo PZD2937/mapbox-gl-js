@@ -48,8 +48,6 @@ class WorkerTile {
     overscaling: number;
     showCollisionBoxes: boolean;
     collectResourceTiming: boolean;
-    returnDependencies: boolean;
-    enableTerrain: boolean;
     isSymbolTile: ?boolean;
     extraShadowCaster: ?boolean;
     projection: Projection;
@@ -77,9 +75,7 @@ class WorkerTile {
         this.overscaling = this.tileID.overscaleFactor();
         this.showCollisionBoxes = params.showCollisionBoxes;
         this.collectResourceTiming = !!params.collectResourceTiming;
-        this.returnDependencies = !!params.returnDependencies;
         this.promoteId = params.promoteId;
-        this.enableTerrain = !!params.enableTerrain;
         this.isSymbolTile = params.isSymbolTile;
         this.tileTransform = tileTransform(params.tileID.canonical, params.projection);
         this.projection = params.projection;
@@ -185,7 +181,6 @@ class WorkerTile {
                     collisionBoxArray: this.collisionBoxArray,
                     sourceLayerIndex,
                     sourceID: this.source,
-                    enableTerrain: this.enableTerrain,
                     projection: this.projection.spec
                 });
 
@@ -206,6 +201,28 @@ class WorkerTile {
         const maybePrepare = () => {
             if (error) {
                 return callback(error);
+            } else if (this.extraShadowCaster) {
+                const m = PerformanceUtils.beginMeasure('parseTile2');
+                this.status = 'done';
+                // $FlowIgnore[incompatible-call]
+                callback(null, {
+                    buckets: values(buckets).filter(b => !b.isEmpty()),
+                    featureIndex,
+                    // $FlowIgnore[incompatible-call] setting null on purpose
+                    collisionBoxArray: null,
+                    // $FlowIgnore[incompatible-call] setting null on purpose
+                    glyphAtlasImage: null,
+                    // $FlowIgnore[incompatible-call] setting null on purpose
+                    lineAtlas: null,
+                    // $FlowIgnore[incompatible-call] setting null on purpose
+                    imageAtlas: null,
+                    brightness: options.brightness,
+                    // Only used for benchmarking:
+                    glyphMap: null,
+                    iconMap: null,
+                    glyphPositions: null
+                });
+                PerformanceUtils.endMeasure(m);
             } else if (glyphMap && iconMap && patternMap) {
                 const m = PerformanceUtils.beginMeasure('parseTile2');
                 const glyphAtlas = new GlyphAtlas(glyphMap);
@@ -216,27 +233,26 @@ class WorkerTile {
                     if (bucket instanceof SymbolBucket) {
                         recalculateLayers(bucket.layers, this.zoom, options.brightness, availableImages);
                         performSymbolLayout(bucket,
-                            glyphMap,
-                            glyphAtlas.positions,
-                            iconMap,
-                            imageAtlas.iconPositions,
-                            this.showCollisionBoxes,
-                            availableImages,
-                            this.tileID.canonical,
-                            this.tileZoom,
-                            this.projection,
-                            this.brightness);
+                                glyphMap,
+                                glyphAtlas.positions,
+                                iconMap,
+                                imageAtlas.iconPositions,
+                                this.showCollisionBoxes,
+                                availableImages,
+                                this.tileID.canonical,
+                                this.tileZoom,
+                                this.projection,
+                                this.brightness);
                     } else if (bucket.hasPattern &&
-                        (bucket instanceof LineBucket ||
-                         bucket instanceof FillBucket ||
-                         bucket instanceof FillExtrusionBucket)) {
+                            (bucket instanceof LineBucket ||
+                             bucket instanceof FillBucket ||
+                             bucket instanceof FillExtrusionBucket)) {
                         recalculateLayers(bucket.layers, this.zoom, options.brightness, availableImages);
                         // $FlowFixMe[incompatible-type] Flow can't interpret ImagePosition as SpritePosition for some reason here
                         const imagePositions: SpritePositions = imageAtlas.patternPositions;
                         bucket.addFeatures(options, this.tileID.canonical, imagePositions, availableImages, this.tileTransform, this.brightness);
                     }
                 }
-
                 this.status = 'done';
                 callback(null, {
                     buckets: values(buckets).filter(b => !b.isEmpty()),
@@ -245,58 +261,57 @@ class WorkerTile {
                     glyphAtlasImage: glyphAtlas.image,
                     lineAtlas,
                     imageAtlas,
-                    brightness: options.brightness,
-                    // Only used for benchmarking:
-                    glyphMap: this.returnDependencies ? glyphMap : null,
-                    iconMap: this.returnDependencies ? iconMap : null,
-                    glyphPositions: this.returnDependencies ? glyphAtlas.positions : null
+                    brightness: options.brightness
                 });
                 PerformanceUtils.endMeasure(m);
             }
         };
 
-        const stacks = mapObject(options.glyphDependencies, (glyphs) => Object.keys(glyphs).map(Number));
-        if (Object.keys(stacks).length) {
-            actor.send('getGlyphs', {uid: this.uid, stacks, scope: this.scope}, (err, result) => {
-                if (!error) {
-                    error = err;
-                    glyphMap = result;
-                    maybePrepare();
-                }
-            }, undefined, false, taskMetadata);
-        } else {
-            glyphMap = {};
-        }
+        if (!this.extraShadowCaster) {
+            const stacks = mapObject(options.glyphDependencies, (glyphs) => Object.keys(glyphs).map(Number));
+            if (Object.keys(stacks).length) {
+                actor.send('getGlyphs', {uid: this.uid, stacks, scope: this.scope}, (err, result) => {
+                    if (!error) {
+                        error = err;
+                        glyphMap = result;
+                        maybePrepare();
+                    }
+                }, undefined, false, taskMetadata);
+            } else {
+                glyphMap = {};
+            }
 
-        const icons = Object.keys(options.iconDependencies);
-        if (icons.length) {
-            actor.send('getImages', {icons, source: this.source, scope: this.scope, tileID: this.tileID, type: 'icons'}, (err, result) => {
-                if (!error) {
-                    error = err;
-                    iconMap = result;
-                    maybePrepare();
-                }
-            }, undefined, false, taskMetadata);
-        } else {
-            iconMap = {};
-        }
+            const icons = Object.keys(options.iconDependencies);
+            if (icons.length) {
+                actor.send('getImages', {icons, source: this.source, scope: this.scope, tileID: this.tileID, type: 'icons'}, (err, result) => {
+                    if (!error) {
+                        error = err;
+                        iconMap = result;
+                        maybePrepare();
+                    }
+                }, undefined, false, taskMetadata);
+            } else {
+                iconMap = {};
+            }
 
-        const patterns = Object.keys(options.patternDependencies);
-        if (patterns.length) {
-            actor.send('getImages', {icons: patterns, source: this.source, scope: this.scope, tileID: this.tileID, type: 'patterns'}, (err, result) => {
-                if (!error) {
-                    error = err;
-                    patternMap = result;
-                    maybePrepare();
-                }
-            }, undefined, false, taskMetadata);
-        } else {
-            patternMap = {};
+            const patterns = Object.keys(options.patternDependencies);
+            if (patterns.length) {
+                actor.send('getImages', {icons: patterns, source: this.source, scope: this.scope, tileID: this.tileID, type: 'patterns'}, (err, result) => {
+                    if (!error) {
+                        error = err;
+                        patternMap = result;
+                        maybePrepare();
+                    }
+                }, undefined, false, taskMetadata);
+            } else {
+                patternMap = {};
+            }
         }
 
         PerformanceUtils.endMeasure(m);
 
         maybePrepare();
+
     }
 }
 
