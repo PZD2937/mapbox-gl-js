@@ -236,7 +236,16 @@ class VectorTileWorkerSource extends Evented implements WorkerSource {
                             resourceTiming.resourceTiming = JSON.parse(JSON.stringify(resourceTimingData));
                         }
                     }
-                    callback(null, extend({rawTileData: rawTileData.slice(0)}, result, cacheControl, resourceTiming));
+
+                    const layersData = [];
+                    Object.values(workerTile.vectorTile.layers).forEach(layer => {
+                        layersData.push({
+                            name: layer.name,
+                            keys: layer._keys
+                        })
+                    })
+
+                    callback(null, extend({rawTileData: rawTileData.slice(0), layersData}, result, cacheControl, resourceTiming));
                 };
                 workerTile.parse(workerTile.vectorTile, this.layerIndex, this.availableImages, this.actor, workerTileCallback);
             };

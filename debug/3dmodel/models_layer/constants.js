@@ -1,0 +1,11 @@
+// const WORLD_SIZE = 1024000; //TILE_SIZE * 2000
+
+export default {
+    WORLD_SIZE: 1024000,
+    PROJECTION_WORLD_SIZE: 1024000 / (6371008.8 * Math.PI * 2),
+    MERCATOR_A: 6371008.8, // 900913 projection property
+    DEG2RAD: Math.PI / 180,
+    RAD2DEG: 180 / Math.PI,
+    EARTH_CIRCUMFERENCE: 40030228.88407185, // In meters
+    TILE_SIZE: 512
+}

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mapbox GL JS debug page</title>
+    <meta charset='utf-8'>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <link rel='stylesheet' href='../../dist/mapbox-gl.css'/>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        html, body, #map {
+            height: 100%;
+        }
+    </style>
+    <script type="importmap">
+        {
+          "imports": {
+            "three": "https://unpkg.com/three@0.126.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.126.0/examples/jsm/"
+          }
+        }
+    </script>
+</head>
+
+<body>
+<div id='map'></div>
+<div></div>
+
+<script src='../../dist/mapbox-gl-dev.js'></script>
+<!--<script src='https://cdnjs.cloudflare.com/ajax/libs/three.js/0.159.0/three.min.js'></script>-->
+<script src='../../debug/access_token_generated.js'></script>
+<script src="./config.js"></script>
+<script type="module">
+    import {ModelsLayer} from "./models_layer/models_layer.js";
+
+    console.log(models);
+    const map = window.map = new mapboxgl.Map({
+        container: 'map',
+        antialias: true,
+        zoom: 18,
+        center: [-109.405843, -27.174223],
+        pitch: 60,
+        style: {
+            version: 8,
+            sources: {
+                img: {
+                    type: "raster",
+                    tiles: ["https://www.google.com/maps/vt?lyrs=s&&x={x}&y={y}&z={z}&scale=2"],
+                    tileSize: 512,
+                    maxzoom: 21
+                }
+            },
+            layers: [{id: "img", type: "raster", source: "img"}]
+        },
+        hash: true
+    });
+
+
+    map.on('load', function() {
+        map.addSource('xz-dem', {
+            type: 'raster-dem',
+            tileSize: 512,
+            maxzoom: 10,
+            minzoom: 5,
+            tiles: ['https://map.xinzhi.space/terrain/srtmv4/{z}/{x}/{y}.png'],
+            bounds: [71.25, 18, 135.5, 54]
+        })
+
+        map.addSource('mapbox-dem', {
+            "type": "raster-dem",
+            "url": "mapbox://mapbox.terrain-rgb",
+            "tileSize": 512,
+            "maxzoom": 14
+        });
+        map.setTerrain({source: "xz-dem"});
+
+        window.modelslayer = new ModelsLayer(models);
+
+        map.addLayer(modelslayer);
+
+        map.on('click', e => {
+            // console.log(e)
+            const models = modelslayer.pickModelAtScreenPoint(e.point);
+            console.log(models)
+            // const raycaster = new Raycaster();
+            // const point = map.transform.pointCoordinate(e.point);
+            // console.log(point)
+            // raycaster.setFromCamera(new Vector2(point.x, point.y), layer.camera);
+            // const intersects = raycaster.intersectObjects(layer.scene.children);
+            // console.log(intersects)
+        })
+
+    });
+</script>
+</body>
+</html>
