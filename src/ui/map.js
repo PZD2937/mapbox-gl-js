@@ -76,6 +76,7 @@ import type {Source} from '../source/source.js';
 import type {QueryFeature} from '../util/vectortile_to_geojson.js';
 import type {QueryResult} from '../data/feature_index.js';
 import type {EasingOptions} from './camera.js';
+import type {ContextOptions} from '../gl/context.js';
 
 export type ControlPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 /* eslint-disable no-use-before-define */
@@ -141,6 +142,7 @@ type MapOptions = {
     crossSourceCollisions?: boolean,
     collectResourceTiming?: boolean,
     respectPrefersReducedMotion?: boolean,
+    contextCreateOptions?: ContextOptions,
 };
 
 const defaultMinZoom = -2;
@@ -468,8 +470,12 @@ class Map extends Camera {
      */
     touchPitch: TouchPitchHandler;
 
+    _contextCreateOptions: ContextOptions;
+
     constructor(options: MapOptions) {
         LivePerformanceUtils.mark(PerformanceMarkers.create);
+
+        const initialOptions = options;
 
         options = (extend({}, defaultOptions, options): typeof defaultOptions & MapOptions);
 
@@ -537,6 +543,11 @@ class Map extends Camera {
 
         this._requestManager = new RequestManager(options.transformRequest, options.accessToken, options.testMode);
         this._silenceAuthErrors = !!options.testMode;
+        if (options.contextCreateOptions) {
+            this._contextCreateOptions = {...options.contextCreateOptions};
+        } else {
+            this._contextCreateOptions = {};
+        }
 
         if (typeof options.container === 'string') {
             this._container = window.document.getElementById(options.container);
@@ -612,6 +623,11 @@ class Map extends Camera {
         if (options.hash) this._hash = (new Hash(hashName)).addTo(this);
         // don't set position from options if set through hash
         if (!this._hash || !this._hash._onHashChange()) {
+            // if we set `center`/`zoom` explicitly, mark as modified even if the values match defaults
+            if (initialOptions.center != null || initialOptions.zoom != null) {
+                this.transform._unmodified = false;
+            }
+
             this.jumpTo({
                 center: options.center,
                 zoom: options.zoom,
@@ -1145,7 +1161,7 @@ class Map extends Camera {
         if (!this.style || newLanguage === this._language) return this;
         this._language = newLanguage;
 
-        this.style.clearSources();
+        this.style.reloadSources();
 
         for (const control of this._controls) {
             if (control._setLanguage) {
@@ -1188,7 +1204,7 @@ class Map extends Camera {
         if (!this.style || worldview === this._worldview) return this;
 
         this._worldview = worldview;
-        this.style.clearSources();
+        this.style.reloadSources();
 
         return this;
     }
@@ -2890,6 +2906,19 @@ class Map extends Camera {
     /** @section {Style properties} */
 
     /**
+     * Returns the value of a configuration property in the imported style.
+     *
+     * @param {string} importId The name of the imported style to set the config for (e.g. `basemap`).
+     * @param {string} configName The name of the configuration property from the style.
+     * @returns {*} Returns the value of the configuration property.
+     * @example
+     * map.getConfigProperty('basemap', 'showLabels');
+     */
+    getConfigProperty(importId: string, configName: string): ?any {
+        return this.style.getConfigProperty(importId, configName);
+    }
+
+    /**
      * Sets the value of a configuration property in the currently set style.
      *
      * @param {string} importId The name of the imported style to set the config for (e.g. `basemap`).
@@ -3381,7 +3410,7 @@ class Map extends Camera {
 
         storeAuthState(gl, true);
 
-        this.painter = new Painter(gl, this.transform);
+        this.painter = new Painter(gl, this._contextCreateOptions, this.transform);
         this.on('data', (event: MapDataEvent) => {
             if (event.dataType === 'source') {
                 this.painter.setTileLoadedFlag(true);

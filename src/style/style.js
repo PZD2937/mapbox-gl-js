@@ -58,7 +58,7 @@ import {
 import PauseablePlacement from './pauseable_placement.js';
 import CrossTileSymbolIndex from '../symbol/cross_tile_symbol_index.js';
 import {validateCustomStyleLayer} from './style_layer/custom_style_layer.js';
-import {makeFQID, getNameFromFQID} from '../util/fqid.js';
+import {isFQID, makeFQID, getNameFromFQID, getScopeFromFQID} from '../util/fqid.js';
 import {shadowDirectionFromProperties} from '../../3d-style/render/shadow_renderer.js';
 
 // We're skipping validation errors with the `source.canvas` identifier in order
@@ -163,7 +163,8 @@ export type StyleOptions = {
 };
 
 export type StyleSetterOptions = {
-    validate?: boolean
+    validate?: boolean;
+    isInitialLoad?: boolean;
 };
 
 export type Fragment = {|
@@ -412,18 +413,20 @@ class Style extends Evented {
         this._load(empty, false);
     }
 
-    _loadImports(imports: Array<ImportSpecification>, validate: boolean): void {
+    _loadImports(imports: Array<ImportSpecification>, validate: boolean): Promise<any> {
         // We take the root style into account when calculating the import depth.
         if (this.importDepth >= MAX_IMPORT_DEPTH - 1) {
             warnOnce(`Style doesn't support nesting deeper than ${MAX_IMPORT_DEPTH}`);
-            return this._reloadImports();
+            return Promise.resolve();
         }
 
         const waitForStyles = [];
         for (const importSpec of imports) {
             const style = this._createFragmentStyle(importSpec);
 
-            const waitForStyle = new Promise(resolve => style.on('style.import.load', resolve));
+            // Merge everything and update layers after the import style is loaded.
+            const waitForStyle = new Promise(resolve => style.once('style.import.load', resolve))
+                .then(() => this.mergeAll());
             waitForStyles.push(waitForStyle);
 
             // Load empty style if one of the ancestors was already
@@ -453,7 +456,7 @@ class Style extends Evented {
         }
 
         // $FlowFixMe[method-unbinding]
-        Promise.all(waitForStyles).then(() => this._reloadImports());
+        return Promise.allSettled(waitForStyles);
     }
 
     _createFragmentStyle(importSpec: ImportSpecification): Style {
@@ -484,6 +487,7 @@ class Style extends Evented {
     _reloadImports() {
         this.mergeAll();
         this._updateMapProjection();
+        this.map._triggerCameraUpdate(this.camera);
 
         this.dispatcher.broadcast('setLayers', {
             layers: this._serializeLayers(this._order),
@@ -493,7 +497,6 @@ class Style extends Evented {
 
         const isRootStyle = this.isRootStyle();
         this._shouldPrecompile = isRootStyle;
-        this.fire(new Event('data', {dataType: 'style'}));
         this.fire(new Event(isRootStyle ? 'style.load' : 'style.import.load'));
     }
 
@@ -519,9 +522,8 @@ class Style extends Evented {
         this.stylesheet = clone(json);
 
         for (const id in json.sources) {
-            this.addSource(id, json.sources[id], {validate: false});
+            this.addSource(id, json.sources[id], {validate: false, isInitialLoad: true});
         }
-        this._changes.changed = false; // avoid triggering redundant style update after adding initial sources
 
         if (json.sprite) {
             this._loadSprite(json.sprite);
@@ -560,7 +562,6 @@ class Style extends Evented {
             if (styleLayer.isConfigDependent) this._configDependentLayers.add(styleLayer.fqid);
             styleLayer.setEventedParent(this, {layer: {id: styleLayer.id}});
             this._layers[styleLayer.id] = styleLayer;
-            this._layers[styleLayer.id] = styleLayer;
             this._serializedLayers[styleLayer.id] = styleLayer.serialize();
 
             const sourceCache = this.getOwnLayerSourceCache(styleLayer);
@@ -588,26 +589,12 @@ class Style extends Evented {
             this.setTransition(this.stylesheet.transition);
         }
 
-        this.mergeAll();
-        this._updateMapProjection();
-
-        // Trigger update
-        this.map._triggerCameraUpdate(this.camera);
-
         this.fire(new Event('data', {dataType: 'style'}));
 
         if (json.imports) {
-            this._loadImports(json.imports, validate);
+            this._loadImports(json.imports, validate).then(() => this._reloadImports());
         } else {
-            this.dispatcher.broadcast('setLayers', {
-                layers: this._serializeLayers(this._order),
-                scope: this.scope,
-                options: this.options
-            });
-
-            const isRootStyle = this.isRootStyle();
-            this._shouldPrecompile = isRootStyle;
-            this.fire(new Event(isRootStyle ? 'style.load' : 'style.import.load'));
+            this._reloadImports();
         }
     }
 
@@ -892,7 +879,7 @@ class Style extends Evented {
         if (!this._loaded)
             return false;
 
-        if (Object.keys(this._changes.updatedSourceCaches).length)
+        if (Object.keys(this._changes.getUpdatedSourceCaches()).length)
             return false;
 
         for (const id in this._sourceCaches)
@@ -1056,9 +1043,8 @@ class Style extends Evented {
             this.dispatcher.broadcast('setBrightness', brightness);
         }
 
-        const changed = this._changes.changed;
-
-        if (this._changes.changed) {
+        const changed = this._changes.isDirty();
+        if (this._changes.isDirty()) {
             const updatesByScope = this._changes.getLayerUpdatesByScope();
             for (const scope in updatesByScope) {
                 const {updatedIds, removedIds} = updatesByScope[scope];
@@ -1103,7 +1089,7 @@ class Style extends Evented {
             const layer = this._mergedLayers[layerId];
             layer.recalculate(parameters, this._availableImages);
             if (!layer.isHidden(parameters.zoom)) {
-                const sourceCache = this.getOwnLayerSourceCache(layer);
+                const sourceCache = this.getLayerSourceCache(layer);
                 if (sourceCache) sourceCache.used = true;
             }
 
@@ -1170,27 +1156,25 @@ class Style extends Evented {
         if (changed) {
             this.fire(new Event('data', {dataType: 'style'}));
         }
-
-        for (const {style} of this.fragments) {
-            style.update(parameters);
-        }
     }
 
     /*
      * Apply any queued image changes.
      */
     _updateTilesForChangedImages() {
-        const changedImages = Array.from(this._changes.changedImages.keys());
-        if (changedImages.length) {
+        const updatedImages = this._changes.getUpdatedImages();
+        if (updatedImages.length) {
             for (const name in this._sourceCaches) {
-                this._sourceCaches[name].reloadTilesForDependencies(['icons', 'patterns'], changedImages);
+                this._sourceCaches[name].reloadTilesForDependencies(['icons', 'patterns'], updatedImages);
             }
-            this._changes.changedImages.clear();
+            this._changes.resetUpdatedImages();
         }
     }
 
     _updateWorkerLayers(scope: string, updatedIds?: Array<string>, removedIds?: Array<string>) {
         const fragmentStyle = this.getFragmentStyle(scope);
+        if (!fragmentStyle) return;
+
         this.dispatcher.broadcast('updateLayers', {
             layers: updatedIds ? fragmentStyle._serializeLayers(updatedIds) : [],
             scope,
@@ -1273,8 +1257,7 @@ class Style extends Evented {
 
     _afterImageUpdated(id: string) {
         this._availableImages = this.imageManager.listImages(this.scope);
-        this._changes.changedImages.add(id);
-        this._changes.changed = true;
+        this._changes.updateImage(id);
         this.dispatcher.broadcast('setImages', {
             scope: this.scope,
             images: this._availableImages
@@ -1292,7 +1275,7 @@ class Style extends Evented {
         if (this._validate(validateModel, `models.${id}`, url, null, options)) return this;
 
         this.modelManager.addModel(id, url, this.scope);
-        this._changes.changed = true;
+        this._changes.setDirty();
         return this;
     }
 
@@ -1353,9 +1336,12 @@ class Style extends Evented {
         }
 
         if (sourceInstance.onAdd) sourceInstance.onAdd(this.map);
-        this.mergeSources();
 
-        this._changes.changed = true;
+        // Avoid triggering redundant style update after adding initial sources.
+        if (!options.isInitialLoad) {
+            this.mergeSources();
+            this._changes.setDirty();
+        }
     }
 
     /**
@@ -1376,7 +1362,7 @@ class Style extends Evented {
                 return this.fire(new ErrorEvent(new Error(`Source "${id}" cannot be removed while layer "${layerId}" is using it.`)));
             }
         }
-        if (this.terrain && this.terrain.get().source === id) {
+        if (this.terrain && this.terrain.scope === this.scope && this.terrain.get().source === id) {
             return this.fire(new ErrorEvent(new Error(`Source "${id}" cannot be removed while terrain is using it.`)));
         }
 
@@ -1384,7 +1370,7 @@ class Style extends Evented {
         for (const sourceCache of sourceCaches) {
             const id = getNameFromFQID(sourceCache.id);
             delete this._sourceCaches[id];
-            delete this._changes.updatedSourceCaches[sourceCache.id];
+            this._changes.discardSourceCacheUpdate(sourceCache.id);
             sourceCache.fire(new Event('data', {sourceDataType: 'metadata', dataType:'source', sourceId: sourceCache.getSource().id}));
             sourceCache.setEventedParent(null);
             sourceCache.clearTiles();
@@ -1397,7 +1383,7 @@ class Style extends Evented {
         if (source.onRemove) {
             source.onRemove(this.map);
         }
-        this._changes.changed = true;
+        this._changes.setDirty();
         return this;
     }
 
@@ -1414,7 +1400,7 @@ class Style extends Evented {
         assert(geojsonSource.type === 'geojson');
 
         geojsonSource.setData(data);
-        this._changes.changed = true;
+        this._changes.setDirty();
     }
 
     /**
@@ -1542,13 +1528,27 @@ class Style extends Evented {
         return !!this.ambientLight && !!this.directionalLight;
     }
 
-    getFragmentStyle(fragmentId?: string): Style {
+    getFragmentStyle(fragmentId?: string): ?Style {
         if (!fragmentId) return this;
 
-        const fragment = this.fragments.find(({id}) => id === fragmentId);
-        if (!fragment) throw new Error(`Style import not found: ${fragmentId}`);
+        if (isFQID(fragmentId)) {
+            const scope = getScopeFromFQID(fragmentId);
+            const fragment = this.fragments.find(({id}) => id === scope);
+            if (!fragment) throw new Error(`Style import not found: ${fragmentId}`);
+            const name = getNameFromFQID(fragmentId);
+            return fragment.style.getFragmentStyle(name);
+        } else {
+            const fragment = this.fragments.find(({id}) => id === fragmentId);
+            if (!fragment) throw new Error(`Style import not found: ${fragmentId}`);
+            return fragment.style;
+        }
+    }
 
-        return fragment.style;
+    getConfigProperty(fragmentId: string, key: string): ?any {
+        const fragmentStyle = this.getFragmentStyle(fragmentId);
+        if (!fragmentStyle) return null;
+        const expression = fragmentStyle.options.get(key);
+        return expression ? expression.serialize() : null;
     }
 
     setConfigProperty(fragmentId: string, key: string, value: any) {
@@ -1561,6 +1561,7 @@ class Style extends Evented {
         const expression = expressionParsed.value.expression;
 
         const fragmentStyle = this.getFragmentStyle(fragmentId);
+        if (!fragmentStyle) return;
         fragmentStyle.options.set(key, expression);
         fragmentStyle.updateConfigDependencies();
     }
@@ -1613,7 +1614,7 @@ class Style extends Evented {
             this.directionalLight.updateConfig(this.options);
         }
 
-        this._changes.changed = true;
+        this._changes.setDirty();
     }
 
     /**
@@ -1699,9 +1700,9 @@ class Style extends Evented {
             this._changes.discardLayerRemoval(layer);
             const fqid = makeFQID(layer.source, layer.scope);
             if (removedLayer.type !== layer.type) {
-                this._changes.updatedSourceCaches[fqid] = 'clear';
+                this._changes.updateSourceCache(fqid, 'clear');
             } else {
-                this._changes.updatedSourceCaches[fqid] = 'reload';
+                this._changes.updateSourceCache(fqid, 'reload');
                 sourceCache.pause();
             }
         }
@@ -1726,7 +1727,6 @@ class Style extends Evented {
      */
     moveLayer(id: string, before?: string) {
         this._checkLoaded();
-        this._changes.changed = true;
 
         const layer = this._checkLayer(id);
         if (!layer) return;
@@ -1756,6 +1756,7 @@ class Style extends Evented {
 
         this._order.splice(newIndex, 0, id);
 
+        this._changes.setDirty();
         this._layerOrderChanged = true;
 
         this.mergeLayers();
@@ -1783,7 +1784,7 @@ class Style extends Evented {
         delete this._layers[id];
         delete this._serializedLayers[id];
 
-        this._changes.changed = true;
+        this._changes.setDirty();
         this._layerOrderChanged = true;
 
         this._configDependentLayers.delete(layer.fqid);
@@ -1951,8 +1952,7 @@ class Style extends Evented {
             this._updateLayer(layer);
         }
 
-        this._changes.changed = true;
-        this._changes.updatedPaintProps.add(layer.fqid);
+        this._changes.updatePaintProperties(layer);
     }
 
     getPaintProperty(layerId: string, name: string): void | TransitionSpecification | PropertyValueSpecification<mixed> {
@@ -2079,14 +2079,13 @@ class Style extends Evented {
         this._changes.updateLayer(layer);
         const sourceCache = this.getLayerSourceCache(layer);
         const fqid = makeFQID(layer.source, layer.scope);
-        if (layer.source && !this._changes.updatedSourceCaches[fqid] &&
-            //Skip for raster layers (https://github.com/mapbox/mapbox-gl-js/issues/7865)
-            sourceCache &&
-            sourceCache.getSource().type !== 'raster') {
-            this._changes.updatedSourceCaches[fqid] = 'reload';
+        const sourceCacheUpdates = this._changes.getUpdatedSourceCaches();
+        if (layer.source && !sourceCacheUpdates[fqid] &&
+            // Skip for raster layers (https://github.com/mapbox/mapbox-gl-js/issues/7865)
+            sourceCache && sourceCache.getSource().type !== 'raster') {
+            this._changes.updateSourceCache(fqid, 'reload');
             sourceCache.pause();
         }
-        this._changes.changed = true;
         layer.invalidateCompiledFilter();
     }
 
@@ -2330,7 +2329,7 @@ class Style extends Evented {
         }
 
         // Enabling
-        if (!this.terrain || (this.terrain && drapeRenderMode !== this.terrain.drapeRenderMode)) {
+        if (!this.terrain || this.terrain.scope !== this.scope || (this.terrain && drapeRenderMode !== this.terrain.drapeRenderMode)) {
             if (!options) return;
             this._createTerrain(options, drapeRenderMode);
             this.fire(new Event('data', {dataType: 'style'}));
@@ -2347,7 +2346,7 @@ class Style extends Evented {
             }
             for (const key in terrainOptions) {
                 if (!deepEqual(terrainOptions[key], currSpec[key])) {
-                    terrain.set(terrainOptions);
+                    terrain.set(terrainOptions, this.options);
                     this.stylesheet.terrain = terrainOptions;
                     const parameters = this._getTransitionParameters({duration: 0});
                     terrain.updateTransitions(parameters);
@@ -2441,8 +2440,7 @@ class Style extends Evented {
     }
 
     _createTerrain(terrainOptions: TerrainSpecification, drapeRenderMode: number) {
-        const terrain = this.terrain = new Terrain(terrainOptions, drapeRenderMode);
-        terrain.setScope(this.scope);
+        const terrain = this.terrain = new Terrain(terrainOptions, drapeRenderMode, this.scope, this.options);
 
         this.stylesheet.terrain = terrainOptions;
         this.mergeTerrain();
@@ -2540,6 +2538,12 @@ class Style extends Evented {
         for (const sourceCache of sourceCaches) {
             sourceCache.resume();
             sourceCache.reload();
+        }
+    }
+
+    reloadSources() {
+        for (const source of this.getSources()) {
+            if (source.reload) source.reload();
         }
     }
 
@@ -2677,12 +2681,10 @@ class Style extends Evented {
 
         // Update related fragment
         const fragment = this.fragments[index];
-        fragment.style = this._createFragmentStyle({id: importId, url});
+        fragment.style = this._createFragmentStyle(imports[index]);
 
-        const waitForStyle = new Promise(resolve => fragment.style.on('style.import.load', resolve));
+        fragment.style.on('style.import.load', () => this.mergeAll());
         fragment.style.loadURL(url);
-
-        waitForStyle.then(() => this._reloadImports());
 
         return this;
     }
@@ -2818,8 +2820,9 @@ class Style extends Evented {
     }
 
     updateSourceCaches() {
-        for (const fqid in this._changes.updatedSourceCaches) {
-            const action = this._changes.updatedSourceCaches[fqid];
+        const updatedSourceCaches = this._changes.getUpdatedSourceCaches();
+        for (const fqid in updatedSourceCaches) {
+            const action = updatedSourceCaches[fqid];
             assert(action === 'reload' || action === 'clear');
             if (action === 'reload') {
                 this.reloadSource(fqid);
@@ -2830,7 +2833,8 @@ class Style extends Evented {
     }
 
     updateLayers(parameters: EvaluationParameters) {
-        for (const id of this._changes.updatedPaintProps) {
+        const updatedPaintProps = this._changes.getUpdatedPaintProperties();
+        for (const id of updatedPaintProps) {
             const layer = this.getLayer(id);
             if (layer) layer.updateTransitions(parameters);
         }

@@ -256,7 +256,7 @@ test('Style#loadURL', (t) => {
         map.on('data', spy);
 
         style.on('style.load', () => {
-            t.equal(spy.callCount, 3);
+            t.ok(spy.calledTwice);
 
             // initial root style 'data' event
             t.equal(spy.getCall(0).args[0].target, map);
@@ -267,11 +267,6 @@ test('Style#loadURL', (t) => {
             t.equal(spy.getCall(1).args[0].target, map);
             t.equal(spy.getCall(1).args[0].dataType, 'style');
             t.equal(spy.getCall(1).args[0].style.scope, 'streets');
-
-            // final root style 'data' event
-            t.equal(spy.getCall(2).args[0].target, map);
-            t.equal(spy.getCall(2).args[0].dataType, 'style');
-            t.equal(spy.getCall(2).args[0].style.scope, '');
 
             t.end();
         });
@@ -462,7 +457,7 @@ test('Style#loadJSON', (t) => {
         map.on('data', spy);
 
         style.on('style.load', () => {
-            t.equal(spy.callCount, 3);
+            t.ok(spy.calledTwice);
 
             // initial root style 'data' event
             t.equal(spy.getCall(0).args[0].target, map);
@@ -473,11 +468,6 @@ test('Style#loadJSON', (t) => {
             t.equal(spy.getCall(1).args[0].target, map);
             t.equal(spy.getCall(1).args[0].dataType, 'style');
             t.equal(spy.getCall(1).args[0].style.scope, 'streets');
-
-            // final root style 'data' event
-            t.equal(spy.getCall(2).args[0].target, map);
-            t.equal(spy.getCall(2).args[0].dataType, 'style');
-            t.equal(spy.getCall(2).args[0].style.scope, '');
 
             t.end();
         });
@@ -1312,7 +1302,16 @@ test('Style#getLights', (t) => {
     t.end();
 });
 
-test('Style#getTerrain', (t) => {
+test('Terrain', (t) => {
+    t.beforeEach(() => {
+        window.useFakeXMLHttpRequest();
+        window.server.configure({respondImmediately: true});
+    });
+
+    t.afterEach(() => {
+        window.restore();
+    });
+
     t.test('root style resolves terrain from import', (t) => {
         const style = new Style(new StubMap());
 
@@ -1382,6 +1381,100 @@ test('Style#getTerrain', (t) => {
         });
     });
 
+    t.test('empty root style terrain overrides terrain in imports', (t) => {
+        const style = new Style(new StubMap());
+
+        style.loadJSON(createStyleJSON({
+            terrain: {source: 'mapbox-dem', exaggeration: 2},
+            sources: {
+                'mapbox-dem': {
+                    type: 'raster-dem',
+                    tiles: ['http://example.com/{z}/{x}/{y}.png'],
+                    tileSize: 256,
+                    maxzoom: 14
+                }
+            },
+            imports: [{
+                id: 'basemap',
+                url: '/standard.json',
+                data: createStyleJSON({
+                    terrain: {source: 'mapbox-dem', exaggeration: 1.5},
+                    sources: {
+                        'mapbox-dem': {
+                            type: 'raster-dem',
+                            tiles: ['http://example.com/{z}/{x}/{y}.png'],
+                            tileSize: 256,
+                            maxzoom: 14
+                        }
+                    },
+                })
+            }],
+        }));
+
+        style.on('style.load', () => {
+            style.setTerrain(null);
+            t.deepEqual(style.getTerrain(), null);
+            t.end();
+        });
+    });
+
+    t.test('setState correctly overrides terrain in the root style', async (t) => {
+        const map = new StubMap();
+        const style = new Style(map);
+        style.setEventedParent(map, {style});
+
+        const importWithTerrain = {
+            id: 'basemap',
+            url: '/standard.json',
+            data: createStyleJSON({
+                terrain: {source: 'mapbox-dem', exaggeration: 1.5},
+                sources: {
+                    'mapbox-dem': {
+                        type: 'raster-dem',
+                        tiles: ['http://example.com/{z}/{x}/{y}.png'],
+                        tileSize: 256,
+                        maxzoom: 14
+                    }
+                },
+            })
+        };
+
+        const rootWithTerrain = createStyleJSON({
+            terrain: {source: 'mapbox-dem', exaggeration: 2},
+            sources: {
+                'mapbox-dem': {
+                    type: 'raster-dem',
+                    tiles: ['http://example.com/{z}/{x}/{y}.png'],
+                    tileSize: 256,
+                    maxzoom: 14
+                }
+            },
+            imports: [importWithTerrain],
+        });
+
+        const rootWithoutTerrain = createStyleJSON({
+            imports: [importWithTerrain],
+        });
+
+        // Using terrain from the root style
+        style.loadJSON(rootWithTerrain);
+        await new Promise((resolve) => map.on('style.load', resolve));
+        t.equal(style.terrain.scope, style.scope);
+        t.deepEqual(style.getTerrain(), {source: 'mapbox-dem', exaggeration: 2});
+
+        // Using terrain from the imported style
+        style.setState(rootWithoutTerrain);
+        t.equal(style.terrain.scope, style.getFragmentStyle('basemap').scope);
+        t.deepEqual(style.getTerrain(), {source: 'mapbox-dem', exaggeration: 1.5});
+
+        // Using terrain from the root style again
+        style.setState(rootWithTerrain);
+        t.equal(style.terrain.scope, style.scope);
+        t.deepEqual(style.getTerrain(), {source: 'mapbox-dem', exaggeration: 2});
+
+        t.end();
+    });
+
     t.test('empty terrain in import does not override terrain in root style', (t) => {
         const style = new Style(new StubMap());
 
@@ -1406,6 +1499,88 @@ test('Style#getTerrain', (t) => {
             t.deepEqual(style.getTerrain(), {source: 'mapbox-dem', exaggeration: 1.5});
             t.end();
         });
+    });
+
+    t.test('multiple imports should not reset the style changed state when terrain and 3d layers are present', (t) => {
+        const map = new StubMap();
+        const style = new Style(map);
+
+        const initialStyle = createStyleJSON({
+            imports: [
+                {id: 'basemap', url: '/standard.json'},
+                {id: 'navigation', url: '/navigation.json'}
+            ],
+        });
+
+        const standardFragment = createStyleJSON({
+            terrain: {source: 'mapbox-dem', exaggeration: 1.5},
+            sources: {
+                composite: {type: 'vector', tiles: []},
+                'mapbox-dem': {
+                    type: 'raster-dem',
+                    tiles: ['http://example.com/{z}/{x}/{y}.png'],
+                    tileSize: 256,
+                    maxzoom: 14
+                }
+            },
+            layers: [
+                {id: 'land', type: 'background'},
+                {id: '3d-building', type: 'fill-extrusion', source: 'composite', 'source-layer': 'building'}
+            ]
+        });
+
+        const navigationFragment = createStyleJSON({
+            sources: {composite: {type: 'vector', tiles: []}},
+            layers: [{id: 'traffic', type: 'line', source: 'composite', 'source-layer': 'traffic'}]
+        });
+
+        map.on('style.import.load', () => {
+            t.equals(style._changes.isDirty(), true, 'style must be dirty during import');
+        });
+
+        style.on('style.load', () => {
+            t.equals(window.server.requests.length, 3);
+            t.equals(style._changes.isDirty(), true, 'style must be dirty after load');
+            t.end();
+        });
+
+        window.server.respondWith('/style.json', JSON.stringify(initialStyle));
+        window.server.respondWith('/standard.json', JSON.stringify(standardFragment));
+        window.server.respondWith('/navigation.json', JSON.stringify(navigationFragment));
+        style.loadURL('/style.json');
+    });
+
+    t.test('supports config', (t) => {
+        const style = new Style(new StubMap());
+
+        const initialStyle = createStyleJSON({
+            imports: [{
+                id: 'standard',
+                url: '/standard.json',
+                config: {showTerrain: true},
+                data: createStyleJSON({
+                    terrain: {source: 'mapbox-dem', exaggeration: ['case', ['config', 'showTerrain'], 2, 0]},
+                    sources: {
+                        'mapbox-dem': {
+                            type: 'raster-dem',
+                            tiles: ['http://example.com/{z}/{x}/{y}.png']
+                        }
+                    },
+                })
+            }]
+        });
+
+        style.on('style.load', () => {
+            t.equal(style.terrain.getExaggeration(0), 2);
+
+            style.setConfigProperty('standard', 'showTerrain', false);
+            style.update({});
+
+            t.equal(style.terrain.getExaggeration(0), 0);
+            t.end();
+        });
+
+        style.loadJSON(initialStyle);
     });
 
     t.end();
@@ -1501,6 +1676,34 @@ test('Camera', (t) => {
 
         style.on('style.load', () => {
             t.deepEqual(style.camera, {'camera-projection': 'orthographic'});
+            t.end();
+        });
+    });
+
+    t.test('sequential imports dont override orthographic camera with perspective', (t) => {
+        const map = new StubMap();
+        const style = new Style(map);
+
+        style.loadJSON(createStyleJSON({
+            imports: [
+                {
+                    id: 'basemap',
+                    url: '/standard.json',
+                    data: createStyleJSON({camera: {'camera-projection': 'orthographic'}})
+                },
+                {
+                    id: 'navigation',
+                    url: '/navigation.json',
+                    data: createStyleJSON()
+                }
+            ],
+        }));
+
+        const spy = t.spy(map, '_triggerCameraUpdate');
+
+        style.on('style.load', () => {
+            t.deepEqual(style.camera, {'camera-projection': 'orthographic'});
+            t.deepEqual(spy.lastCall.firstArg, {'camera-projection': 'orthographic'});
             t.end();
         });
     });
@@ -1988,6 +2191,8 @@ test('Style#setConfigProperty', (t) => {
         });
 
         style.on('style.load', () => {
+            t.equal(style.getConfigProperty('standard', 'showBackground'), false);
+
             style.dispatcher.broadcast = function(key, value) {
                 t.equal(key, 'updateLayers');
                 t.equal(value.scope, 'standard');
@@ -1998,6 +2203,7 @@ test('Style#setConfigProperty', (t) => {
             };
 
             style.setConfigProperty('standard', 'showBackground', true);
+            t.equal(style.getConfigProperty('standard', 'showBackground'), true);
             style.update({});
         });
 
@@ -2048,19 +2254,21 @@ test('Style#setState', (t) => {
     });
 
     t.test('Adds fragment', async (t) => {
-        const style = new Style(new StubMap());
+        const map = new StubMap();
+        const style = new Style(map);
+        style.setEventedParent(map, {style});
 
         const initialStyle = createStyleJSON();
         style.loadJSON(initialStyle);
 
-        await new Promise((resolve) => style.on('style.load', resolve));
+        await new Promise((resolve) => map.on('style.load', resolve));
 
         const nextStyle = createStyleJSON({
             imports: [{id: 'a', url: '', data: createStyleJSON()}]
         });
 
         style.setState(nextStyle);
-        await new Promise((resolve) => style.on('style.load', resolve));
+        await new Promise((resolve) => map.on('style.import.load', resolve));
 
         t.deepEqual(style.serialize(), nextStyle);
 
@@ -2068,21 +2276,23 @@ test('Style#setState', (t) => {
     });
 
     t.test('Adds fragment to the existing fragments', async (t) => {
-        const style = new Style(new StubMap());
+        const map = new StubMap();
+        const style = new Style(map);
+        style.setEventedParent(map, {style});
 
         const initialStyle = createStyleJSON({
             imports: [{id: 'a', url: '', data: createStyleJSON()}]
         });
 
         style.loadJSON(initialStyle);
-        await new Promise((resolve) => style.on('style.load', resolve));
+        await new Promise((resolve) => map.on('style.load', resolve));
 
         const nextStyle = createStyleJSON({
             imports: [{id: 'a', url: '', data: createStyleJSON()}, {id: 'b', url: '', data: createStyleJSON()}]
         });
 
         style.setState(nextStyle);
-        await new Promise((resolve) => style.on('style.load', resolve));
+        await new Promise((resolve) => map.on('style.import.load', resolve));
 
         t.deepEqual(style.serialize(), nextStyle);
 
@@ -2090,21 +2300,23 @@ test('Style#setState', (t) => {
     });
 
     t.test('Adds fragment before another', async (t) => {
-        const style = new Style(new StubMap());
+        const map = new StubMap();
+        const style = new Style(map);
+        style.setEventedParent(map, {style});
 
         const initialStyle = createStyleJSON({
             imports: [{id: 'b', url: '', data: createStyleJSON()}]
         });
 
         style.loadJSON(initialStyle);
-        await new Promise((resolve) => style.on('style.load', resolve));
+        await new Promise((resolve) => map.on('style.load', resolve));
 
         const nextStyle = createStyleJSON({
             imports: [{id: 'a', url: '', data: createStyleJSON()}, {id: 'b', url: '', data: createStyleJSON()}]
         });
 
         style.setState(nextStyle);
-        await new Promise((resolve) => style.on('style.load', resolve));
+        await new Promise((resolve) => map.on('style.import.load', resolve));
 
         t.deepEqual(style.serialize(), nextStyle);
 
@@ -2201,59 +2413,65 @@ test('Style#setState', (t) => {
     });
 
     t.test('Moves fragment', async (t) => {
-        const style = new Style(new StubMap());
+        const map = new StubMap();
+        const style = new Style(map);
+        style.setEventedParent(map, {style});
 
         const initialStyle = createStyleJSON({
             imports: [{id: 'a', url: '', data: createStyleJSON()}, {id: 'b', url: '', data: createStyleJSON()}]
         });
 
         style.loadJSON(initialStyle);
-        await new Promise((resolve) => style.on('style.load', resolve));
+        await new Promise((resolve) => map.on('style.load', resolve));
 
         const nextStyle = createStyleJSON({
             imports: [{id: 'b', url: '', data: createStyleJSON()}, {id: 'a', url: '', data: createStyleJSON()}]
         });
 
         style.setState(nextStyle);
-        await new Promise((resolve) => style.on('style.load', resolve));
+        await new Promise((resolve) => map.on('style.import.load', resolve));
 
         t.deepEqual(style.serialize(), nextStyle);
 
         t.end();
     });
 
-    t.test('Updates fragment URL', async (t) => {
-        const style = new Style(new StubMap());
+    t.test('Updates fragment URL', (t) => {
+        const map = new StubMap();
+        const style = new Style(map);
+        style.setEventedParent(map, {style});
+
+        const data = createStyleJSON({layers: [{id: 'a', type: 'background'}]});
+        window.server.respondWith('/style1.json', JSON.stringify(createStyleJSON()));
+        window.server.respondWith('/style2.json', JSON.stringify(data));
 
         const initialStyle = createStyleJSON({
-            imports: [{id: 'a', url: '/style.json'}],
+            imports: [{id: 'a', url: '/style1.json', config: {lightPreset: 'night'}}],
             layers: [{id: 'b', type: 'background', paint: {'background-color': 'red'}}]
         });
 
-        window.server.respondWith('/style.json', JSON.stringify(createStyleJSON()));
-
-        style.loadJSON(initialStyle);
-        await new Promise((resolve) => style.on('style.load', resolve));
-
         const nextStyle = createStyleJSON({
-            imports: [{id: 'a', url: '/styles/streets-v12.json'}],
+            imports: [{id: 'a', url: '/style2.json', config: {lightPreset: 'night'}}],
             layers: [{id: 'b', type: 'background', paint: {'background-color': 'pink'}}]
         });
 
-        const data = createStyleJSON({layers: [{id: 'a', type: 'background'}]});
-        window.server.respondWith('/styles/streets-v12.json', JSON.stringify(data));
+        map.on('style.load', () => {
+            style.setState(nextStyle);
 
-        style.setState(nextStyle);
-        t.equal(style._changes.updatedPaintProps.has('b'), true, 'Keeps previous changes intact');
+            t.deepEqual(style.serialize(), createStyleJSON({
+                imports: [{id: 'a', url: '/style2.json', config: {lightPreset: 'night'}, data}],
+                layers: [{id: 'b', type: 'background', paint: {'background-color': 'pink'}}]
+            }));
 
-        await new Promise((resolve) => style.on('style.load', resolve));
+            t.equal(style.getConfigProperty('a', 'lightPreset'), 'night');
 
-        t.deepEqual(style.serialize(), createStyleJSON({
-            imports: [{id: 'a', url: '/styles/streets-v12.json', data}],
-            layers: [{id: 'b', type: 'background', paint: {'background-color': 'pink'}}]
-        }));
+            const updatedPaintProperties = style._changes.getUpdatedPaintProperties();
+            t.equal(updatedPaintProperties.has('b'), true, 'Keeps previous changes intact');
 
-        t.end();
+            t.end();
+        });
+
+        style.loadJSON(initialStyle);
     });
 
     t.test('Updates fragment data', async (t) => {

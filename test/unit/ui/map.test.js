@@ -110,7 +110,7 @@ test('Map', (t) => {
     });
 
     t.test('default performance metrics collection', (t) => {
-        const map = createMap(t);
+        const map = createMap(t, {performanceMetricsCollection: true});
         map._requestManager._customAccessToken = 'access-token';
         map.once('idle', () => {
             map.triggerRepaint();
@@ -127,7 +127,7 @@ test('Map', (t) => {
     });
 
     t.test('performance metrics event stores explicit projection', (t) => {
-        const map = createMap(t, {projection: 'globe', zoom: 20});
+        const map = createMap(t, {performanceMetricsCollection: true, projection: 'globe', zoom: 20});
         map._requestManager._customAccessToken = 'access-token';
         map.once('idle', () => {
             map.triggerRepaint();
@@ -160,6 +160,57 @@ test('Map', (t) => {
         createMap(t, {container, testMode: true});
 
         t.ok(stub.calledOnce);
+
+        t.end();
+    });
+
+    t.test('uses zero values for zoom and coordinates', (t) => {
+        function getInitialMap(t) {
+            return createMap(t, {
+                zoom: 0,
+                center: [0, 0],
+                style: {
+                    version: 8,
+                    sources: {},
+                    layers: [],
+                    center: [
+                        -73.9749,
+                        40.7736
+                    ],
+                    zoom: 4
+                }
+            });
+        }
+
+        t.test('should use these values instead of defaults from style', (t) => {
+            const map = getInitialMap(t);
+
+            map.on('load', () => {
+                t.equal(map.getZoom(), 0);
+                t.deepEqual(map.getCenter(), {lat: 0, lng: 0});
+                t.end();
+            });
+        });
+
+        t.test('after setStyle should still use these values', (t) => {
+            const map = getInitialMap(t);
+
+            map.on('load', () => {
+                map.setStyle({
+                    version: 8,
+                    sources: {},
+                    layers: [],
+                    center: [
+                        24.9384,
+                        60.169
+                    ],
+                    zoom: 3
+                });
+                t.equal(map.getZoom(), 0);
+                t.deepEqual(map.getCenter(), {lat: 0, lng: 0});
+                t.end();
+            });
+        });
 
         t.end();
     });
@@ -2911,11 +2962,38 @@ test('Map', (t) => {
         });
 
         t.test('sets and gets language property', (t) => {
-            const map = createMap(t);
+            const map = createMap(t, {
+                style: extend(createStyle(), {
+                    sources: {
+                        mapbox: {
+                            type: 'vector',
+                            minzoom: 1,
+                            maxzoom: 10,
+                            tiles: ['http://example.com/{z}/{x}/{y}.png']
+                        }
+                    }
+                })
+            });
+
             map.on('style.load', () => {
+                const source = map.getSource('mapbox');
+                const loadSpy = t.spy(source, 'load');
+                const clearSourceSpy = t.spy(map.style, 'clearSource');
+
+                source.on('data', (e) => {
+                    if (e.sourceDataType === 'metadata') {
+                        setImmediate(() => {
+                            t.ok(clearSourceSpy.calledOnce, 'Style.clearSource should be called after source load');
+                            t.equal(clearSourceSpy.lastCall.firstArg, 'mapbox');
+                            t.end();
+                        });
+                    }
+                });
+
                 map.setLanguage('es');
+
                 t.equal(map.getLanguage(), 'es');
-                t.end();
+                t.ok(loadSpy.calledOnce, 'Changing language must trigger source reload');
             });
         });
 
@@ -2954,11 +3032,38 @@ test('Map', (t) => {
         });
 
         t.test('sets and gets worldview property', (t) => {
-            const map = createMap(t);
+            const map = createMap(t, {
+                style: extend(createStyle(), {
+                    sources: {
+                        mapbox: {
+                            type: 'vector',
+                            minzoom: 1,
+                            maxzoom: 10,
+                            tiles: ['http://example.com/{z}/{x}/{y}.png']
+                        }
+                    }
+                })
+            });
+
             map.on('style.load', () => {
+                const source = map.getSource('mapbox');
+                const loadSpy = t.spy(source, 'load');
+                const clearSourceSpy = t.spy(map.style, 'clearSource');
+
+                source.on('data', (e) => {
+                    if (e.sourceDataType === 'metadata') {
+                        setImmediate(() => {
+                            t.ok(clearSourceSpy.calledOnce, 'Style.clearSource should be called after source load');
+                            t.equal(clearSourceSpy.lastCall.firstArg, 'mapbox');
+                            t.end();
+                        });
+                    }
+                });
+
                 map.setWorldview('JP');
+
                 t.equal(map.getWorldview(), 'JP');
-                t.end();
+                t.ok(loadSpy.calledOnce, 'Changing worldview must trigger source reload');
             });
         });
 
@@ -4119,7 +4224,7 @@ test('Map', (t) => {
         const version = map.version;
         t.test('returns version string', (t) => {
             t.ok(version);
-            t.match(version, /^3\.[0-9]+\.[0-9]+(-(dev|beta|rc)\.[1-9])?$/);
+            t.match(version, /^3\.[0-9]+\.[0-9]+(-(dev|alpha|beta|rc)\.[1-9])?$/);
             t.end();
         });
         t.test('cannot be set', (t) => {

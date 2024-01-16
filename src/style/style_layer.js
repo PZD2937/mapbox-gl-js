@@ -40,6 +40,11 @@ import type SourceCache from '../source/source_cache.js';
 
 const TRANSITION_SUFFIX = '-transition';
 
+type LayerRenderingStats = {
+    numRenderedVerticesInTransparentPass: number;
+    numRenderedVerticesInShadowPass: number;
+};
+
 class StyleLayer extends Evented {
     id: string;
     fqid: string;
@@ -67,7 +72,7 @@ class StyleLayer extends Evented {
     zIndex: number;
 
     options: ?Map<string, Expression>;
-
+    _stats: ?LayerRenderingStats;
     +queryRadius: (bucket: Bucket) => number;
     +queryIntersectsFeature: (queryGeometry: TilespaceQueryGeometry,
                               feature: IVectorTileFeature,
@@ -379,8 +384,15 @@ class StyleLayer extends Evented {
         return this._featureFilter.needFeature;
     }
 
-    getId(): string{
-        return this.id;
+    getLayerRenderingStats(): ?LayerRenderingStats {
+        return this._stats;
+    }
+
+    resetLayerRenderingStats() {
+        if (this._stats) {
+            this._stats.numRenderedVerticesInShadowPass = 0;
+            this._stats.numRenderedVerticesInTransparentPass = 0;
+        }
     }
 }
 
