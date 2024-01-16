@@ -59,13 +59,13 @@ export class ModelsLayer {
         });
         this.renderer.setPixelRatio(window.devicePixelRatio);
         this.renderer.autoClear = false;
-        this.cameraSysc = new CameraSync(map, this.camera, this.world);
+        this.cameraSync = new CameraSync(map, this.camera, this.world);
         map.on('idle', this._update);
     }
 
     onRemove(){
         this.map.off('idle', this._update);
-        this.cameraSysc.destroy();
+        this.cameraSync.destroy();
         this.map = undefined;
     }
 
