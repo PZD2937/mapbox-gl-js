@@ -434,7 +434,7 @@
                 'circle-color': '#ffa654'
             }
         })
-        const draw = new MapboxDraw();
+        /*const draw = new MapboxDraw();
 
         map.addControl(draw, 'top-right');
         map.on('draw.selectionchange', (e) => {
@@ -462,7 +462,7 @@
 
             // calculate(tin, 200)
 
-        });
+        });*/
         map.getSource('tian_road').on('error', (e) => {
             console.log(e)
             // e.target.setTiles(['https://t0.tianditu.gov.cn/cia_w/wmts?service=WMTS&version=1.0.0&request=GetTile&tilematrix={z}&layer=cia&style=default&tilerow={y}&tilecol={x}&tilematrixset=w&format=tiles&tk=e67b6383a8f8d5826792cdb19f302c71'])

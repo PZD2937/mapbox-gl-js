@@ -91,8 +91,6 @@ class VectorTileSource extends Evented implements Source {
         this.isTileClipped = true;
         this._loaded = false;
 
-        this._layers = {};
-
         extend(this, pick(options, ['url', 'scheme', 'tileSize', 'promoteId', 'vtOptions']));
         this._options = extend({type: 'vector'}, options);
 
@@ -281,12 +279,7 @@ class VectorTileSource extends Evented implements Source {
         // $FlowFixMe[missing-this-annot]
         function done(err: ?Error, data: ?WorkerTileResult) {
             delete tile.request;
-            // console.log(data.layersData);
-            if(data.layersData){
-                data.layersData.forEach(d => {
-                    this._layers[d.name] = d;
-                })
-            }
+
             if (tile.aborted)
                 return callback(null);
 
