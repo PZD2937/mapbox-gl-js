@@ -1848,7 +1848,7 @@ class Map extends Camera {
     }
 
     queryCloudColor(lnglat: LngLatLike, sourceId: string) {
-        const cache = this.style._getSourceCache(sourceId);
+        const cache = this.style.getSourceCache(sourceId);
         if (!cache) return null;
         const source = cache.getSource();
         if (!source) return null;
