@@ -22,6 +22,7 @@
     "eslint-plugin-jsdoc"
   ],
   "rules": {
+    "linebreak-style": "off",
     // no-duplicate-imports doesn't play well with Flow
     // https://github.com/babel/eslint-plugin-babel/issues/59
     "no-duplicate-imports": "off",
