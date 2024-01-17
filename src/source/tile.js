@@ -499,6 +499,31 @@ class Tile {
         }
     }
 
+    queryTextureColor(result: Uint8Array, params: any) {
+        if (this.state !== 'loaded' || !this.texture) return;
+        const {point, padding, gl} = params;
+        let [width, height] = this.texture.size;
+        if (padding) {
+            width -= padding[0];
+            height -= padding[1];
+        }
+        const tilesAtTileZoom = 1 << this.tileID.canonical.z;
+        const px = point.x - Math.floor(point.x);
+        const x = (px * tilesAtTileZoom - this.tileID.canonical.x) * width;
+        const y = (point.y * tilesAtTileZoom - this.tileID.canonical.y) * height;
+        let i = Math.floor(x);
+        let j = Math.floor(y);
+        if (padding) {
+            i += padding[0];
+            j += padding[1];
+        }
+        const framebuffer = gl.createFramebuffer();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.texture.texture, 0);
+        gl.readPixels(i, j, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, result);
+        gl.deleteFramebuffer(framebuffer);
+    }
+
     hasData(): boolean {
         return this.state === 'loaded' || this.state === 'reloading' || this.state === 'expired';
     }
