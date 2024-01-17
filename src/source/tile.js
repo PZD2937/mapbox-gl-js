@@ -58,6 +58,7 @@ import type {QueryFeature} from '../util/vectortile_to_geojson.js';
 import type {Vec3} from 'gl-matrix';
 import type {UserManagedTexture, TextureImage} from '../render/texture.js';
 import type {VectorTileLayer} from '@mapbox/vector-tile';
+import type MercatorCoordinate from '../geo/mercator_coordinate.js';
 
 const CLOCK_SKEW_RETRY_TIMEOUT = 30000;
 export type TileState =
@@ -490,7 +491,7 @@ class Tile {
                 const evaluationFeature = toEvaluationFeature(feature, true);
                 // $FlowFixMe[method-unbinding]
                 if (!filter.filter(new EvaluationParameters(this.tileID.overscaledZ), evaluationFeature, this.tileID.canonical)) continue;
-            // $FlowFixMe[method-unbinding]
+                // $FlowFixMe[method-unbinding]
             } else if (!filter.filter(new EvaluationParameters(this.tileID.overscaledZ), feature)) {
                 continue;
             }
@@ -500,6 +501,31 @@ class Tile {
 
             result.push(geojsonFeature);
         }
+    }
+
+    queryTextureColor(result: Uint8Array, params: any) {
+        if (this.state !== 'loaded' || !this.texture) return;
+        const {point, padding, gl} = params;
+        let [width, height] = this.texture.size;
+        if (padding) {
+            width -= padding[0];
+            height -= padding[1];
+        }
+        const tilesAtTileZoom = 1 << this.tileID.canonical.z;
+        const px = point.x - Math.floor(point.x);
+        const x = (px * tilesAtTileZoom - this.tileID.canonical.x) * width;
+        const y = (point.y * tilesAtTileZoom - this.tileID.canonical.y) * height;
+        let i = Math.floor(x);
+        let j = Math.floor(y);
+        if (padding) {
+            i += padding[0];
+            j += padding[1];
+        }
+        const framebuffer = gl.createFramebuffer();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.texture.texture, 0);
+        gl.readPixels(i, j, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, result);
+        gl.deleteFramebuffer(framebuffer);
     }
 
     hasData(): boolean {
@@ -651,7 +677,7 @@ class Tile {
             this.texture = new Texture(context, img, gl.RGBA, {useMipmap: true});
             this.texture.bind(gl.LINEAR, gl.CLAMP_TO_EDGE);
         }
-        if(this.isWindyTile) {
+        if (this.isWindyTile) {
             this.setTileColorRange(img, 257);
         }
     }
