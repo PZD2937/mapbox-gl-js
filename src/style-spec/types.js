@@ -221,7 +221,7 @@ export type VideoSourceSpecification = {|
 
 export type ImageSourceSpecification = {|
     "type": "image",
-    "url": string,
+    "url"?: string,
     "customTags"?: Object,
     "coordinates": [[number, number], [number, number], [number, number], [number, number]]
 |}
@@ -513,7 +513,8 @@ export type FillExtrusionLayerSpecification = {|
         "fill-extrusion-flood-light-ground-attenuation"?: PropertyValueSpecification<number>,
         "fill-extrusion-vertical-scale"?: PropertyValueSpecification<number>,
         "fill-extrusion-rounded-roof"?: PropertyValueSpecification<boolean>,
-        "fill-extrusion-cutoff-fade-range"?: ExpressionSpecification
+        "fill-extrusion-cutoff-fade-range"?: ExpressionSpecification,
+        "fill-extrusion-emissive-strength"?: PropertyValueSpecification<number>
     |}
 |}
 
@@ -542,7 +543,10 @@ export type RasterLayerSpecification = {|
         "raster-saturation"?: PropertyValueSpecification<number>,
         "raster-contrast"?: PropertyValueSpecification<number>,
         "raster-resampling"?: PropertyValueSpecification<"linear" | "nearest">,
-        "raster-fade-duration"?: PropertyValueSpecification<number>
+        "raster-fade-duration"?: PropertyValueSpecification<number>,
+        "raster-emissive-strength"?: PropertyValueSpecification<number>,
+        "raster-array-band"?: string,
+        "raster-elevation"?: PropertyValueSpecification<number>
     |}
 |}
 
@@ -566,7 +570,8 @@ export type HillshadeLayerSpecification = {|
         "hillshade-exaggeration"?: PropertyValueSpecification<number>,
         "hillshade-shadow-color"?: PropertyValueSpecification<ColorSpecification>,
         "hillshade-highlight-color"?: PropertyValueSpecification<ColorSpecification>,
-        "hillshade-accent-color"?: PropertyValueSpecification<ColorSpecification>
+        "hillshade-accent-color"?: PropertyValueSpecification<ColorSpecification>,
+        "hillshade-emissive-strength"?: PropertyValueSpecification<number>
     |}
 |}
 

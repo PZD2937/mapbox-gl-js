@@ -8,22 +8,21 @@ import loadTileJSON from './load_tilejson.js';
 import {postTurnstileEvent} from '../util/mapbox.js';
 import TileBounds from './tile_bounds.js';
 import browser from '../util/browser.js';
-
 import {cacheEntryPossiblyAdded} from '../util/tile_request_cache.js';
+import {makeFQID} from '../util/fqid.js';
 
 import type {Source} from './source.js';
 import type {OverscaledTileID} from './tile_id.js';
 import type Map from '../ui/map.js';
-import type Painter from '../render/painter.js';
 import type Dispatcher from '../util/dispatcher.js';
 import type Tile from './tile.js';
 import type {Callback} from '../types/callback.js';
 import type {Cancelable} from '../types/cancelable.js';
-import type {TextureImage} from '../render/texture.js';
 import type {
     RasterSourceSpecification,
     RasterDEMSourceSpecification
 } from '../style-spec/types.js';
+import Texture from '../render/texture.js';
 import {CanonicalTileID} from "./tile_id.js";
 import type Actor from '../util/actor.js';
 import mergerTextureImage from "../util/merger_image.js";
@@ -286,7 +285,7 @@ class RasterTileSource extends Evented implements Source {
             } else {
                 tile.request = loadRasterTile.call(this, {requests, offset: data.offset}, (err, result) => {
                     if (tile.state === 'unloaded') return callback(null);
-                    callback(err, result);
+                    callback(err, result)
                 });
                 this.limitedStorage();
             }
@@ -300,16 +299,6 @@ class RasterTileSource extends Evented implements Source {
             for (let i = 0; i < subLoading.length - 80; i++) {
                 delete this.subLoading[subLoading[i]];
             }
-        }
-    }
-
-    static loadTileData(tile: Tile, data: TextureImage, painter: Painter) {
-        tile.setTexture(data, painter);
-    }
-
-    static unloadTileData(tile: Tile, painter: Painter) {
-        if (tile.texture) {
-            painter.saveTileTexture(tile.texture);
         }
     }
 
@@ -336,7 +325,19 @@ class RasterTileSource extends Evented implements Source {
     unloadTile(tile: Tile, callback: Callback<void>) {
         tile.aborted = true;
         tile.state = 'unloaded';
-        if (tile.texture) this.map.painter.saveTileTexture(tile.texture);
+        // Cache the tile texture to avoid re-allocating Textures if they'll just be reloaded
+        if (tile.texture && tile.texture instanceof Texture) {
+            // Clean everything else up owned by the tile, but preserve the texture.
+            // Destroy first to prevent racing with the texture cache being popped.
+            tile.destroy(true);
+
+            // Save the texture to the cache
+            if (tile.texture && tile.texture instanceof Texture) {
+                this.map.painter.saveTileTexture(tile.texture);
+            }
+        } else {
+            tile.destroy();
+        }
         if (tile.actor) {
             tile.actor.send('removeTile', {
                 uid: tile.uid,

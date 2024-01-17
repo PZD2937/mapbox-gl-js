@@ -1,3 +1,6 @@
+#include "_prelude_fog.fragment.glsl"
+#include "_prelude_shadow.fragment.glsl"
+#include "_prelude_lighting.glsl"
 
 uniform float u_opacity;
 
@@ -9,6 +12,8 @@ uniform vec4 u_baseColorFactor;
 uniform vec4 u_emissiveFactor;
 uniform float u_metallicFactor;
 uniform float u_roughnessFactor;
+uniform float u_emissive_strength;
+
 
 varying highp vec4 v_position_height;
 varying lowp vec4 v_color_mix;
@@ -433,8 +438,9 @@ vec4 finalColor;
     vec3 color = computeLightContribution(mat, lightDir, lightColor);
 
     // Ambient Occlusion
+    float ao = 1.0;
 #if defined (HAS_TEXTURE_u_occlusionTexture) && defined(HAS_ATTRIBUTE_a_uv_2f)
-    float ao = (texture2D(u_occlusionTexture, uv_2f).x - 1.0) * u_aoIntensity + 1.0;
+    ao = (texture2D(u_occlusionTexture, uv_2f).x - 1.0) * u_aoIntensity + 1.0;
     color *= ao;
 #endif
     // Emission
@@ -461,7 +467,10 @@ vec4 finalColor;
     opacity *= v_roughness_metallic_emissive_alpha.w * saturate(1.0 - distance * distance);
 #endif
 #endif
-
+    // Use emissive strength as interpolation between lit and unlit color
+    // for coherence with other layer types.
+    vec3 unlitColor = mat.baseColor.rgb * ao + emissive.rgb;
+    color = mix(color, unlitColor, u_emissive_strength);
     color = linearTosRGB(color);
     color *= opacity;
     finalColor = vec4(color, opacity);

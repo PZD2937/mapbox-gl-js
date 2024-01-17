@@ -369,7 +369,7 @@ class GeoJSONSource extends Evented implements Source {
 
         tile.request = this.actor.send(message, params, (err, data) => {
             delete tile.request;
-            tile.unloadVectorData();
+            tile.destroy();
 
             if (tile.aborted) {
                 return callback(null);
@@ -396,8 +396,8 @@ class GeoJSONSource extends Evented implements Source {
 
     // $FlowFixMe[method-unbinding]
     unloadTile(tile: Tile) {
-        tile.unloadVectorData();
         this.actor.send('removeTile', {uid: tile.uid, type: this.type, source: this.id, scope: this.scope});
+        tile.destroy();
     }
 
     // $FlowFixMe[method-unbinding]

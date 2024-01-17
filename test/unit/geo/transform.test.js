@@ -690,14 +690,15 @@ test('transform', (t) => {
             getAtPointOrZero() {
                 return 0.0;
             },
-            getAtPoint(p) {
-                return this.getAtPointOrZero(p);
+            getAtPoint(p, x) {
+                return x;
             },
             getForTilePoints() {
                 return true;
             },
             getMinElevationBelowMSL: () => 0,
-            exaggeration: () => 1
+            exaggeration: () => 1,
+            visibleDemTiles: () => []
         };
     };
 
@@ -722,7 +723,8 @@ test('transform', (t) => {
             _exaggeration: 1,
             exaggeration() {
                 return this._exaggeration;
-            }
+            },
+            getMinMaxForVisibleTiles: () => null
         };
     };
 
@@ -972,7 +974,8 @@ test('transform', (t) => {
             exaggeration() {
                 return 10; // Low tile zoom used, exaggerate elevation to make impact.
             },
-            getMinElevationBelowMSL: () => 0
+            getMinElevationBelowMSL: () => 0,
+            getMinMaxForVisibleTiles: () => null
         };
         transform.elevation = elevation;
         transform.resize(200, 200);
@@ -1183,7 +1186,8 @@ test('transform', (t) => {
             exaggeration() {
                 return 1;
             },
-            getMinElevationBelowMSL: () => 0
+            getMinElevationBelowMSL: () => 0,
+            getMinMaxForVisibleTiles: () => null
         };
         transform.bearing = -95.8;
         transform.resize(1335, 934);

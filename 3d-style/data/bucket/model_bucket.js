@@ -7,6 +7,7 @@ import toEvaluationFeature from '../../../src/data/evaluation_feature.js';
 import type {EvaluationFeature} from '../../../src/data/evaluation_feature.js';
 import EvaluationParameters from '../../../src/style/evaluation_parameters.js';
 import Point from '@mapbox/point-geometry';
+import {vec3} from 'gl-matrix';
 import type {Mat4} from 'gl-matrix';
 import type {CanonicalTileID, OverscaledTileID} from '../../../src/source/tile_id.js';
 import type {
@@ -37,10 +38,17 @@ class ModelFeature {
     instancedDataOffset: number;
     instancedDataCount: number;
 
+    rotation: Array<number>;
+    scale: Array<number>;
+    translation: Array<number>;
+
     constructor(feature: EvaluationFeature, offset: number) {
         this.feature = feature;
         this.instancedDataOffset = offset;
         this.instancedDataCount = 0;
+        this.rotation = [0, 0, 0];
+        this.scale = [1, 1, 1];
+        this.translation = [0, 0, 0];
     }
 }
 
@@ -80,7 +88,7 @@ class ModelBucket implements Bucket {
 
     // elevation is baked into vertex buffer together with evaluated instance translation
     validForExaggeration: number;
-    validForDEMTile: ?OverscaledTileID;
+    validForDEMTile: {id: ?OverscaledTileID, timestamp: number};
     maxVerticalOffset: number; // for tile AABB calculation
     maxScale: number; // across all dimensions, for tile AABB calculation
     maxHeight: number; // calculated from previous two, during rendering, when models are available.
@@ -92,14 +100,18 @@ class ModelBucket implements Bucket {
     terrainElevationMin: number;
     terrainElevationMax: number;
 
+    hasZoomDependentProperties: boolean;
+
     /* $FlowIgnore[incompatible-type-arg] Doesn't need to know about all the implementations */
     constructor(options: BucketParameters<ModelStyleLayer>) {
         this.zoom = options.zoom;
         this.canonical = options.canonical;
         this.layers = options.layers;
-        this.layerIds = this.layers.map(layer => layer.id);
+        this.layerIds = this.layers.map(layer => layer.fqid);
         this.projection = options.projection;
         this.index = options.index;
+
+        this.hasZoomDependentProperties = this.layers[0].isZoomDependent();
 
         this.stateDependentLayerIds = this.layers.filter((l) => l.isStateDependent()).map((l) => l.id);
         this.hasPattern = false;
@@ -115,6 +127,7 @@ class ModelBucket implements Bucket {
 
         this.terrainElevationMin = 0;
         this.terrainElevationMax = 0;
+        this.validForDEMTile = {id: null, timestamp: 0};
     }
 
     populate(features: Array<IndexedFeature>, options: PopulateParameters, canonical: CanonicalTileID, tileTransform: TileTransform) {
@@ -160,6 +173,37 @@ class ModelBucket implements Bucket {
             }
         }
         this.maxHeight = 0; // needs to be recalculated.
+    }
+
+    updateZoomBasedPaintProperties(): boolean {
+        if (!this.hasZoomDependentProperties) {
+            return false;
+        }
+
+        // layer.paint.get('model-rotation').isZoom
+        let reuploadNeeded = false;
+        for (const modelId in this.instancesPerModel) {
+            const instances = this.instancesPerModel[modelId];
+            for (const feature of instances.features) {
+                const layer = this.layers[0];
+                const evaluationFeature = feature.feature;
+                const canonical = this.canonical;
+                const rotation = layer.paint.get('model-rotation').evaluate(evaluationFeature, {}, canonical);
+                const scale = layer.paint.get('model-scale').evaluate(evaluationFeature, {}, canonical);
+                const translation = layer.paint.get('model-translation').evaluate(evaluationFeature, {}, canonical);
+
+                // $FlowFixMe.
+                if (!vec3.exactEquals(feature.rotation, rotation) ||
+                    // $FlowFixMe.
+                    !vec3.exactEquals(feature.scale, scale) ||
+                    // $FlowFixMe.
+                    !vec3.exactEquals(feature.translation, translation)) {
+                    this.evaluate(feature, feature.featureStates, instances, true);
+                    reuploadNeeded = true;
+                }
+            }
+        }
+        return reuploadNeeded;
     }
 
     isEmpty(): boolean {
@@ -255,9 +299,13 @@ class ModelBucket implements Bucket {
         const layer = this.layers[0];
         const evaluationFeature = feature.feature;
         const canonical = this.canonical;
-        const rotation = layer.paint.get('model-rotation').evaluate(evaluationFeature, featureState, canonical);
-        const scale = layer.paint.get('model-scale').evaluate(evaluationFeature, featureState, canonical);
-        const translation = layer.paint.get('model-translation').evaluate(evaluationFeature, featureState, canonical);
+        // $FlowFixMe.
+        const rotation = feature.rotation = layer.paint.get('model-rotation').evaluate(evaluationFeature, featureState, canonical);
+        // $FlowFixMe.
+        const scale = feature.scale = layer.paint.get('model-scale').evaluate(evaluationFeature, featureState, canonical);
+        // $FlowFixMe.
+        const translation = feature.translation = layer.paint.get('model-translation').evaluate(evaluationFeature, featureState, canonical);
+
         const color = layer.paint.get('model-color').evaluate(evaluationFeature, featureState, canonical);
         color.a = layer.paint.get('model-color-mix-intensity').evaluate(evaluationFeature, featureState, canonical);
         const rotationScaleYZFlip: Mat4 = [];

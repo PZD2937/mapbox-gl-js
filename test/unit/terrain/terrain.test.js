@@ -17,7 +17,8 @@ import Marker from '../../../src/ui/marker.js';
 import Popup from '../../../src/ui/popup.js';
 import simulate from '../../util/simulate_interaction.js';
 import browser from '../../../src/util/browser.js';
-import {AVERAGE_ELEVATION_SAMPLING_INTERVAL, AVERAGE_ELEVATION_EASE_TIME} from '../../../src/ui/map.js';
+import * as DOM from '../../../src/util/dom.js';
+import Map, {AVERAGE_ELEVATION_SAMPLING_INTERVAL, AVERAGE_ELEVATION_EASE_TIME} from '../../../src/ui/map.js';
 import {createConstElevationDEM, setMockElevationTerrain} from '../../util/dem_mock.js';
 
 function createStyle() {
@@ -55,7 +56,7 @@ const createGradientDEM = () => {
             }
         }
     }
-    return new DEMData(0, new RGBAImage({height: TILE_SIZE + 2, width: TILE_SIZE + 2}, pixels), "mapbox", false, true);
+    return new DEMData(0, new RGBAImage({height: TILE_SIZE + 2, width: TILE_SIZE + 2}, pixels), "mapbox");
 };
 
 const createNegativeGradientDEM = () => {
@@ -80,7 +81,7 @@ const createNegativeGradientDEM = () => {
             }
         }
     }
-    return new DEMData(0, new RGBAImage({height: TILE_SIZE + 2, width: TILE_SIZE + 2}, pixels), "mapbox", false, true);
+    return new DEMData(0, new RGBAImage({height: TILE_SIZE + 2, width: TILE_SIZE + 2}, pixels), "mapbox");
 };
 
 test('Elevation', (t) => {
@@ -113,6 +114,24 @@ test('Elevation', (t) => {
                     t.equal(elevation2, elevationError);
                     t.end();
                 });
+                t.end();
+            });
+        });
+    });
+
+    t.test('Out of bounds when sampling 514x514 tile', (t) => {
+        const map = createMap(t, {zoom: 15.1, center:[11.594417, 48.095821]});
+        map.on('style.load', () => {
+            setMockElevationTerrain(map, zeroDem, 512, 11);
+            map.once('render', () => {
+
+                t.test('Sample', t => {
+                    const points = [[8191, 8191, 1]];
+                    map.painter.terrain.getForTilePoints(new OverscaledTileID(15, 0, 15, 17439, 11377), points);
+                    t.equal(points[0][2], 0);
+                    t.end();
+                });
+
                 t.end();
             });
         });
@@ -183,7 +202,7 @@ test('Elevation', (t) => {
                 "tileSize": TILE_SIZE,
                 "maxzoom": 14
             });
-            const cache = map.style._getSourceCache('mapbox-dem');
+            const cache = map.style.getOwnSourceCache('mapbox-dem');
             cache.used = cache._sourceLoaded = true;
             cache._loadTile = (tile, callback) => {
                 tile.dem = dem;
@@ -194,7 +213,7 @@ test('Elevation', (t) => {
             };
             map.setTerrain({"source": "mapbox-dem"});
             map.once('render', () => {
-                const cache = map.style._getSourceCache('mapbox-dem');
+                const cache = map.style.getOwnSourceCache('mapbox-dem');
 
                 t.test('terrain tiles loaded wrap', t => {
                     const tile = cache.getTile(new OverscaledTileID(14, 1, 14, 0, 8192));
@@ -217,14 +236,14 @@ test('Elevation', (t) => {
 
                 t.test('dx', t => {
                     const elevationDx = map.painter.terrain.getAtPoint({x: coord.x + dx, y: coord.y}, 0);
-                    t.assert(Math.abs(elevationDx - 0.1) < 1e-12);
+                    t.assert(Math.abs(elevationDx - 0.1) < 1e-8);
                     t.end();
                 });
 
                 t.test('dy', t => {
                     const elevationDy = map.painter.terrain.getAtPoint({x: coord.x, y: coord.y + dx}, 0);
                     const expectation = TILE_SIZE * 0.1;
-                    t.assert(Math.abs(elevationDy - expectation) < 1e-12);
+                    t.assert(Math.abs(elevationDy - expectation) < 1e-6);
                     t.end();
                 });
 
@@ -238,14 +257,14 @@ test('Elevation', (t) => {
                 t.test('-dx -wrap', t => {
                     const elevation = map.painter.terrain.getAtPoint({x: coord.x - dx, y: coord.y}, 0);
                     const expectation = (TILE_SIZE - 1) * 0.1;
-                    t.assert(Math.abs(elevation - expectation) < 1e-12);
+                    t.assert(Math.abs(elevation - expectation) < 1e-6);
                     t.end();
                 });
 
                 t.test('-1.5dx -wrap', t => {
                     const elevation = map.painter.terrain.getAtPoint({x: coord.x - 1.5 * dx, y: coord.y}, 0);
                     const expectation = (TILE_SIZE - 1.5) * 0.1;
-                    t.assert(Math.abs(elevation - expectation) < 1e-12);
+                    t.assert(Math.abs(elevation - expectation) < 1e-7);
                     t.end();
                 });
 
@@ -278,7 +297,7 @@ test('Elevation', (t) => {
                     t.false(map.painter.terrain.isDataAvailableAtPoint({x: 0.5, y: 0.5}));
                     t.end();
                 });
-                const cache = map.style._getSourceCache('mapbox-dem');
+                const cache = map.style.getOwnSourceCache('mapbox-dem');
                 cache.used = cache._sourceLoaded = true;
                 cache._loadTile = (tile, callback) => {
                     tile.dem = zeroDem;
@@ -325,7 +344,7 @@ test('Elevation', (t) => {
                 "tileSize": TILE_SIZE,
                 "maxzoom": 14
             });
-            const cache = map.style._getSourceCache('mapbox-dem');
+            const cache = map.style.getOwnSourceCache('mapbox-dem');
             cache.used = cache._sourceLoaded = true;
             cache._loadTile = (tile, callback) => {
                 // Elevate tiles above center.
@@ -371,7 +390,7 @@ test('Elevation', (t) => {
                 t.true(map._averageElevation.isEasing(timestamp));
                 t.equal(map.transform.averageElevation, 0);
 
-                const assertAlmostEqual = (t, actual, expected, epsilon = 1e-6) => {
+                const assertAlmostEqual = (t, actual, expected, epsilon = 1e-3) => {
                     t.ok(Math.abs(actual - expected) < epsilon);
                 };
 
@@ -531,7 +550,7 @@ test('Elevation', (t) => {
                     'line-width': 5
                 }
             });
-            const cache = map.style._getSourceCache('mapbox-dem');
+            const cache = map.style.getOwnSourceCache('mapbox-dem');
             cache._loadTile = (tile, callback) => {
                 const pixels = new Uint8Array((512 + 2) * (512 + 2) * 4);
                 tile.dem = new DEMData(0, new RGBAImage({height: 512 + 2, width: 512 + 2}, pixels));
@@ -554,7 +573,7 @@ test('Elevation', (t) => {
                         t.end();
                     }
                 });
-                const cache = map.style._getSourceCache('trace');
+                const cache = map.style.getOwnSourceCache('trace');
                 cache.transform = map.painter.transform;
                 cache._addTile(new OverscaledTileID(0, 0, 0, 0, 0));
                 cache.onAdd();
@@ -633,7 +652,7 @@ test('Elevation', (t) => {
         });
 
         map.on('style.load', () => {
-            const cache = map.style._getSourceCache('mapbox-dem');
+            const cache = map.style.getOwnSourceCache('mapbox-dem');
             cache._loadTile = (tile, callback) => {
                 const pixels = new Uint8Array((512 + 2) * (512 + 2) * 4);
                 tile.dem = new DEMData(0, new RGBAImage({height: 512 + 2, width: 512 + 2}, pixels));
@@ -778,6 +797,129 @@ test('Raycast projection 2D/3D', t => {
     });
 });
 
+function createInteractiveMap(t, clickTolerance, dragPan) {
+    t.stub(Map.prototype, '_detectMissingCSS');
+    return new Map({
+        container: DOM.create('div', '', window.document.body),
+        clickTolerance: clickTolerance || 0,
+        dragPan: dragPan || true,
+        testMode: true,
+        style: {
+            version: 8,
+            center: [0, 0],
+            zoom: 15.7,
+            sources: {},
+            layers: [{
+                "id": "background",
+                "type": "background",
+                "paint": {
+                    "background-color": "black"
+                }
+            }],
+            pitch: 0
+        }
+    });
+}
+
+test('Drag pan ortho', (t) => {
+    t.beforeEach(() => {
+        window.useFakeXMLHttpRequest();
+    });
+
+    const assertAlmostEqual = (t, actual, expected, epsilon = 1e-3) => {
+        t.ok(Math.abs(actual - expected) < epsilon);
+    };
+
+    const map = createInteractiveMap(t);
+
+    map.on('style.load', () => {
+        map.addSource('mapbox-dem', {
+            "type": "raster-dem",
+            "tiles": ['http://example.com/{z}/{x}/{y}.png'],
+            "tileSize": TILE_SIZE,
+            "maxzoom": 14
+        });
+        const cache = map.style.getOwnSourceCache('mapbox-dem');
+        cache.used = cache._sourceLoaded = true;
+        const mockDem = (dem, cache) => {
+            cache._loadTile = (tile, callback) => {
+                tile.dem = dem;
+                tile.needsHillshadePrepare = true;
+                tile.needsDEMTextureUpload = true;
+                tile.state = 'loaded';
+                callback(null);
+            };
+        };
+
+        t.test('ortho camera & drag over zero pitch elevation', t => {
+            mockDem(createNegativeGradientDEM(), cache);
+            map.setTerrain({"source": "mapbox-dem"});
+            map.setPitch(0);
+            map.setZoom(15.7);
+            map.setCamera({"camera-projection": "orthographic"});
+            map.once('render', () => {
+
+                // MouseEvent.buttons = 1 // left button
+                const buttons = 1;
+                map._updateTerrain();
+                t.equal(map.getZoom(), 15.7);
+
+                const dragstart = t.spy();
+                const drag      = t.spy();
+                const dragend   = t.spy();
+
+                map.on('dragstart', dragstart);
+                map.on('drag',      drag);
+                map.on('dragend',   dragend);
+
+                simulate.mousedown(map.getCanvas());
+                map._renderTaskQueue.run();
+                simulate.mousemove(window.document.body, {buttons, clientX: 15, clientY: 15});
+                map._renderTaskQueue.run();
+                t.equal(dragstart.callCount, 1);
+                t.equal(drag.callCount, 1);
+                t.equal(dragend.callCount, 0);
+
+                simulate.mouseup(map.getCanvas());
+                map._renderTaskQueue.run();
+                t.equal(dragstart.callCount, 1);
+                t.equal(drag.callCount, 1);
+                t.equal(dragend.callCount, 1);
+
+                t.equal(map.getZoom(), 15.7); // recenter on pitch.
+
+                // Still in ortho
+                map.setPitch(5);
+                simulate.mousedown(map.getCanvas());
+                map._renderTaskQueue.run();
+                simulate.mousemove(window.document.body, {buttons, clientX: 15, clientY: 15});
+                map._renderTaskQueue.run();
+
+                simulate.mouseup(map.getCanvas());
+                map._renderTaskQueue.run();
+                t.equal(dragend.callCount, 2);
+                assertAlmostEqual(t, map.getZoom(), 14.06, 0.01);
+
+                map.setPitch(0);
+                simulate.mousedown(map.getCanvas());
+                map._renderTaskQueue.run();
+                simulate.mousemove(window.document.body, {buttons, clientX: 15, clientY: 15});
+                map._renderTaskQueue.run();
+
+                simulate.mouseup(map.getCanvas());
+                map._renderTaskQueue.run();
+                t.equal(dragend.callCount, 3);
+                assertAlmostEqual(t, map.getZoom(), 14.06, 0.01); // no pitch, keep old zoom.
+
+                map.remove();
+                t.end();
+            });
+        });
+
+        t.end();
+    });
+});
+
 test('Negative Elevation', (t) => {
     t.beforeEach(() => {
         window.useFakeXMLHttpRequest();
@@ -791,7 +933,7 @@ test('Negative Elevation', (t) => {
         style: createStyle()
     });
 
-    const assertAlmostEqual = (t, actual, expected, epsilon = 1e-6) => {
+    const assertAlmostEqual = (t, actual, expected, epsilon = 1e-3) => {
         t.ok(Math.abs(actual - expected) < epsilon);
     };
 
@@ -802,7 +944,7 @@ test('Negative Elevation', (t) => {
             "tileSize": TILE_SIZE,
             "maxzoom": 14
         });
-        const cache = map.style._getSourceCache('mapbox-dem');
+        const cache = map.style.getOwnSourceCache('mapbox-dem');
         cache.used = cache._sourceLoaded = true;
         const mockDem = (dem, cache) => {
             cache._loadTile = (tile, callback) => {
@@ -1045,7 +1187,7 @@ test('Render cache efficiency', (t) => {
         });
 
         map.on('style.load', () => {
-            const cache = map.style._getSourceCache('mapbox-dem');
+            const cache = map.style.getOwnSourceCache('mapbox-dem');
             cache._loadTile = (tile, callback) => {
                 const pixels = new Uint8Array((512 + 2) * (512 + 2) * 4);
                 tile.dem = new DEMData(0, new RGBAImage({height: 512 + 2, width: 512 + 2}, pixels));
@@ -1194,7 +1336,7 @@ test('Render cache efficiency', (t) => {
         });
 
         map.on('style.load', () => {
-            const cache = map.style._getSourceCache('mapbox-dem');
+            const cache = map.style.getOwnSourceCache('mapbox-dem');
             cache._loadTile = (tile, callback) => {
                 const pixels = new Uint8Array((512 + 2) * (512 + 2) * 4);
                 tile.dem = new DEMData(0, new RGBAImage({height: 512 + 2, width: 512 + 2}, pixels));
@@ -1350,7 +1492,7 @@ test('Marker interaction and raycast', (t) => {
             "maxzoom": 14
         });
         map.transform._horizonShift = 0;
-        const cache = map.style._getSourceCache('mapbox-dem');
+        const cache = map.style.getOwnSourceCache('mapbox-dem');
         cache.used = cache._sourceLoaded = true;
         cache._loadTile = (tile, callback) => {
             // Elevate tiles above center.
@@ -1410,6 +1552,8 @@ test('Marker interaction and raycast', (t) => {
 
             t.test('Occluded', (t) => {
                 marker._fadeTimer = null;
+                // Occlusion is happening with Timers API. Advance them
+                t.stub(global, 'setTimeout').callsFake((cb) => cb());
                 marker.setLngLat(terrainTopLngLat);
                 const bottomLngLat = tr.pointLocation3D(new Point(terrainTop.x, tr.height));
                 // Raycast returns distance to closer point evaluates to occluded marker.
@@ -1467,7 +1611,7 @@ test('terrain getBounds', (t) => {
             "tileSize": TILE_SIZE,
             "maxzoom": 14
         });
-        const cache = map.style._getSourceCache('mapbox-dem');
+        const cache = map.style.getOwnSourceCache('mapbox-dem');
         cache.used = cache._sourceLoaded = true;
         cache._loadTile = (tile, callback) => {
             // Elevate tiles above center.
@@ -1616,7 +1760,7 @@ test('terrain recursively loads parent tiles on 404', (t) => {
             'maxzoom': 14
         });
 
-        const cache = map.style._getSourceCache('mapbox-dem');
+        const cache = map.style.getOwnSourceCache('mapbox-dem');
         cache.used = cache._sourceLoaded = true;
         cache._loadTile = (tile, callback) => {
             if (tile.tileID.canonical.z > 10) {

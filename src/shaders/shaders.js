@@ -64,6 +64,7 @@ import preludeTerrainVert from './_prelude_terrain.vertex.glsl';
 import preludeFogVert from './_prelude_fog.vertex.glsl';
 import preludeFogFrag from './_prelude_fog.fragment.glsl';
 import preludeLighting from './_prelude_lighting.glsl';
+import preludeRasterArrayFrag from './_prelude_raster_array.glsl';
 import skyboxCaptureFrag from './skybox_capture.fragment.glsl';
 import skyboxCaptureVert from './skybox_capture.vertex.glsl';
 import globeFrag from './globe_raster.fragment.glsl';
@@ -92,19 +93,26 @@ import windyFrag from '../../windy-style/shaders/windy.fragment.glsl';
 export let preludeTerrain = {};
 export let preludeFog = {};
 export let preludeShadow = {};
+export let preludeRasterArray = {};
 
 const commonDefines = [];
 parseUsedPreprocessorDefines(preludeCommon, commonDefines);
-parseUsedPreprocessorDefines(preludeLighting, commonDefines);
-parseUsedPreprocessorDefines(preludeTerrainVert, commonDefines);
-parseUsedPreprocessorDefines(preludeFogVert, commonDefines);
-parseUsedPreprocessorDefines(preludeFogFrag, commonDefines);
-parseUsedPreprocessorDefines(preludeShadowVert, commonDefines);
-parseUsedPreprocessorDefines(preludeShadowFrag, commonDefines);
+export const includeMap = {
+    "_prelude_fog.vertex.glsl": preludeFogVert,
+    "_prelude_terrain.vertex.glsl": preludeTerrainVert,
+    "_prelude_shadow.vertex.glsl": preludeShadowVert,
+    "_prelude_fog.fragment.glsl": preludeFogFrag,
+    "_prelude_shadow.fragment.glsl": preludeShadowFrag,
+    "_prelude_lighting.glsl": preludeLighting,
+    "_prelude_raster_array.glsl": preludeRasterArrayFrag
+};
+// Populated during precompilation
+const defineMap = {};
 
 preludeTerrain = compile('', preludeTerrainVert);
 preludeFog = compile(preludeFogFrag, preludeFogVert);
 preludeShadow = compile(preludeShadowFrag, preludeShadowVert);
+preludeRasterArray = compile(preludeRasterArrayFrag, '');
 
 export const prelude = compile(preludeFrag, preludeVert);
 export const preludeCommonSource = preludeCommon;
@@ -146,8 +154,6 @@ precision mediump float;
 #endif
 
 #endif`;
-
-export const standardDerivativesExt = '#extension GL_OES_standard_derivatives : enable\n';
 
 export default {
     background: compile(backgroundFrag, backgroundVert),
@@ -213,6 +219,7 @@ export function parseUsedPreprocessorDefines(source, defines) {
 
 // Expand #pragmas to #ifdefs.
 export function compile(fragmentSource, vertexSource) {
+    const includeRegex = /#include\s+"([^"]+)"/g;
     const pragmaRegex = /#pragma mapbox: ([\w\-]+) ([\w]+) ([\w]+) ([\w]+)/g;
     const attributeRegex = /attribute(\S*) (highp |mediump |lowp )?([\w]+) ([\w]+)/g;
 
@@ -226,9 +233,30 @@ export function compile(fragmentSource, vertexSource) {
     }
     const fragmentPragmas = {};
 
-    const usedDefines = [...commonDefines];
+    const vertexIncludes = [];
+    const fragmentIncludes = [];
+    fragmentSource = fragmentSource.replace(includeRegex, (match, name) => {
+        fragmentIncludes.push(name);
+        return '';
+    });
+    vertexSource = vertexSource.replace(includeRegex, (match, name) => {
+        vertexIncludes.push(name);
+        return '';
+    });
+
+    let usedDefines = [...commonDefines];
     parseUsedPreprocessorDefines(fragmentSource, usedDefines);
     parseUsedPreprocessorDefines(vertexSource, usedDefines);
+    for (const includePath of [...vertexIncludes, ...fragmentIncludes]) {
+        if (!includeMap[includePath]) {
+            console.error(`Undefined include: ${includePath}`);
+        }
+        if (!defineMap[includePath]) {
+            defineMap[includePath] = [];
+            parseUsedPreprocessorDefines(includeMap[includePath], defineMap[includePath]);
+        }
+        usedDefines = [...usedDefines, ...defineMap[includePath]];
+    }
 
     fragmentSource = fragmentSource.replace(pragmaRegex, (match, operation, precision, type, name) => {
         fragmentPragmas[name] = true;
@@ -372,5 +400,5 @@ uniform ${precision} ${type} u_${name};
         }
     });
 
-    return {fragmentSource, vertexSource, staticAttributes, usedDefines};
+    return {fragmentSource, vertexSource, staticAttributes, usedDefines, vertexIncludes, fragmentIncludes};
 }

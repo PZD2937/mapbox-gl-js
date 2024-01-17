@@ -21,6 +21,10 @@ import type {Terrain} from '../../../src/terrain/terrain.js';
 import {ZoomConstantExpression} from '../../../src/style-spec/expression/index.js';
 import assert from 'assert';
 import Point from '@mapbox/point-geometry';
+import browser from '../../../src/util/browser.js';
+
+const lookup = new Float32Array(512 * 512);
+const passLookup = new Uint8Array(512 * 512);
 
 function getNodeHeight(node: Node): number {
     let height = 0;
@@ -165,7 +169,6 @@ class Tiled3dModelBucket implements Bucket {
             expressionRequiresReevaluation(layer.paint.get('model-roughness').value, brightnessChanged) ||
             expressionRequiresReevaluation(layer.paint.get('model-emissive-strength').value, brightnessChanged) ||
             expressionRequiresReevaluation(layer.paint.get('model-height-based-emissive-strength-multiplier').value, brightnessChanged)) {
-            this.dirty = false;
             this.projection = projection;
             this.brightness = calculatedBrightness;
             return true;
@@ -224,17 +227,22 @@ class Tiled3dModelBucket implements Bucket {
                 this.needsUpload = true;
             }
         }
+        this.dirty = false;
     }
 
-    elevationUpdate(terrain: Terrain, exaggeration: number, coord: OverscaledTileID) {
-
+    elevationUpdate(terrain: Terrain, exaggeration: number, coord: OverscaledTileID, source: string) {
+        assert(terrain);
         const demTile = terrain.findDEMTileFor(coord);
-        if (demTile === this.terrainTile && exaggeration === this.terrainExaggeration) return;
+        if (!demTile) return;
+        if (demTile.tileID.canonical === this.terrainTile && exaggeration === this.terrainExaggeration) return;
 
-        if (terrain && demTile && demTile.dem && demTile.tileID.overscaledZ !== this.elevationReadFromZ) {
+        if (demTile.dem && demTile.tileID.overscaledZ !== this.elevationReadFromZ) {
             this.elevationReadFromZ = demTile.tileID.overscaledZ;
-            const dem = DEMSampler.create(terrain, this.id, demTile);
+            const dem = DEMSampler.create(terrain, coord, demTile);
             if (!dem) return;
+            if (this.modelTraits & ModelTraits.HasMapboxMeshFeatures) {
+                this.updateDEM(terrain, dem, coord, source);
+            }
             for (const nodeInfo of this.getNodesInfo()) {
                 const node = nodeInfo.node;
                 if (!node.footprint || !node.footprint.vertices || !node.footprint.vertices.length) {
@@ -247,6 +255,169 @@ class Tiled3dModelBucket implements Bucket {
                 }
                 node.elevation = elevation;
             }
+        }
+        this.terrainTile = demTile.tileID.canonical;
+        this.terrainExaggeration = exaggeration;
+    }
+
+    updateDEM(terrain: Terrain, dem: DEMSampler, coord: OverscaledTileID, source: string) {
+        let tiles = dem._dem._modifiedForSources[source];
+        if (tiles === undefined) {
+            dem._dem._modifiedForSources[source] = [];
+            tiles = dem._dem._modifiedForSources[source];
+        }
+        if (tiles.includes(coord.canonical)) {
+            return;
+        }
+
+        // Resolution of the DEM data.
+        const demRes = dem._dem.dim;
+
+        tiles.push(coord.canonical);
+        assert(lookup.length <= demRes * demRes);
+
+        let changed = false;
+        for (const nodeInfo of this.getNodesInfo()) {
+            const node = nodeInfo.node;
+            if (!node.footprint || !node.footprint.grid) {
+                continue;
+            }
+
+            // Convert the bounds of the footprint for this node from its tile coordinates to DEM pixel coordinates.
+            const grid = node.footprint.grid;
+            const minDem = dem.tileCoordToPixel(grid.min.x, grid.min.y);
+            const maxDem = dem.tileCoordToPixel(grid.max.x, grid.max.y);
+
+            const distanceToBorder = Math.min(Math.min(demRes - maxDem.y, minDem.x), Math.min(minDem.y, demRes - maxDem.x));
+            if (distanceToBorder < 0) {
+                continue; // don't deal with neighbors and landmarks crossing tile borders, fix terrain only for buildings within the tile
+            }
+            // demAtt is a number of pixels we use to propagate attenuated change to surrounding pixels.
+            // this is clamped further when sampling near tile border.
+            // The footprint covers a certain region of DEM pixels as indicated with 'minDem' and 'maxDem' (region A).
+            // This region is further padded by demAtt pixels to form the region B.
+            // First mark all the DEM pixels in region B as unchanged (using 'passLookup' array).
+            // +------------+
+            // |  +-----+   |
+            // |  |  A  |   |
+            // |  +-----+ B |
+            // +------------+
+            const demAtt = clamp(distanceToBorder, 2, 5);
+            let minx = Math.max(0, minDem.x - demAtt);
+            let miny = Math.max(0, minDem.y - demAtt);
+            let maxx = Math.min(maxDem.x + demAtt, demRes - 1);
+            let maxy = Math.min(maxDem.y + demAtt, demRes - 1);
+            for (let y = miny; y <= maxy; ++y) {
+                for (let x = minx; x <= maxx; ++x) {
+                    passLookup[y * demRes + x] = 255;
+                }
+            }
+
+            // Next go through all eligible DEM pixels in region A, mark them as changed and calculate the average height(elevation).
+            // Some pixels may be skipped (and therefore aren't eligible) because no footprint geometry overlaps them.
+            // This is indicated by the existence of a 'Cell' at a given pixel's position.
+            let heightAcc = 0;
+            let count = 0;
+            for (let celly = 0; celly < grid.cellsY; ++celly) {
+                for (let cellx = 0; cellx < grid.cellsX; ++cellx) {
+                    const cell = grid.cells[celly * grid.cellsX + cellx];
+                    if (!cell) {
+                        continue;
+                    }
+                    const demP = dem.tileCoordToPixel(grid.min.x + cellx / grid.xScale, grid.min.y + celly / grid.yScale);
+                    const demPMax = dem.tileCoordToPixel(grid.min.x + (cellx + 1) / grid.xScale, grid.min.y + (celly + 1) / grid.yScale);
+                    for (let y = demP.y; y <= Math.min(demPMax.y + 1, demRes - 1); ++y) {
+                        for (let x = demP.x; x <= Math.min(demPMax.x + 1, demRes - 1); ++x) {
+                            if (passLookup[y * demRes + x] === 255) {
+                                passLookup[y * demRes + x] = 0;
+                                const height = dem.getElevationAtPixel(x, y);
+                                heightAcc += height;
+                                count++;
+                            }
+                        }
+                    }
+                }
+            }
+
+            assert(count);
+            const avgHeight = heightAcc / count;
+            // See https://github.com/mapbox/mapbox-gl-js-internal/pull/804#issuecomment-1738720351
+            // for explanation why bounds should be clamped to 1 and demRes - 2 respectively.
+            minx = Math.max(1, minDem.x - demAtt);
+            miny = Math.max(1, minDem.y - demAtt);
+            maxx = Math.min(maxDem.x + demAtt, demRes - 2);
+            maxy = Math.min(maxDem.y + demAtt, demRes - 2);
+
+            // Next, update the DEM pixels in region A (which the footprint overlaps with) by the average height.
+            // This effectively flattens the terrain for the given footprint/building.
+            // Store the difference of the original height with the average height in 'lookup' array.
+            changed = true;
+            for (let y = miny; y <= maxy; ++y) {
+                for (let x = minx; x <= maxx; ++x) {
+                    if (passLookup[y * demRes + x] === 0) {
+                        lookup[y * demRes + x] = dem._dem.set(x, y, avgHeight);
+                    }
+                }
+            }
+
+            // Finally propagate the flattened out values to the remaining surrounding pixels (as goverened by demAtt padding) in region B.
+            // This ensures a smooth transition between the flattened and the non-flattened regions.
+            for (let p = 1; p < demAtt; ++p) {
+                minx = Math.max(1, minDem.x - p);
+                miny = Math.max(1, minDem.y - p);
+                maxx = Math.min(maxDem.x + p, demRes - 2);
+                maxy = Math.min(maxDem.y + p, demRes - 2);
+                for (let y = miny; y <= maxy; ++y) {
+                    for (let x = minx; x <= maxx; ++x) {
+                        const indexThis = y * demRes + x;
+                        // If DEM pixel is not modified.
+                        if (passLookup[indexThis] === 255) {
+                            let maxDiff = 0;
+                            let maxDiffAbs = 0;
+                            let xoffset = -1;
+                            let yoffset = -1;
+                            for (let j = -1; j <= 1; ++j) {
+                                for (let i = -1; i <= 1; ++i) {
+                                    const index = (y + j) * demRes + x + i;
+                                    if (passLookup[index] >= p) {
+                                        continue;
+                                    }
+                                    const diff = lookup[index];
+                                    const diffAbs = Math.abs(diff);
+                                    if (diffAbs  > maxDiffAbs) {
+                                        maxDiff = diff;
+                                        maxDiffAbs = diffAbs;
+                                        xoffset = i;
+                                        yoffset = j;
+                                    }
+                                }
+                            }
+
+                            if (maxDiffAbs > 0.1) {
+                                const diagonalAttenuation = Math.abs(xoffset * yoffset) * 0.5;
+                                const attenuation = 1 - (p + diagonalAttenuation) / demAtt;
+                                assert(attenuation > 0);
+                                const prev = dem._dem.get(x, y);
+                                let next = prev + maxDiff * attenuation;
+
+                                // parent - child in the meaning of wave propagation
+                                const parent = dem._dem.get(x + xoffset, y + yoffset);
+                                const child = dem._dem.get(x - xoffset, y - yoffset, true);
+                                // prevent waves
+                                if ((next - parent) * (next - child) > 0) {
+                                    next = (parent + child) / 2;
+                                }
+                                lookup[indexThis] = dem._dem.set(x, y, next);
+                                passLookup[indexThis] = p;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (changed) {
+            dem._demTile.needsDEMTextureUpload = true;
+            dem._dem._timestamp = browser.now();
         }
     }
 
@@ -301,7 +472,7 @@ class Tiled3dModelBucket implements Bucket {
         }
     }
 
-    getHeightAtTileCoord(x: number, y: number): ?{height: ?number, hidden: boolean, verticalScale: number} {
+    getHeightAtTileCoord(x: number, y: number): ?{height: ?number, maxHeight: number, hidden: boolean, verticalScale: number} {
         const nodesInfo = this.getNodesInfo();
         const candidates = [];
 
@@ -320,12 +491,12 @@ class Tiled3dModelBucket implements Bucket {
                 // unpopulated cell. If it is in the building footprint, return undefined height
                 nodeInfo.node.footprint.grid.query(new Point(x, y), new Point(x, y), candidates);
                 if (candidates.length > 0) {
-                    return {height: undefined, hidden: nodeInfo.hiddenByReplacement, verticalScale: nodeInfo.evaluatedScale[2]};
+                    return {height: undefined, maxHeight: nodeInfo.feature.properties["height"], hidden: nodeInfo.hiddenByReplacement, verticalScale: nodeInfo.evaluatedScale[2]};
                 }
                 continue;
             }
             if (nodeInfo.hiddenByReplacement) return; // better luck with the next source
-            return {height: mesh.heightmap[heightmapIndex], hidden: false, verticalScale: nodeInfo.evaluatedScale[2]};
+            return {height: mesh.heightmap[heightmapIndex], maxHeight: nodeInfo.feature.properties["height"], hidden: false, verticalScale: nodeInfo.evaluatedScale[2]};
         }
     }
 }

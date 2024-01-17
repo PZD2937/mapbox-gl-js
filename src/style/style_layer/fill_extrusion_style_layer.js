@@ -7,7 +7,6 @@ import {translateDistance, tilespaceTranslate} from '../query_utils.js';
 import properties from './fill_extrusion_style_layer_properties.js';
 import {Transitionable, Transitioning, PossiblyEvaluated} from '../properties.js';
 import Point from '@mapbox/point-geometry';
-import ProgramConfiguration from '../../data/program_configuration.js';
 import {vec3, vec4} from 'gl-matrix';
 import EXTENT from '../../style-spec/data/extent.js';
 import {CanonicalTileID} from '../../source/tile_id.js';
@@ -40,6 +39,7 @@ class FillExtrusionStyleLayer extends StyleLayer {
 
     constructor(layer: LayerSpecification, options?: ?Map<string, Expression>) {
         super(layer, properties, options);
+        this._stats = {numRenderedVerticesInShadowPass : 0, numRenderedVerticesInTransparentPass: 0};
     }
 
     createBucket(parameters: BucketParameters<FillExtrusionStyleLayer>): FillExtrusionBucket {
@@ -71,10 +71,6 @@ class FillExtrusionStyleLayer extends StyleLayer {
         const patternProperty = this.paint.get('fill-extrusion-pattern');
         const image = patternProperty.constantOr((1: any));
         return [image ? 'fillExtrusionPattern' : 'fillExtrusion'];
-    }
-
-    getProgramConfiguration(zoom: number): ProgramConfiguration {
-        return new ProgramConfiguration(this, zoom);
     }
 
     // $FlowFixMe[method-unbinding]

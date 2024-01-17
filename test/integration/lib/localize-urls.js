@@ -10,13 +10,20 @@ const require = createRequire(import.meta.url);
 
 export default function localizeURLs(style, port) {
     localizeStyleURLs(style, port);
+
+    if (style.imports) {
+        for (const importSpec of style.imports) {
+            localizeURLs(importSpec.data, port);
+        }
+    }
+
     if (style.metadata && style.metadata.test && style.metadata.test.operations) {
         style.metadata.test.operations.forEach((op) => {
             if (op[0] === 'addSource') {
                 localizeSourceURLs(op[2], port);
             } else if (op[0] === 'setStyle') {
                 if (typeof op[1] === 'object') {
-                    localizeStyleURLs(op[1], port);
+                    localizeURLs(op[1], port);
                     return;
                 }
                 if (op[1].startsWith('mapbox://')) return;

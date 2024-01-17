@@ -16,6 +16,7 @@ import Color from '../../../src/style-spec/util/color.js';
 import {MAX_MERCATOR_LATITUDE} from '../../../src/geo/mercator_coordinate.js';
 import {performanceEvent_} from '../../../src/util/mapbox.js';
 import {makeFQID} from '../../../src/util/fqid.js';
+import styleSpec from '../../../src/style-spec/reference/latest.js';
 
 function createStyleSource() {
     return {
@@ -90,7 +91,7 @@ test('Map', (t) => {
         new Map({container: window.document.createElement('div'), testMode: false});
 
         t.ok(stub.calledOnce);
-        t.equal(stub.getCall(0).args[0], 'mapbox://styles/mapbox/standard-beta');
+        t.equal(stub.getCall(0).args[0], 'mapbox://styles/mapbox/standard');
 
         t.end();
     });
@@ -109,7 +110,7 @@ test('Map', (t) => {
     });
 
     t.test('default performance metrics collection', (t) => {
-        const map = createMap(t);
+        const map = createMap(t, {performanceMetricsCollection: true});
         map._requestManager._customAccessToken = 'access-token';
         map.once('idle', () => {
             map.triggerRepaint();
@@ -126,7 +127,7 @@ test('Map', (t) => {
     });
 
     t.test('performance metrics event stores explicit projection', (t) => {
-        const map = createMap(t, {projection: 'globe', zoom: 20});
+        const map = createMap(t, {performanceMetricsCollection: true, projection: 'globe', zoom: 20});
         map._requestManager._customAccessToken = 'access-token';
         map.once('idle', () => {
             map.triggerRepaint();
@@ -159,6 +160,57 @@ test('Map', (t) => {
         createMap(t, {container, testMode: true});
 
         t.ok(stub.calledOnce);
+
+        t.end();
+    });
+
+    t.test('uses zero values for zoom and coordinates', (t) => {
+        function getInitialMap(t) {
+            return createMap(t, {
+                zoom: 0,
+                center: [0, 0],
+                style: {
+                    version: 8,
+                    sources: {},
+                    layers: [],
+                    center: [
+                        -73.9749,
+                        40.7736
+                    ],
+                    zoom: 4
+                }
+            });
+        }
+
+        t.test('should use these values instead of defaults from style', (t) => {
+            const map = getInitialMap(t);
+
+            map.on('load', () => {
+                t.equal(map.getZoom(), 0);
+                t.deepEqual(map.getCenter(), {lat: 0, lng: 0});
+                t.end();
+            });
+        });
+
+        t.test('after setStyle should still use these values', (t) => {
+            const map = getInitialMap(t);
+
+            map.on('load', () => {
+                map.setStyle({
+                    version: 8,
+                    sources: {},
+                    layers: [],
+                    center: [
+                        24.9384,
+                        60.169
+                    ],
+                    zoom: 3
+                });
+                t.equal(map.getZoom(), 0);
+                t.deepEqual(map.getCenter(), {lat: 0, lng: 0});
+                t.end();
+            });
+        });
 
         t.end();
     });
@@ -1011,9 +1063,9 @@ test('Map', (t) => {
             map.on('load', () => {
                 const fakeTileId = new OverscaledTileID(0, 0, 0, 0, 0);
                 map.addSource('geojson', createStyleSource());
-                map.style._getSourceCache('geojson')._tiles[fakeTileId.key] = new Tile(fakeTileId);
+                map.style.getOwnSourceCache('geojson')._tiles[fakeTileId.key] = new Tile(fakeTileId);
                 t.equal(map.areTilesLoaded(), false, 'returns false if tiles are loading');
-                map.style._getSourceCache('geojson')._tiles[fakeTileId.key].state = 'loaded';
+                map.style.getOwnSourceCache('geojson')._tiles[fakeTileId.key].state = 'loaded';
                 t.equal(map.areTilesLoaded(), true, 'returns true if tiles are loaded');
                 t.end();
             });
@@ -1034,8 +1086,8 @@ test('Map', (t) => {
                 map.addSource('geojson', createStyleSource());
                 const source = map.getSource('geojson');
                 const fakeTileId = new OverscaledTileID(0, 0, 0, 0, 0);
-                map.style._getSourceCache('geojson')._tiles[fakeTileId.key] = new Tile(fakeTileId);
-                map.style._getSourceCache('geojson')._tiles[fakeTileId.key].state = tileState;
+                map.style.getOwnSourceCache('geojson')._tiles[fakeTileId.key] = new Tile(fakeTileId);
+                map.style.getOwnSourceCache('geojson')._tiles[fakeTileId.key].state = tileState;
                 callback(map, source);
             });
         }
@@ -1137,9 +1189,16 @@ test('Map', (t) => {
                     "color": "blue"
                 };
                 map.setFog(fog);
-                t.deepEqual(map.getStyle(), extend(createStyle(), {
-                    fog
-                }));
+
+                const fogDefaults = Object
+                    .entries(styleSpec.fog)
+                    .reduce((acc, [key, value]) => {
+                        acc[key] = value.default;
+                        return acc;
+                    }, {});
+
+                const fogWithDefaults = extend({}, fogDefaults, fog);
+                t.deepEqual(map.getStyle(), extend(createStyle(), {fog: fogWithDefaults}));
                 t.ok(map.getFog());
                 t.end();
             });
@@ -2515,6 +2574,25 @@ test('Map', (t) => {
         t.end();
     });
 
+    t.test('#hasImage doesn\'t throw after map is removed', (t) => {
+        const map = createMap(t);
+        map.remove();
+        t.notOk(map.hasImage('image'));
+        t.end();
+    });
+
+    t.test('#updateImage doesn\'t throw after map is removed', (t) => {
+        const map = createMap(t);
+        map.remove();
+
+        const stub = t.stub(console, 'error');
+        map.updateImage('image', {});
+        t.ok(stub.calledOnce);
+        t.match(stub.getCall(0).args[0].message, 'The map has no image with that id');
+
+        t.end();
+    });
+
     t.test('#addControl', (t) => {
         const map = createMap(t);
         const control = {
@@ -2770,7 +2848,7 @@ test('Map', (t) => {
     });
 
     t.test('#queryRenderedFeatures', (t) => {
-
+        const defaultParams = {scope: '', availableImages: [], serializedLayers: {}};
         t.test('if no arguments provided', (t) => {
             createMap(t, {}, (err, map) => {
                 t.error(err);
@@ -2780,7 +2858,7 @@ test('Map', (t) => {
 
                 const args = map.style.queryRenderedFeatures.getCall(0).args;
                 t.ok(args[0]);
-                t.deepEqual(args[1], {availableImages: []});
+                t.deepEqual(args[1], defaultParams);
                 t.deepEqual(output, []);
 
                 t.end();
@@ -2796,7 +2874,7 @@ test('Map', (t) => {
 
                 const args = map.style.queryRenderedFeatures.getCall(0).args;
                 t.deepEqual(args[0], {x: 100, y: 100}); // query geometry
-                t.deepEqual(args[1], {availableImages: []}); // params
+                t.deepEqual(args[1], defaultParams); // params
                 t.deepEqual(args[2], map.transform); // transform
                 t.deepEqual(output, []);
 
@@ -2813,7 +2891,7 @@ test('Map', (t) => {
 
                 const args = map.style.queryRenderedFeatures.getCall(0).args;
                 t.ok(args[0]);
-                t.deepEqual(args[1], {availableImages: [], filter: ['all']});
+                t.deepEqual(args[1], {...defaultParams, filter: ['all']});
                 t.deepEqual(output, []);
 
                 t.end();
@@ -2829,7 +2907,7 @@ test('Map', (t) => {
 
                 const args = map.style.queryRenderedFeatures.getCall(0).args;
                 t.deepEqual(args[0], {x: 100, y: 100});
-                t.deepEqual(args[1], {availableImages: [], filter: ['all']});
+                t.deepEqual(args[1], {...defaultParams, filter: ['all']});
                 t.deepEqual(args[2], map.transform);
                 t.deepEqual(output, []);
 
@@ -2884,11 +2962,38 @@ test('Map', (t) => {
         });
 
         t.test('sets and gets language property', (t) => {
-            const map = createMap(t);
+            const map = createMap(t, {
+                style: extend(createStyle(), {
+                    sources: {
+                        mapbox: {
+                            type: 'vector',
+                            minzoom: 1,
+                            maxzoom: 10,
+                            tiles: ['http://example.com/{z}/{x}/{y}.png']
+                        }
+                    }
+                })
+            });
+
             map.on('style.load', () => {
+                const source = map.getSource('mapbox');
+                const loadSpy = t.spy(source, 'load');
+                const clearSourceSpy = t.spy(map.style, 'clearSource');
+
+                source.on('data', (e) => {
+                    if (e.sourceDataType === 'metadata') {
+                        setImmediate(() => {
+                            t.ok(clearSourceSpy.calledOnce, 'Style.clearSource should be called after source load');
+                            t.equal(clearSourceSpy.lastCall.firstArg, 'mapbox');
+                            t.end();
+                        });
+                    }
+                });
+
                 map.setLanguage('es');
+
                 t.equal(map.getLanguage(), 'es');
-                t.end();
+                t.ok(loadSpy.calledOnce, 'Changing language must trigger source reload');
             });
         });
 
@@ -2927,11 +3032,38 @@ test('Map', (t) => {
         });
 
         t.test('sets and gets worldview property', (t) => {
-            const map = createMap(t);
+            const map = createMap(t, {
+                style: extend(createStyle(), {
+                    sources: {
+                        mapbox: {
+                            type: 'vector',
+                            minzoom: 1,
+                            maxzoom: 10,
+                            tiles: ['http://example.com/{z}/{x}/{y}.png']
+                        }
+                    }
+                })
+            });
+
             map.on('style.load', () => {
+                const source = map.getSource('mapbox');
+                const loadSpy = t.spy(source, 'load');
+                const clearSourceSpy = t.spy(map.style, 'clearSource');
+
+                source.on('data', (e) => {
+                    if (e.sourceDataType === 'metadata') {
+                        setImmediate(() => {
+                            t.ok(clearSourceSpy.calledOnce, 'Style.clearSource should be called after source load');
+                            t.equal(clearSourceSpy.lastCall.firstArg, 'mapbox');
+                            t.end();
+                        });
+                    }
+                });
+
                 map.setWorldview('JP');
+
                 t.equal(map.getWorldview(), 'JP');
-                t.end();
+                t.ok(loadSpy.calledOnce, 'Changing worldview must trigger source reload');
             });
         });
 
@@ -3014,7 +3146,7 @@ test('Map', (t) => {
 
             map.on('style.load', () => {
                 map.on('error', ({error}) => {
-                    t.match(error.message, /does not exist in the map\'s style and cannot be styled/);
+                    t.match(error.message, /does not exist in the map\'s style/);
                     t.end();
                 });
                 map.setLayoutProperty('non-existant', 'text-transform', 'lowercase');
@@ -3274,7 +3406,7 @@ test('Map', (t) => {
 
             map.on('style.load', () => {
                 map.on('error', ({error}) => {
-                    t.match(error.message, /does not exist in the map\'s style and cannot be styled/);
+                    t.match(error.message, /does not exist in the map\'s style/);
                     t.end();
                 });
                 map.setPaintProperty('non-existant', 'background-color', 'red');
@@ -4092,7 +4224,7 @@ test('Map', (t) => {
         const version = map.version;
         t.test('returns version string', (t) => {
             t.ok(version);
-            t.match(version, /^3\.[0-9]+\.[0-9]+(-dev|-beta\.[1-9])?$/);
+            t.match(version, /^3\.[0-9]+\.[0-9]+(-(dev|alpha|beta|rc)\.[1-9])?$/);
             t.end();
         });
         t.test('cannot be set', (t) => {

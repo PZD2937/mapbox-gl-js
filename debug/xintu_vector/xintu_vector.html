@@ -14,6 +14,7 @@
         html, body, #map {
             height: 100%;
         }
+
         .map-overlay {
             font: 12px/20px 'Helvetica Neue', Arial, Helvetica, sans-serif;
             position: absolute;
@@ -22,13 +23,26 @@
             left: 0;
             padding: 10px;
         }
+
+        #layers {
+            position: absolute;
+            top: 0;
+            left: 0;
+            background: white;
+            height: 100vh;
+            overflow: scroll;
+        }
     </style>
 </head>
 <body>
-
-</body>
 <div id='map'></div>
-<script src='../../dist/mapbox-gl.js'></script>
+<div id="layers">
+    <span>全部</span>
+    <label>显示<input value="visible" type="radio" name="all-layers"/></label>
+    <label>隐藏<input value="none" type="radio" name="all-layers"/></label>
+</div>
+</body>
+<script src='../../dist/mapbox-gl-dev.js'></script>
 <script>
     // https://tile0.tianditu.gov.cn/province?t=vt&z={z}&x={x}&y={y}&tk=a66fdc6029126cf83ce233f81d44c4ba
 
@@ -40,6 +54,38 @@
         hash: true,
         projection: 'globe',
         language: 'zh_CN'
+    });
+
+    const layersEle = document.querySelector('#layers');
+    map.once('load', () => {
+        Object.values(map.style._layers).forEach(layer => {
+            layersEle.innerHTML += `<div class="layer-item">
+                             <span>id: ${layer.id}</span>
+                             <span>${layer.sourceLayer ? 'source-layer: ' + layer.sourceLayer : ''}</span>
+                             <label>显示<input data-zoom="${layer.minzoom ? layer.minzoom + 0.5 : ''}" value="visible" type="radio" name="${layer.id}"/></label>
+                             <label>隐藏<input value="none" type="radio" name="${layer.id}"/></label>
+                            </div>`;
+            map.setLayerZoomRange(layer.id, 0, 21);
+        });
+    });
+
+    layersEle.addEventListener('click', e => {
+        if (e.target instanceof HTMLInputElement) {
+            if ((e.target.name === 'all-layers')) {
+                Object.values(map.style._layers).forEach(layer => {
+                    map.setLayoutProperty(layer.id, 'visibility', e.target.value);
+                });
+            } else {
+                map.setLayoutProperty(e.target.name, 'visibility', e.target.value);
+                if (e.target.value === 'visible') {
+                    const zoom = e.target.dataset.zoom;
+                    console.log(zoom);
+                    if (zoom) {
+                        map.setZoom(Number(zoom));
+                    }
+                }
+            }
+        }
     });
 
 

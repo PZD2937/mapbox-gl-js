@@ -26,32 +26,44 @@ class ModelManager extends Evented {
         this.numModelsLoading = {};
     }
 
-    async loadModel(id: string, url: string): Promise<?Model> {
-        const gltf = await loadGLTF(this.requestManager.transformRequest(url, ResourceType.Model).url).catch((err) => {
-            this.fire(new ErrorEvent(new Error(`Could not load model ${id} from ${url}: ${err.message}`)));
-        });
+    loadModel(id: string, url: string): Promise<?Model> {
+        return loadGLTF(this.requestManager.transformRequest(url, ResourceType.Model).url)
+            .then(gltf => {
+                if (!gltf) return;
 
-        if (!gltf) return;
-
-        const nodes = convertModel(gltf);
-        const model = new Model(id, undefined, undefined, nodes);
-        model.computeBoundsAndApplyParent();
-        return model;
+                const nodes = convertModel(gltf);
+                const model = new Model(id, undefined, undefined, nodes);
+                model.computeBoundsAndApplyParent();
+                return model;
+            })
+            .catch((err) => {
+                this.fire(new ErrorEvent(new Error(`Could not load model ${id} from ${url}: ${err.message}`)));
+            });
     }
 
-    async load(modelUris: {[string]: string}, scope: string) {
+    load(modelUris: {[string]: string}, scope: string) {
         if (!this.models[scope]) this.models[scope] = {};
-        if (this.numModelsLoading[scope] === undefined) this.numModelsLoading[scope] = 0;
 
-        for (const modelId in modelUris) {
-            const modelUri = modelUris[modelId];
-            this.numModelsLoading[scope] += 1;
-            const model = await this.loadModel(modelId, modelUri);
-            this.numModelsLoading[scope] -= 1;
-            if (model) this.models[scope][modelId] = model;
+        const modelIds = Object.keys(modelUris);
+        this.numModelsLoading[scope] = (this.numModelsLoading[scope] || 0) + modelIds.length;
+
+        const modelLoads = [];
+        for (const modelId of modelIds) {
+            modelLoads.push(this.loadModel(modelId, modelUris[modelId]));
         }
 
-        this.fire(new Event('data', {dataType: 'style'}));
+        Promise.allSettled(modelLoads)
+            .then(results => {
+                for (let i = 0; i < results.length; i++) {
+                    const {status, value} = results[i];
+                    if (status === 'fulfilled' && value) this.models[scope][modelIds[i]] = value;
+                }
+                this.numModelsLoading[scope] -= modelIds.length;
+                this.fire(new Event('data', {dataType: 'style'}));
+            })
+            .catch((err) => {
+                this.fire(new ErrorEvent(new Error(`Could not load models: ${err.message}`)));
+            });
     }
 
     isLoaded(): boolean {
@@ -70,7 +82,7 @@ class ModelManager extends Evented {
         return this.models[scope][id];
     }
 
-    async addModel(id: string, url: string, scope: string) {
+    addModel(id: string, url: string, scope: string) {
         if (!this.models[scope]) this.models[scope] = {};
         // Destroy model if it exists
         if (this.hasModel(id, scope)) {

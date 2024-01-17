@@ -1,7 +1,7 @@
 // @flow
 
 import validate from './validate.js';
-import ValidationError from '../error/validation_error.js';
+import {default as ValidationError, ValidationWarning} from '../error/validation_error.js';
 import getType from '../util/get_type.js';
 import {isFunction} from '../function/index.js';
 import {unbundle, deepUnbundle} from '../util/unbundle_jsonlint.js';
@@ -41,7 +41,7 @@ export default function validateProperty(options: PropertyValidationOptions, pro
 
     const valueSpec = options.valueSpec || layerSpec[propertyKey];
     if (!valueSpec) {
-        return [new ValidationError(key, value, `unknown property "${propertyKey}"`)];
+        return [new ValidationWarning(key, value, `unknown property "${propertyKey}"`)];
     }
 
     let tokenMatch: ?RegExp$matchResult;
@@ -67,8 +67,8 @@ export default function validateProperty(options: PropertyValidationOptions, pro
             // Performance related style spec limitation: zoom and light expressions are not allowed for e.g. trees.
             const expression = createPropertyExpression(deepUnbundle(value), valueSpec);
             const expressionObj = (expression.value: any).expression || (expression.value: any)._styleExpression.expression;
-            if (expressionObj && (!isGlobalPropertyConstant(expressionObj, ['zoom']) || !isGlobalPropertyConstant(expressionObj, ['measure-light']))) {
-                errors.push(new ValidationError(key, value, `${propertyKey} does not support zoom or measure-light expressions when the model layer source is vector tile or GeoJSON.`));
+            if (expressionObj && !isGlobalPropertyConstant(expressionObj, ['measure-light'])) {
+                errors.push(new ValidationError(key, value, `${propertyKey} does not support measure-light expressions when the model layer source is vector tile or GeoJSON.`));
             }
         }
     }

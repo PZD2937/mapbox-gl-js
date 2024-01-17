@@ -4,9 +4,11 @@ import styleSpec from '../style-spec/reference/latest.js';
 import {Evented} from '../util/evented.js';
 import {Properties, Transitionable, Transitioning, PossiblyEvaluated, DataConstantProperty} from './properties.js';
 
-import type EvaluationParameters from './evaluation_parameters.js';
+import EvaluationParameters from './evaluation_parameters.js';
+import type {Expression} from '../../src/style-spec/expression/expression.js';
 import type {TransitionParameters} from './properties.js';
 import type {TerrainSpecification} from '../style-spec/types.js';
+import {ZoomDependentExpression} from '../style-spec/expression/index.js';
 
 type Props = {|
     "source": DataConstantProperty<string>,
@@ -24,15 +26,17 @@ const properties: Properties<Props> = new Properties({
 });
 
 class Terrain extends Evented {
+    scope: string;
     _transitionable: Transitionable<Props>;
     _transitioning: Transitioning<Props>;
     properties: PossiblyEvaluated<Props>;
     drapeRenderMode: number;
 
-    constructor(terrainOptions: TerrainSpecification, drapeRenderMode: number) {
+    constructor(terrainOptions: TerrainSpecification, drapeRenderMode: number, scope: string, configOptions?: ?Map<string, Expression>) {
         super();
-        this._transitionable = new Transitionable(properties);
-        this.set(terrainOptions);
+        this.scope = scope;
+        this._transitionable = new Transitionable(properties, configOptions);
+        this._transitionable.setTransitionOrValue<TerrainSpecification>(terrainOptions, configOptions);
         this._transitioning = this._transitionable.untransitioned();
         this.drapeRenderMode = drapeRenderMode;
     }
@@ -41,8 +45,8 @@ class Terrain extends Evented {
         return (this._transitionable.serialize(): any);
     }
 
-    set(terrain: TerrainSpecification) {
-        this._transitionable.setTransitionOrValue<TerrainSpecification>(terrain);
+    set(terrain: TerrainSpecification, configOptions?: ?Map<string, Expression>) {
+        this._transitionable.setTransitionOrValue<TerrainSpecification>(terrain, configOptions);
     }
 
     updateTransitions(parameters: TransitionParameters) {
@@ -55,6 +59,17 @@ class Terrain extends Evented {
 
     recalculate(parameters: EvaluationParameters) {
         this.properties = this._transitioning.possiblyEvaluate(parameters);
+    }
+
+    getExaggeration(atZoom: number): number {
+        return this._transitioning.possiblyEvaluate(new EvaluationParameters(atZoom)).get('exaggeration');
+    }
+
+    isZoomDependent(): boolean {
+        const exaggeration = this._transitionable._values['exaggeration'];
+        return exaggeration != null && exaggeration.value != null &&
+            exaggeration.value.expression != null &&
+            exaggeration.value.expression instanceof ZoomDependentExpression;
     }
 }
 

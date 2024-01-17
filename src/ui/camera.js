@@ -167,7 +167,7 @@ const freeCameraNotSupportedWarning = 'map.setFreeCameraOptions(...) and map.get
  * @example
  * const bbox = [[-79, 43], [-73, 45]];
  * map.fitBounds(bbox, {
- *     padding: {top: 10, bottom:25, left: 15, right: 5}
+ *     padding: {top: 10, bottom: 25, left: 15, right: 5}
  * });
  *
  * @example
@@ -1372,7 +1372,7 @@ class Camera extends Evented {
         this._prepareEase(eventData, options.noMoveStart, currently);
 
         this._ease(frame(tr), (interruptingEaseId?: string) => {
-            tr.recenterOnTerrain();
+            if (tr.cameraElevationReference === "sea") tr.recenterOnTerrain();
             this._afterEase(eventData, interruptingEaseId);
             finish && finish();
         }, options);
@@ -1383,6 +1383,11 @@ class Camera extends Evented {
     _prepareEase(eventData?: Object, noMoveStart: boolean, currently: Object = {}) {
         this._moving = true;
         this.transform.cameraElevationReference = "sea";
+        if (this.transform._orthographicProjectionAtLowPitch && this.transform.pitch  === 0 && this.transform.projection.name !== 'globe') {
+            // Run easeTo on ground elevation reference. EaseTo is otherwise always on sea elevation reference,
+            // triggering changes in center to camera distance and bumpy camera movement for ortho mode.
+            this.transform.cameraElevationReference = "ground";
+        }
 
         if (!noMoveStart && !currently.moving) {
             this.fire(new Event('movestart', eventData));
@@ -1760,7 +1765,9 @@ class Camera extends Evented {
     // interpolating between the two endpoints will cross it.
     _normalizeCenter(center: LngLat) {
         const tr = this.transform;
-        if (!tr.renderWorldCopies || tr.maxBounds) return;
+        if (tr.maxBounds) return;
+        const isGlobe = tr.projection.name === 'globe';
+        if (!isGlobe && !tr.renderWorldCopies) return;
 
         const delta = center.lng - tr.center.lng;
         center.lng +=

@@ -27,7 +27,7 @@
     "center": {
       "type": "array",
       "value": "number",
-      "doc": "Default map center in longitude and latitude.  The style center will be used only if the map has not been positioned by other means (e.g. map options or user interaction).",
+      "doc": "Default map center in longitude and latitude. The style center will be used only if the map has not been positioned by other means (e.g. map options or user interaction).",
       "example": [
         -73.9749,
         40.7736
@@ -35,7 +35,7 @@
     },
     "zoom": {
       "type": "number",
-      "doc": "Default zoom level.  The style zoom will be used only if the map has not been positioned by other means (e.g. map options or user interaction).",
+      "doc": "Default zoom level. The style zoom will be used only if the map has not been positioned by other means (e.g. map options or user interaction).",
       "example": 12.5
     },
     "bearing": {
@@ -87,7 +87,15 @@
             "shadow-intensity": 0.2
           }
         }
-      ]
+      ],
+      "sdk-support": {
+        "basic functionality": {
+          "js": "3.0.0",
+          "android": "11.0.0",
+          "ios": "11.0.0",
+          "macos": "11.0.0"
+        }
+      }
     },
     "terrain": {
       "type": "terrain",
@@ -310,7 +318,7 @@
           }
         },
         "directional": {
-          "doc": "A light that has a direction and is located at infinite, so its rays are parallel. Simulates the sun light and it can cast shadows",
+          "doc": "A light that has a direction and is located at infinite distance, so its rays are parallel. It simulates the sun light and can cast shadows.",
           "sdk-support": {
             "basic functionality": {
               "js": "3.0.0",
@@ -320,7 +328,7 @@
           }
         },
         "flat": {
-          "doc": "A global directional light source which is only applied on 3D layers and hillshade layers. Using this type disables other light sources.",
+          "doc": "A global directional light source which is only applied on 3D and hillshade layers. Using this type disables other light sources.",
           "sdk-support": {
             "basic functionality": {
               "js": "3.0.0",
@@ -354,7 +362,14 @@
         ]
       },
       "doc": "Direction of the light source specified as [a azimuthal angle, p polar angle] where a indicates the azimuthal angle of the light relative to north (in degrees and proceeding clockwise), and p indicates polar angle of the light (from 0°, directly above, to 180°, directly below).",
-      "example": [90, 40]
+      "example": [90, 40],
+      "sdk-support": {
+        "basic functionality": {
+          "js": "3.0.0",
+          "android": "11.0.0",
+          "ios": "11.0.0"
+        }
+      }
     },
     "color": {
       "type": "color",
@@ -367,7 +382,14 @@
         ]
       },
       "transition": true,
-      "doc": "Color of the directional light."
+      "doc": "Color of the directional light.",
+      "sdk-support": {
+        "basic functionality": {
+          "js": "3.0.0",
+          "android": "11.0.0",
+          "ios": "11.0.0"
+        }
+      }
     },
     "intensity": {
       "type": "number",
@@ -382,7 +404,14 @@
         ]
       },
       "transition": true,
-      "doc": "A multiplier for the color of the directional light."
+      "doc": "A multiplier for the color of the directional light.",
+      "sdk-support": {
+        "basic functionality": {
+          "js": "3.0.0",
+          "android": "11.0.0",
+          "ios": "11.0.0"
+        }
+      }
     },
     "cast-shadows": {
       "type": "boolean",
@@ -392,7 +421,14 @@
       "expression": {
         "interpolated": false
       },
-      "property-type": "data-constant"
+      "property-type": "data-constant",
+      "sdk-support": {
+        "basic functionality": {
+          "js": "3.0.0",
+          "android": "11.0.0",
+          "ios": "11.0.0"
+        }
+      }
     },
     "shadow-intensity": {
       "type": "number",
@@ -407,7 +443,14 @@
         ]
       },
       "doc": "Determines the shadow strength, affecting the shadow receiver surfaces final color. Values near 0.0 reduce the shadow contribution to the final color. Values near to 1.0 make occluded surfaces receive almost no directional light. Designed to be used mostly for transitioning between values 0 and 1.",
-      "transition": true
+      "transition": true,
+      "sdk-support": {
+        "basic functionality": {
+          "js": "3.0.0",
+          "android": "11.0.0",
+          "ios": "11.0.0"
+        }
+      }
     }
   },
   "properties_light_ambient": {
@@ -422,7 +465,14 @@
         ]
       },
       "transition": true,
-      "doc": "Color of the ambient light."
+      "doc": "Color of the ambient light.",
+      "sdk-support": {
+        "basic functionality": {
+          "js": "3.0.0",
+          "android": "11.0.0",
+          "ios": "11.0.0"
+        }
+      }
     },
     "intensity": {
       "type": "number",
@@ -437,7 +487,14 @@
         ]
       },
       "transition": true,
-      "doc": "A multiplier for the color of the ambient light."
+      "doc": "A multiplier for the color of the ambient light.",
+      "sdk-support": {
+        "basic functionality": {
+          "js": "3.0.0",
+          "android": "11.0.0",
+          "ios": "11.0.0"
+        }
+      }
     }
   },
   "properties_light_flat": {
@@ -464,10 +521,9 @@
       "example": "map",
       "sdk-support": {
         "basic functionality": {
-          "js": "0.27.0",
-          "android": "5.1.0",
-          "ios": "3.6.0",
-          "macos": "0.5.0"
+          "js": "3.0.0",
+          "android": "11.0.0",
+          "ios": "11.0.0"
         }
       }
     },
@@ -496,10 +552,9 @@
       ],
       "sdk-support": {
         "basic functionality": {
-          "js": "0.27.0",
-          "android": "5.1.0",
-          "ios": "3.6.0",
-          "macos": "0.5.0"
+          "js": "3.0.0",
+          "android": "11.0.0",
+          "ios": "11.0.0"
         }
       }
     },
@@ -517,10 +572,9 @@
       "doc": "Color tint for lighting extruded geometries.",
       "sdk-support": {
         "basic functionality": {
-          "js": "0.27.0",
-          "android": "5.1.0",
-          "ios": "3.6.0",
-          "macos": "0.5.0"
+          "js": "3.0.0",
+          "android": "11.0.0",
+          "ios": "11.0.0"
         }
       }
     },
@@ -540,10 +594,9 @@
       "doc": "Intensity of lighting (on a scale from 0 to 1). Higher numbers will present as more extreme contrast.",
       "sdk-support": {
         "basic functionality": {
-          "js": "0.27.0",
-          "android": "5.1.0",
-          "ios": "3.6.0",
-          "macos": "0.5.0"
+          "js": "3.0.0",
+          "android": "11.0.0",
+          "ios": "11.0.0"
         }
       }
     }
@@ -558,6 +611,7 @@
     "source_vector",
     "source_raster",
     "source_raster_dem",
+    "source_raster_array",
     "source_geojson",
     "source_video",
     "source_image",
@@ -805,6 +859,67 @@
       "doc": "Other keys to configure the data source."
     }
   },
+  "source_raster_array": {
+    "type": {
+      "required": true,
+      "type": "enum",
+      "values": {
+        "raster-array": {
+          "doc": "A raster array source"
+        }
+      },
+      "doc": "The type of the source."
+    },
+    "url": {
+      "type": "string",
+      "doc": "A URL to a TileJSON resource. Supported protocols are `http:`, `https:`, and `mapbox://<Tileset ID>`."
+    },
+    "tiles": {
+      "type": "array",
+      "value": "string",
+      "doc": "An array of one or more tile source URLs, as in the TileJSON spec."
+    },
+    "bounds": {
+      "type": "array",
+      "value": "number",
+      "length": 4,
+      "default": [
+        -180,
+        -85.051129,
+        180,
+        85.051129
+      ],
+      "doc": "An array containing the longitude and latitude of the southwest and northeast corners of the source's bounding box in the following order: `[sw.lng, sw.lat, ne.lng, ne.lat]`. When this property is included in a source, no tiles outside of the given bounds are requested by Mapbox GL."
+    },
+    "minzoom": {
+      "type": "number",
+      "default": 0,
+      "doc": "Minimum zoom level for which tiles are available, as in the TileJSON spec."
+    },
+    "maxzoom": {
+      "type": "number",
+      "default": 22,
+      "doc": "Maximum zoom level for which tiles are available, as in the TileJSON spec. Data from tiles at the maxzoom are used when displaying the map at higher zoom levels."
+    },
+    "tileSize": {
+      "type": "number",
+      "default": 512,
+      "units": "pixels",
+      "doc": "The minimum visual size to display tiles for this layer. Only configurable for raster layers."
+    },
+    "attribution": {
+      "type": "string",
+      "doc": "Contains an attribution to be displayed when the map is shown to a user."
+    },
+    "rasterLayers": {
+      "type": "*",
+      "doc": "Contains the description of the raster data layers and the bands contained within the tiles."
+    },
+    "*": {
+      "type": "*",
+      "doc": "Other keys to configure the data source."
+    }
+  },
   "source_geojson": {
     "type": {
       "required": true,
@@ -925,13 +1040,13 @@
       "doc": "The data type of the image source."
     },
     "url": {
-      "required": true,
+      "required": false,
       "type": "string",
-      "doc": "URL that points to an image."
+      "doc": "URL that points to an image. If the URL is not specified, the image is expected to be loaded directly during runtime."
     },
     "coordinates": {
       "required": true,
-      "doc": "Corners of image specified in longitude, latitude pairs.",
+      "doc": "Corners of image specified in longitude, latitude pairs. Note: When using globe projection, the image will be centered at the North or South Pole in the respective hemisphere if the average latitude value exceeds 85 degrees or falls below -85 degrees.",
       "type": "array",
       "length": 4,
       "value": {
@@ -1237,7 +1352,7 @@
     },
     "filter": {
       "type": "filter",
-      "doc": "An expression specifying conditions on source features. Only features that match the filter are displayed. Zoom expressions in filters are only evaluated at integer zoom levels. The `[\"feature-state\", ...]` expression is not supported in filter expressions.  The `[\"pitch\"]` and `[\"distance-from-center\"]` expressions are supported only for filter expressions on the symbol layer."
+      "doc": "An expression specifying conditions on source features. Only features that match the filter are displayed. Zoom expressions in filters are only evaluated at integer zoom levels. The `[\"feature-state\", ...]` expression is not supported in filter expressions. The `[\"pitch\"]` and `[\"distance-from-center\"]` expressions are supported only for filter expressions on the symbol layer."
     },
     "layout": {
       "type": "layout",
@@ -1354,6 +1469,7 @@
     },
     "model-id": {
       "type": "string",
+      "default": "",
       "doc": "Model to render.",
       "property-type": "data-driven",
       "expression": {
@@ -1884,7 +2000,7 @@
     },
     "symbol-sort-key": {
       "type": "number",
-      "doc": "Sorts features in ascending order based on this value. Features with lower sort keys are drawn and placed first.  When `icon-allow-overlap` or `text-allow-overlap` is `false`, features with a lower sort key will have priority during placement. When `icon-allow-overlap` or `text-allow-overlap` is set to `true`, features with a higher sort key will overlap over features with a lower sort key.",
+      "doc": "Sorts features in ascending order based on this value. Features with lower sort keys are drawn and placed first. When `icon-allow-overlap` or `text-allow-overlap` is `false`, features with a lower sort key will have priority during placement. When `icon-allow-overlap` or `text-allow-overlap` is set to `true`, features with a higher sort key will overlap over features with a lower sort key.",
       "sdk-support": {
         "basic functionality": {
           "js": "0.53.0",
@@ -1942,7 +2058,7 @@
     "symbol-z-elevate": {
       "type": "boolean",
       "default": false,
-      "doc": "Position symbol on buildings (both fill extrusions and models) roof tops. In order to have minimal impact on performance, this is supported only when `fill-extrusion-height` is not zoom-dependent and not edited after initial bucket creation. For fading in buildings when zooming in, fill-extrusion-vertical-scale should be used and symbols would raise with building roofs. Symbols are sorted by elevation, except in case when `viewport-y` sorting or `symbol-sort-key` are applied.",
+      "doc": "Position symbol on buildings (both fill extrusions and models) rooftops. In order to have minimal impact on performance, this is supported only when `fill-extrusion-height` is not zoom-dependent and remains unchanged. For fading in buildings when zooming in, fill-extrusion-vertical-scale should be used and symbols would raise with building rooftops. Symbols are sorted by elevation, except in cases when `viewport-y` sorting or `symbol-sort-key` are applied.",
       "sdk-support": {
         "basic functionality": {
           "js": "3.0.0",
@@ -3608,7 +3724,7 @@
         }
       },
       "array": {
-        "doc": "Asserts that the input is an array (optionally with a specific item type and length).  If, when the input expression is evaluated, it is not of the asserted type, then this assertion will cause the whole expression to be aborted.",
+        "doc": "Asserts that the input is an array (optionally with a specific item type and length). If, when the input expression is evaluated, it is not of the asserted type, then this assertion will cause the whole expression to be aborted.",
         "group": "Types",
         "sdk-support": {
           "basic functionality": {
@@ -4054,7 +4170,7 @@
         }
       },
       "properties": {
-        "doc": "Returns the feature properties object.  Note that in some cases, it may be more efficient to use `[\"get\", \"property_name\"]` directly.",
+        "doc": "Returns the feature properties object. Note that in some cases, it may be more efficient to use `[\"get\", \"property_name\"]` directly.",
         "group": "Feature data",
         "sdk-support": {
           "basic functionality": {
@@ -4101,7 +4217,7 @@
         }
       },
       "zoom": {
-        "doc": "Returns the current zoom level.  Note that in style layout and paint properties, [\"zoom\"] may only appear as the input to a top-level \"step\" or \"interpolate\" expression.",
+        "doc": "Returns the current zoom level. Note that in style layout and paint properties, [\"zoom\"] may only appear as the input to a top-level \"step\" or \"interpolate\" expression.",
         "group": "Camera",
         "sdk-support": {
           "basic functionality": {
@@ -4912,7 +5028,7 @@
         ],
         "relaxZoomRestriction": true
       },
-      "doc": "Specify the vertical range, measured in meters, over which the fog should gradually fade out. When both parameters are set to zero, the fog will be rendered without any vertical constraints.",
+      "doc": "An array of two number values, specifying the vertical range, measured in meters, over which the fog should gradually fade out. When both parameters are set to zero, the fog will be rendered without any vertical constraints.",
       "sdk-support": {
         "basic functionality": {
           "js": "3.0.0",
@@ -5135,7 +5251,7 @@
       "minimum": [-90, -90],
       "maximum": [90, 90],
       "transition": false,
-      "doc":  "The standard parallels of the projection, denoting the desired latitude range with minimal distortion. `parallels` takes the form of [lat0, lat1]. This property is only configurable for conic projections (Albers and Lambert Conformal Conic).",
+      "doc": "The standard parallels of the projection, denoting the desired latitude range with minimal distortion. `parallels` takes the form of [lat0, lat1]. This property is only configurable for conic projections (Albers and Lambert Conformal Conic).",
       "example": [
         29.5,
         45.5
@@ -5423,7 +5539,10 @@
       "minimum": 0,
       "transition": true,
       "units": "intensity",
-      "doc": "Controls the intensity of light emitted on the source features. This property works only with 3D light, i.e. when `lights` root property is defined.",
+      "doc": "Controls the intensity of light emitted on the source features.",
+      "requires": [
+        "lights"
+      ],
       "sdk-support": {
         "basic functionality": {
           "js": "3.0.0",
@@ -5611,8 +5730,7 @@
         "parameters": [
           "zoom",
           "feature",
-          "feature-state",
-          "measure-light"
+          "feature-state"
         ]
       },
       "property-type": "data-driven"
@@ -5646,8 +5764,7 @@
         "parameters": [
           "zoom",
           "feature",
-          "feature-state",
-          "measure-light"
+          "feature-state"
         ]
       },
       "property-type": "data-driven"
@@ -5688,6 +5805,12 @@
       },
       "transition": true,
       "doc": "Controls the intensity of shading near ground and concave angles between walls. Default value 0.0 disables ambient occlusion and values around 0.3 provide the most plausible results for buildings.",
+      "requires": [
+        "lights",
+        {
+          "!": "fill-extrusion-flood-light-intensity"
+        }
+      ],
       "sdk-support": {
         "basic functionality": {
           "js": "3.0.0",
@@ -5709,9 +5832,12 @@
         ]
       },
       "transition": true,
-      "doc": "Shades area near ground and concave angles between walls where the radius defines only vertical impact. Default value 3.0 corresponds to height of one floor and brings the most plausible results for buildings. This property works only with legacy light. When 3D light is enabled `fill-extrusion-ambient-occlusion-wall-radius` and `fill-extrusion-ambient-occlusion-ground-radius` are used instead.",
+      "doc": "Shades area near ground and concave angles between walls where the radius defines only vertical impact. Default value 3.0 corresponds to height of one floor and brings the most plausible results for buildings. This property works only with legacy light. When 3D lights are enabled `fill-extrusion-ambient-occlusion-wall-radius` and `fill-extrusion-ambient-occlusion-ground-radius` are used instead.",
       "requires": [
-        "fill-extrusion-edge-radius"
+        "fill-extrusion-edge-radius",
+        {
+          "!": "fill-extrusion-flood-light-intensity"
+        }
       ],
       "sdk-support": {
         "basic functionality": {
@@ -5733,9 +5859,13 @@
         ]
       },
       "transition": true,
-      "doc": "Shades area near ground and concave angles between walls where the radius defines only vertical impact. Default value 3.0 corresponds to height of one floor and brings the most plausible results for buildings. This property works only with 3D light, i.e. when `lights` root property is defined.",
+      "doc": "Shades area near ground and concave angles between walls where the radius defines only vertical impact. Default value 3.0 corresponds to height of one floor and brings the most plausible results for buildings.",
       "requires": [
-        "fill-extrusion-edge-radius"
+        "lights",
+        "fill-extrusion-edge-radius",
+        {
+          "!": "fill-extrusion-flood-light-intensity"
+        }
       ],
       "sdk-support": {
         "basic functionality": {
@@ -5757,7 +5887,13 @@
         ]
       },
       "transition": true,
-      "doc": "The extent of the ambient occlusion effect on the ground beneath the extruded buildings in meters. This property works only with 3D light, i.e. when `lights` root property is defined.",
+      "doc": "The extent of the ambient occlusion effect on the ground beneath the extruded buildings in meters.",
+      "requires": [
+        "lights",
+        {
+          "!": "fill-extrusion-flood-light-intensity"
+        }
+      ],
       "sdk-support": {
         "basic functionality": {
           "js": "3.0.0",
@@ -5772,7 +5908,13 @@
       "default": 0.69,
       "minimum": 0.0,
       "maximum": 1.0,
-      "doc": "Provides a control to futher fine-tune the look of the ambient occlusion on the ground beneath the extruded buildings. Lower values give the effect a more solid look while higher values make it smoother. This property works only with 3D light, i.e. when `lights` root property is defined.",
+      "doc": "Provides a control to futher fine-tune the look of the ambient occlusion on the ground beneath the extruded buildings. Lower values give the effect a more solid look while higher values make it smoother.",
+      "requires": [
+        "lights",
+        {
+          "!": "fill-extrusion-flood-light-intensity"
+        }
+      ],
       "transition": true,
       "expression": {
         "interpolated": true,
@@ -5792,7 +5934,13 @@
       "property-type": "data-constant",
       "type": "color",
       "default": "#ffffff",
-      "doc": "The color of the flood light effect on the walls of the extruded buildings. This property works only with 3D light, i.e. when `lights` root property is defined.",
+      "doc": "The color of the flood light effect on the walls of the extruded buildings.",
+      "requires": [
+        "lights",
+        {
+          "!": "fill-extrusion-ambient-occlusion-intensity"
+        }
+      ],
       "transition": true,
       "expression": {
         "interpolated": true,
@@ -5815,7 +5963,13 @@
       "default": 0.0,
       "minimum": 0.0,
       "maximum": 1.0,
-      "doc": "The intensity of the flood light color. This property works only with 3D light, i.e. when `lights` root property is defined.",
+      "doc": "The intensity of the flood light color.",
+      "requires": [
+        "lights",
+        {
+          "!": "fill-extrusion-ambient-occlusion-intensity"
+        }
+      ],
       "transition": true,
       "expression": {
         "interpolated": true,
@@ -5838,7 +5992,13 @@
       "units": "meters",
       "default": 0,
       "minimum": 0,
-      "doc": "The extent of the flood light effect on the walls of the extruded buildings in meters. This property works only with 3D light, i.e. when `lights` root property is defined.",
+      "doc": "The extent of the flood light effect on the walls of the extruded buildings in meters.",
+      "requires": [
+        "lights",
+        {
+          "!": "fill-extrusion-ambient-occlusion-intensity"
+        }
+      ],
       "transition": true,
       "expression": {
         "interpolated": true,
@@ -5866,7 +6026,13 @@
       "units": "meters",
       "default": 0,
       "minimum": 0,
-      "doc": "The extent of the flood light effect on the ground beneath the extruded buildings in meters. This property works only with 3D light, i.e. when `lights` root property is defined.",
+      "doc": "The extent of the flood light effect on the ground beneath the extruded buildings in meters.",
+      "requires": [
+        "lights",
+        {
+          "!": "fill-extrusion-ambient-occlusion-intensity"
+        }
+      ],
       "transition": true,
       "expression": {
         "interpolated": true,
@@ -5894,7 +6060,13 @@
       "default": 0.69,
       "minimum": 0.0,
       "maximum": 1.0,
-      "doc": "Provides a control to futher fine-tune the look of the flood light on the ground beneath the extruded buildings. Lower values give the effect a more solid look while higher values make it smoother. This property works only with 3D light, i.e. when `lights` root property is defined.",
+      "doc": "Provides a control to futher fine-tune the look of the flood light on the ground beneath the extruded buildings. Lower values give the effect a more solid look while higher values make it smoother.",
+      "requires": [
+        "lights",
+        {
+          "!": "fill-extrusion-ambient-occlusion-intensity"
+        }
+      ],
       "transition": true,
       "expression": {
         "interpolated": true,
@@ -5959,7 +6131,7 @@
       "default": 0.0,
       "minimum": 0.0,
       "maximum": 1.0,
-      "doc": "This parameter defines the range for the fade-out effect before an automatic content cutoff  on pitched map views. The automatic cutoff range is calculated according to the minimum required zoom level of the source and layer. The fade range is expressed in relation to the height of the map view. A value of 1.0 indicates that the content is faded to the same extent as the map's height in pixels, while a value close to zero represents a sharp cutoff. When the value is set to 0.0, the cutoff is completely disabled. Note: The property has no effect on the map if terrain is enabled.",
+      "doc": "This parameter defines the range for the fade-out effect before an automatic content cutoff on pitched map views. The automatic cutoff range is calculated according to the minimum required zoom level of the source and layer. The fade range is expressed in relation to the height of the map view. A value of 1.0 indicates that the content is faded to the same extent as the map's height in pixels, while a value close to zero represents a sharp cutoff. When the value is set to 0.0, the cutoff is completely disabled. Note: The property has no effect on the map if terrain is enabled.",
       "transition": false,
       "expression": {
         "interpolated": false
@@ -5972,7 +6144,33 @@
         }
       },
       "property-type": "data-constant"
-    }
+    },
+    "fill-extrusion-emissive-strength": {
+      "type": "number",
+      "default": 0,
+      "minimum": 0,
+      "transition": true,
+      "units": "intensity",
+      "doc": "Controls the intensity of light emitted on the source features.",
+      "requires": [
+        "lights"
+      ],
+      "sdk-support": {
+        "basic functionality": {
+          "js": "3.0.0",
+          "android": "11.0.0",
+          "ios": "11.0.0"
+        }
+      },
+      "expression": {
+        "interpolated": true,
+        "parameters": [
+          "zoom",
+          "measure-light"
+        ]
+      },
+      "property-type": "data-constant"
+   }
   },
   "paint_line": {
     "line-opacity": {
@@ -6288,7 +6486,7 @@
     },
     "line-gradient": {
       "type": "color",
-      "doc": "A gradient used to color a line feature at various distances along its length. Defined using a `step` or `interpolate` expression which outputs a color for each corresponding `line-progress` input value. `line-progress` is a percentage of the line feature's total length as measured on the webmercator projected coordinate plane (a `number` between `0` and `1`).  Can only be used with GeoJSON sources that specify `\"lineMetrics\": true`.",
+      "doc": "A gradient used to color a line feature at various distances along its length. Defined using a `step` or `interpolate` expression which outputs a color for each corresponding `line-progress` input value. `line-progress` is a percentage of the line feature's total length as measured on the webmercator projected coordinate plane (a `number` between `0` and `1`). Can only be used with GeoJSON sources that specify `\"lineMetrics\": true`.",
       "example": [
         "interpolate",
         [ "linear" ],
@@ -6368,7 +6566,10 @@
       "minimum": 0,
       "transition": true,
       "units": "intensity",
-      "doc": "Controls the intensity of light emitted on the source features. This property works only with 3D light, i.e. when `lights` root property is defined.",
+      "doc": "Controls the intensity of light emitted on the source features.",
+      "requires": [
+        "lights"
+      ],
       "sdk-support": {
         "basic functionality": {
           "js": "3.0.0",
@@ -6782,7 +6983,10 @@
       "minimum": 0,
       "transition": true,
       "units": "intensity",
-      "doc": "Controls the intensity of light emitted on the source features. This property works only with 3D light, i.e. when `lights` root property is defined.",
+      "doc": "Controls the intensity of light emitted on the source features.",
+      "requires": [
+        "lights"
+      ],
       "sdk-support": {
         "basic functionality": {
           "js": "3.0.0",
@@ -6909,7 +7113,7 @@
         1,
         "red"
       ],
-      "doc": "Defines the color of each pixel based on its density value in a heatmap.  Should be an expression that uses `[\"heatmap-density\"]` as input.",
+      "doc": "Defines the color of each pixel based on its density value in a heatmap. Should be an expression that uses `[\"heatmap-density\"]` as input.",
       "transition": false,
       "sdk-support": {
         "basic functionality": {
@@ -6994,7 +7198,10 @@
       "minimum": 0,
       "transition": true,
       "units": "intensity",
-      "doc": "Controls the intensity of light emitted on the source features. This property works only with 3D light, i.e. when `lights` root property is defined.",
+      "doc": "Controls the intensity of light emitted on the source features.",
+      "requires": [
+        "lights"
+      ],
       "sdk-support": {
         "basic functionality": {
           "js": "3.0.0",
@@ -7022,7 +7229,10 @@
       "minimum": 0,
       "transition": true,
       "units": "intensity",
-      "doc": "Controls the intensity of light emitted on the source features. This property works only with 3D light, i.e. when `lights` root property is defined.",
+      "doc": "Controls the intensity of light emitted on the source features.",
+      "requires": [
+        "lights"
+      ],
       "sdk-support": {
         "basic functionality": {
           "js": "3.0.0",
@@ -7533,7 +7743,7 @@
     },
     "raster-color": {
       "type": "color",
-      "doc": "Defines a color map by which to colorize a raster layer, parameterized by the `[\"raster-value\"]` expression and evaluated at 1024 uniformly spaced steps over the range specified by `raster-color-range`.",
+      "doc": "Defines a color map by which to colorize a raster layer, parameterized by the `[\"raster-value\"]` expression and evaluated at 256 uniformly spaced steps over the range specified by `raster-color-range`.",
       "transition": false,
       "sdk-support": {
         "basic functionality": {
@@ -7784,6 +7994,66 @@
         ]
       },
       "property-type": "data-constant"
+    },
+    "raster-emissive-strength": {
+      "type": "number",
+      "default": 0,
+      "minimum": 0,
+      "transition": true,
+      "units": "intensity",
+      "doc": "Controls the intensity of light emitted on the source features.",
+      "requires": [
+        "lights"
+      ],
+      "sdk-support": {
+        "basic functionality": {
+          "js": "3.0.0",
+          "android": "11.0.0",
+          "ios": "11.0.0"
+        }
+      },
+      "expression": {
+        "interpolated": true,
+        "parameters": [
+          "zoom",
+          "measure-light"
+        ]
+      },
+      "property-type": "data-constant"
+   },
+    "raster-array-band": {
+      "type": "string",
+      "required": false,
+      "property-type": "data-constant",
+      "transition": false,
+      "doc": "Displayed band of raster array source layer",
+      "example": "band-name",
+      "sdk-support": {
+        "basic functionality": {
+          "js": "3.1.0",
+          "android": "11.1.0",
+          "ios": "11.1.0"
+        }
+      }
+    },
+    "raster-elevation": {
+      "type": "number",
+      "doc": "Specifies an uniform elevation from the ground, in meters. Only supported with image sources.",
+      "default": 0,
+      "minimum": 0,
+      "transition": true,
+      "sdk-support": {
+        "basic functionality": {
+          "js": "3.1.0"
+        }
+      },
+      "expression": {
+        "interpolated": true,
+        "parameters": [
+          "zoom"
+        ]
+      },
+      "property-type": "data-constant"
     }
   },
   "paint_hillshade": {
@@ -7792,7 +8062,7 @@
       "default": 335,
       "minimum": 0,
       "maximum": 359,
-      "doc": "The direction of the light source used to generate the hillshading with 0 as the top of the viewport if `hillshade-illumination-anchor` is set to `viewport` and due north if `hillshade-illumination-anchor` is set to `map`.",
+      "doc": "The direction of the light source used to generate the hillshading with 0 as the top of the viewport if `hillshade-illumination-anchor` is set to `viewport` and due north if `hillshade-illumination-anchor` is set to `map` and no 3d lights enabled. If `hillshade-illumination-anchor` is set to `map` and 3d lights enabled, the direction from 3d lights is used instead.",
       "transition": false,
       "sdk-support": {
         "basic functionality": {
@@ -7877,7 +8147,8 @@
       "expression": {
         "interpolated": true,
         "parameters": [
-          "zoom"
+          "zoom",
+          "measure-light"
         ]
       },
       "property-type": "data-constant"
@@ -7898,7 +8169,8 @@
       "expression": {
         "interpolated": true,
         "parameters": [
-          "zoom"
+          "zoom",
+          "measure-light"
         ]
       },
       "property-type": "data-constant"
@@ -7919,7 +8191,34 @@
       "expression": {
         "interpolated": true,
         "parameters": [
-          "zoom"
+          "zoom",
+          "measure-light"
+        ]
+      },
+      "property-type": "data-constant"
+    },
+    "hillshade-emissive-strength": {
+      "type": "number",
+      "default": 0.0,
+      "minimum": 0,
+      "transition": true,
+      "units": "intensity",
+      "doc": "Controls the intensity of light emitted on the source features.",
+      "requires": [
+        "lights"
+      ],
+      "sdk-support": {
+        "basic functionality": {
+          "js": "3.0.0",
+          "android": "11.0.0",
+          "ios": "11.0.0"
+        }
+      },
+      "expression": {
+        "interpolated": true,
+        "parameters": [
+          "zoom",
+          "measure-light"
         ]
       },
       "property-type": "data-constant"
@@ -8001,7 +8300,10 @@
       "minimum": 0,
       "transition": true,
       "units": "intensity",
-      "doc": "Controls the intensity of light emitted on the source features. This property works only with 3D light, i.e. when `lights` root property is defined.",
+      "doc": "Controls the intensity of light emitted on the source features.",
+      "requires": [
+        "lights"
+      ],
       "sdk-support": {
         "basic functionality": {
           "js": "3.0.0",
@@ -8287,7 +8589,7 @@
       "property-type": "data-driven",
       "expression": {
         "interpolated": true,
-        "parameters": ["feature", "feature-state"]
+        "parameters": ["feature", "feature-state", "zoom"]
       },
       "sdk-support": {
          "basic functionality": {
@@ -8337,7 +8639,7 @@
       "property-type": "data-driven",
       "expression": {
         "interpolated": true,
-        "parameters": ["feature", "feature-state"]
+        "parameters": ["feature", "feature-state", "zoom"]
       },
       "sdk-support": {
           "basic functionality": {
@@ -8361,7 +8663,7 @@
       "property-type": "data-driven",
       "expression": {
         "interpolated": true,
-        "parameters": ["feature", "feature-state", "measure-light"]
+        "parameters": ["feature", "feature-state", "measure-light", "zoom"]
       },
       "sdk-support": {
           "basic functionality": {
@@ -8483,7 +8785,7 @@
       "default": 0.0,
       "minimum": 0,
       "maximum": 5,
-      "units": "number",
+      "units": "intensity",
       "doc": "Strength of the emission. There is no emission for value 0. For value 1.0, only emissive component (no shading) is displayed and values above 1.0 produce light contribution to surrounding area, for some of the parts (e.g. doors). Expressions that depend on measure-light are not supported when using GeoJSON or vector tile as the model layer source.",
       "expression": {
         "interpolated": true,
@@ -8564,7 +8866,7 @@
       "default": 0.0,
       "minimum": 0.0,
       "maximum": 1.0,
-      "doc": "This parameter defines the range for the fade-out effect before an automatic content cutoff  on pitched map views. The automatic cutoff range is calculated according to the minimum required zoom level of the source and layer. The fade range is expressed in relation to the height of the map view. A value of 1.0 indicates that the content is faded to the same extent as the map's height in pixels, while a value close to zero represents a sharp cutoff. When the value is set to 0.0, the cutoff is completely disabled. Note: The property has no effect on the map if terrain is enabled.",
+      "doc": "This parameter defines the range for the fade-out effect before an automatic content cutoff on pitched map views. The automatic cutoff range is calculated according to the minimum required zoom level of the source and layer. The fade range is expressed in relation to the height of the map view. A value of 1.0 indicates that the content is faded to the same extent as the map's height in pixels, while a value close to zero represents a sharp cutoff. When the value is set to 0.0, the cutoff is completely disabled. Note: The property has no effect on the map if terrain is enabled.",
       "transition": false,
       "expression": {
         "interpolated": false
