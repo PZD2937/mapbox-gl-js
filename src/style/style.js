@@ -2086,6 +2086,9 @@ class Style extends Evented {
             this._changes.updateSourceCache(fqid, 'reload');
             sourceCache.pause();
         }
+        if (layer.visibility === 'none' && sourceCache)
+            sourceCache.clearTilesRequest();
+
         layer.invalidateCompiledFilter();
     }
 

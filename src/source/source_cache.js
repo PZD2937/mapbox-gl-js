@@ -877,6 +877,17 @@ class SourceCache extends Evented {
     }
 
     /**
+     * Remove all tiles request from this pyramid.
+     * @private
+     */
+    clearTilesRequest() {
+        this._shouldReloadOnResume = false;
+        this._paused = false;
+        for (const id in this._tiles)
+            this._removeTile(+id);
+    }
+
+    /**
      * Search through our current tiles and attempt to find the tiles that cover the given `queryGeometry`.
      *
      * @param {QueryGeometry} queryGeometry
