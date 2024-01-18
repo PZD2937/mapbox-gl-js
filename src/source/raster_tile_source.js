@@ -1,6 +1,6 @@
 // @flow
 
-import {asyncAll, clamp, extend, pick} from '../util/util.js';
+import {extend, pick} from '../util/util.js';
 
 import {getImage, ResourceType} from '../util/ajax.js';
 import {Event, ErrorEvent, Evented} from '../util/evented.js';
@@ -25,7 +25,6 @@ import type {
 import Texture from '../render/texture.js';
 import {CanonicalTileID} from "./tile_id.js";
 import type Actor from '../util/actor.js';
-import mergerTextureImage from "../util/merger_image.js";
 import offscreenCanvasSupported from "../util/offscreen_canvas_supported.js";
 import {DedupedRequest} from "./vector_tile_worker_source.js";
 import {loadRasterTile} from "./raster_tile_worker_source.js";
@@ -143,7 +142,8 @@ class RasterTileSource extends Evented implements Source {
     // $FlowFixMe[method-unbinding]
     reload() {
         this.cancelTileJSONRequest();
-        this.load(() => this.map.style._clearSource(this.id));
+        const fqid = makeFQID(this.id, this.scope);
+        this.load(() => this.map.style.clearSource(fqid));
     }
 
     /**
