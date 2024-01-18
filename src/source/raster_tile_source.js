@@ -93,6 +93,7 @@ class RasterTileSource extends Evented implements Source {
 
         this.deduped = new DedupedRequest();
         this.subLoading = {};
+        this._tileWorkers = {};
 
         this._options = extend({type: 'raster'}, options);
         extend(this, pick(options, ['url', 'scheme', 'tileSize', 'projection', 'customTags', 'showDebugTileLoadTime']));
@@ -204,7 +205,7 @@ class RasterTileSource extends Evented implements Source {
     }
 
     needRevise() {
-        return this.projection && this.projection !== 'WGS84'
+        return this.projection && this.projection !== 'WGS84';
     }
 
     loadTile(tile: Tile, callback: Callback<void>) {
@@ -232,10 +233,10 @@ class RasterTileSource extends Evented implements Source {
             tile._loadTime = Date.now() - tile._beiginTime;
             delete tile._beiginTime;
             if (this.showDebugTileLoadTime) {
-                console.log(tile._loadTime, this.id)
+                console.log(tile._loadTime, this.id);
             }
             callback(null);
-        }
+        };
 
         tile._beiginTime = Date.now();
         if (this.needRevise()) {
@@ -251,6 +252,7 @@ class RasterTileSource extends Evented implements Source {
         if (!tile.actor) {
             tile.actor = this.dispatcher.getActor();
         }
+        // console.log(this.id, tile.tileID.toString(), 'calculateCoverTiles start', tile);
         // 计算覆盖的瓦片
         tile.actor.send(`${this.type}.getCoverTiles`, {
             tile: tile.tileID.canonical,
@@ -259,7 +261,8 @@ class RasterTileSource extends Evented implements Source {
             type: this.type,
             scope: this.scope
         }, (err, data) => {
-            if (tile.state === 'unloaded') return callback(null);
+            // console.log(this.id, tile.tileID.toString(), tile.aborted, 'calculateCoverTiles end');
+            if (tile.aborted) return callback(null);
             if (!data) return callback(err);
             const coverTiles = data.coverTiles;
             const requests = coverTiles.map(item => {
@@ -285,7 +288,7 @@ class RasterTileSource extends Evented implements Source {
             } else {
                 tile.request = loadRasterTile.call(this, {requests, offset: data.offset}, (err, result) => {
                     if (tile.state === 'unloaded') return callback(null);
-                    callback(err, result)
+                    callback(err, result);
                 });
                 this.limitedStorage();
             }
@@ -306,6 +309,7 @@ class RasterTileSource extends Evented implements Source {
     abortTile(tile: Tile, callback: Callback<void>) {
         tile.aborted = true;
         tile.state = 'unloaded';
+        // console.log(this.id, tile.tileID.toString(), 'abort', tile);
         if (tile.request) {
             tile.request.cancel();
             delete tile.request;
@@ -315,7 +319,8 @@ class RasterTileSource extends Evented implements Source {
                 uid: tile.uid,
                 tileID: tile.tileID.canonical,
                 type: this.type,
-                source: this.id
+                source: this.id,
+                scope: this.scope
             });
         }
         callback();
@@ -343,7 +348,8 @@ class RasterTileSource extends Evented implements Source {
                 uid: tile.uid,
                 tileID: tile.tileID.canonical,
                 type: this.type,
-                source: this.id
+                source: this.id,
+                scope: this.scope
             });
         }
         callback();

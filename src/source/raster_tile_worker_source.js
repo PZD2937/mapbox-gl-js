@@ -13,6 +13,7 @@ import {DedupedRequest} from "./vector_tile_worker_source.js";
 import type {Cancelable} from "../types/cancelable.js";
 import offscreenCanvasSupported from "../util/offscreen_canvas_supported.js";
 import window from "../util/window.js";
+import type Actor from "../util/actor.js";
 
 const supportImageBitmap = typeof window.createImageBitmap === 'function';
 
@@ -207,7 +208,7 @@ export default class RasterTileWorkerSource {
         const loading = this.loading[params.tileID.key] = this.loading[params.tileID.key] || {status: 'loading'};
         loading.request = this.loadRasterTile(params, (error, result) => {
             if (loading.status === 'unloaded') return callback(null);
-            delete loading.request;
+            delete this.loading[params.tileID.key];
             callback(error, result);
         });
         // console.log(Object.keys(this.loading).length, 'loading')
