@@ -6,7 +6,7 @@ import {bezier, clamp, extend} from '../util/util.js';
 import Point from '@mapbox/point-geometry';
 
 import type {DragPanOptions} from './handler/shim/drag_pan.js';
-import type {EasingOptions} from '../ui/camera.js';
+import type {EasingOptions} from './camera.js';
 
 const defaultInertiaOptions = {
     linearity: 0.3,
