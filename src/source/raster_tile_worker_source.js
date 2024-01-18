@@ -13,7 +13,6 @@ import {DedupedRequest} from "./vector_tile_worker_source.js";
 import type {Cancelable} from "../types/cancelable.js";
 import offscreenCanvasSupported from "../util/offscreen_canvas_supported.js";
 import window from "../util/window.js";
-import type Actor from "../util/actor.js";
 
 const supportImageBitmap = typeof window.createImageBitmap === 'function';
 
