@@ -9,10 +9,7 @@ import {
     RequestManager,
     mapSessionAPI,
     mapLoadEvent,
-    getMapSessionAPI,
     postPerformanceEvent,
-    postMapLoadEvent,
-    AUTH_ERR_MSG,
     storeAuthState,
     removeAuthState
 } from '../util/mapbox.js';

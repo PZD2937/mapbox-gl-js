@@ -310,7 +310,7 @@ class RasterTileSource extends Evented implements Source {
             tile.request.cancel();
             delete tile.request;
         }
-        if (tile.actor) {
+        if (tile.actor && this.type === 'raster') {
             tile.actor.send('abortTile', {
                 uid: tile.uid,
                 tileID: tile.tileID.canonical,
@@ -338,7 +338,7 @@ class RasterTileSource extends Evented implements Source {
         } else {
             tile.destroy();
         }
-        if (tile.actor) {
+        if (tile.actor && this.type === 'raster') {
             tile.actor.send('removeTile', {
                 uid: tile.uid,
                 tileID: tile.tileID.canonical,

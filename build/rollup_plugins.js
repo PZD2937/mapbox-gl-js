@@ -28,6 +28,9 @@ export const plugins = ({minified, production, test, bench, keepClassNames}) => 
             replacement: production ?
                 fileURLToPath(new URL('../src/tracked-parameters/internal/tracked_parameters_mock.js', import.meta.url)) :
                 fileURLToPath(new URL('../src/tracked-parameters/internal/tracked_parameters_ui.js', import.meta.url))
+        }, {
+            find: '@mapbox/vector-tile',
+            replacement: fileURLToPath(new URL('../lib/vector-tile/index.js', import.meta.url))
         }]
     }),
     (production && !bench) ? strip({
@@ -59,11 +62,6 @@ export const plugins = ({minified, production, test, bench, keepClassNames}) => 
         // global keyword handling causes Webpack compatibility issues, so we disabled it:
         // https://github.com/mapbox/mapbox-gl-js/pull/6956
         ignoreGlobal: true
-    }),
-    alias({
-        entries: {
-            '@mapbox/vector-tile': './lib/vector-tile/index.js'
-        }
     })
 ].filter(Boolean);
 

@@ -12,9 +12,8 @@ import {getTileSystem, lngLatToPixel} from "../geo/projection/tile_projection.js
 import {DedupedRequest} from "./vector_tile_worker_source.js";
 import type {Cancelable} from "../types/cancelable.js";
 import offscreenCanvasSupported from "../util/offscreen_canvas_supported.js";
-import window from "../util/window.js";
 
-const supportImageBitmap = typeof window.createImageBitmap === 'function';
+const supportImageBitmap = typeof createImageBitmap === 'function';
 
 type Request = {
     request: RequestParameters,
@@ -37,7 +36,7 @@ type LoadingTile = {
 }
 
 function dataToTextureImage(data, cb: Callback) {
-    if (data instanceof window.ArrayBuffer) {
+    if (data instanceof ArrayBuffer) {
         arrayBufferToImage(data, cb);
     } else {
         cb(null, data);
@@ -47,21 +46,11 @@ function dataToTextureImage(data, cb: Callback) {
 function canvasToImage(canvas: HTMLCanvasElement | OffscreenCanvas, callback: Callback<ImageBitmap | HTMLCanvasElement>) {
     if (supportImageBitmap) {
         // console.log(canvas.toDataURL())
-        window.createImageBitmap(canvas).then(imageBitmap => {
+        createImageBitmap(canvas).then(imageBitmap => {
             callback(null, imageBitmap);
         });
     } else {
         callback(null, canvas);
-    }
-}
-
-function tileChildren(tile: {x: number, y: number, z: number}, targetZ: number, targetChildren: []) {
-    if (tile.z > targetZ) return targetChildren.push(tile);
-    const x = tile.x << 1, y = tile.y << 1, z = tile.z + 1, dx = (tile.dx || 0) * 2, dy = (tile.dy || 0) * 2;
-    const children = [{x, y, z, dx, dy}, {x: x + 1, y, z, dx: dx + 1, dy}, {x, y: y + 1, z, dx, dy: dy + 1}, {x: x + 1, y: y + 1, z, dx: dx + 1, dy: dy + 1}];
-    if (tile.z === targetZ) return targetChildren.push(...children);
-    for (let i = 0; i < 4; i++) {
-        tileChildren(children[i], targetZ - 1, targetChildren);
     }
 }
 
@@ -80,7 +69,7 @@ export function loadRasterTile(params: WorkerTileParameters, callback: Callback)
 
     const initConfig = (imageSize: number) => {
         if (!canvas) {
-            canvas = offscreenCanvasSupported() ? new window.OffscreenCanvas(imageSize, imageSize) : (isWorker() ? null : document.createElement('canvas'));
+            canvas = offscreenCanvasSupported() ? new OffscreenCanvas(imageSize, imageSize) : (isWorker() ? null : document.createElement('canvas'));
             if (!canvas) return;
             // 计算都是基于256像素计算，所以使用的所有坐标要乘以 实际图片像素/256
             const scale = imageSize / 256;

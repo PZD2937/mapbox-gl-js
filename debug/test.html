@@ -159,8 +159,8 @@
     }
 
     function getTXX16(data, x, y, z) {
-        x = x || data.x
-        return Math.floor(x / 16)
+        x = x || data.x;
+        return Math.floor(x / 16);
     }
 
     function getTXY16(data, x, y, z) {
@@ -174,6 +174,7 @@
         container: 'map',
         renderWorldCopies: false,
         language: 'zh_CN',
+        respectPrefersReducedMotion: false,
         style: {
             version: 8,
             light: {
@@ -354,19 +355,19 @@
 
     const layerInput = document.getElementById('layer');
     const roadInput = document.getElementById('road');
-    const terrain = document.getElementById('terrain')
+    const terrain = document.getElementById('terrain');
     const exaggeratedTerrainInput = document.getElementById('exaggeratedTerrain');
     const projectionInput = document.getElementById('projection');
     const debugDiv = document.getElementById('debug');
     const exaggeratedTerrainDiv = document.getElementById('exaggeratedTerrain-div');
-    exaggeratedTerrainDiv.style.display = 'none'
+    exaggeratedTerrainDiv.style.display = 'none';
 
     let lastLayer = 'bing_satellite', lastRoad = 'amap_road';
 
     layerInput.addEventListener('change', () => {
         lastLayer && map.setLayoutProperty(lastLayer, 'visibility', 'none');
         layerInput.value && map.setLayoutProperty(layerInput.value, 'visibility', 'visible');
-        lastLayer = layerInput.value
+        lastLayer = layerInput.value;
     });
 
     roadInput.addEventListener('change', () => {
@@ -377,16 +378,16 @@
 
     terrain.addEventListener('change', () => {
         if (terrain.value) {
-            exaggeratedTerrainDiv.style.display = ''
+            exaggeratedTerrainDiv.style.display = '';
             map.setTerrain({
                 source: terrain.value,
                 exaggeration: Number(exaggeratedTerrainInput.value)
             });
         } else {
             map.setTerrain(undefined);
-            exaggeratedTerrainDiv.style.display = 'none'
+            exaggeratedTerrainDiv.style.display = 'none';
         }
-    })
+    });
 
     exaggeratedTerrainInput.addEventListener('change', () => {
         const terrain = map.getTerrain();
@@ -402,7 +403,7 @@
 
     debugDiv.addEventListener('click', (e) => {
         if (e.target instanceof HTMLInputElement) {
-            map[e.target.id] = e.target.checked
+            map[e.target.id] = e.target.checked;
         }
     });
 
@@ -410,7 +411,7 @@
     const data = {
         type: 'FeatureCollection',
         features: geojson
-    }
+    };
 
     map.on('load', () => {
         map.addSource('geojson', {
@@ -433,7 +434,7 @@
                 'circle-radius': 5,
                 'circle-color': '#ffa654'
             }
-        })
+        });
         /*const draw = new MapboxDraw();
 
         map.addControl(draw, 'top-right');
@@ -464,11 +465,10 @@
 
         });*/
         map.getSource('tian_road').on('error', (e) => {
-            console.log(e)
+            console.log(e);
             // e.target.setTiles(['https://t0.tianditu.gov.cn/cia_w/wmts?service=WMTS&version=1.0.0&request=GetTile&tilematrix={z}&layer=cia&style=default&tilerow={y}&tilecol={x}&tilematrixset=w&format=tiles&tk=e67b6383a8f8d5826792cdb19f302c71'])
-        })
-        console.log(map)
-
+        });
+        console.log(map);
 
         // function getStreetBriefByLocation() {
         //     // http://apisv0.bdimg.com/?qt=qsdata&x=11857323.466123164&y=3433626.2685959353&r=50&action=1&auth_key=1688006760-1688004960000-HwOIc6QgPXmI6uBjZVGOlTGZwrnfG7X3-595920211df458015b1313531e2a4411&&fn=jsonp57929&sign=5f6d0b96eb84
