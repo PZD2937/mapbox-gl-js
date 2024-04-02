@@ -7,7 +7,7 @@ import {
     preludeCommonSource,
     includeMap
 } from '../shaders/shaders.js';
-import assert from 'assert';
+// import assert from 'assert';
 import ProgramConfiguration from '../data/program_configuration.js';
 import VertexArrayObject from './vertex_array_object.js';
 import Context from '../gl/context.js';
@@ -135,7 +135,7 @@ class Program<Us: UniformBindings> {
         }
         gl.shaderSource(fragmentShader, fragmentSource);
         gl.compileShader(fragmentShader);
-        assert(gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS), (gl.getShaderInfoLog(fragmentShader): any));
+        // assert(gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS), (gl.getShaderInfoLog(fragmentShader): any));
         gl.attachShader(this.program, fragmentShader);
 
         const vertexShader = ((gl.createShader(gl.VERTEX_SHADER): any): WebGLShader);
@@ -145,7 +145,7 @@ class Program<Us: UniformBindings> {
         }
         gl.shaderSource(vertexShader, vertexSource);
         gl.compileShader(vertexShader);
-        assert(gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS), (gl.getShaderInfoLog(vertexShader): any));
+        // assert(gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS), (gl.getShaderInfoLog(vertexShader): any));
         gl.attachShader(this.program, vertexShader);
 
         this.attributes = {};
@@ -162,7 +162,7 @@ class Program<Us: UniformBindings> {
         }
 
         gl.linkProgram(this.program);
-        assert(gl.getProgramParameter(this.program, gl.LINK_STATUS), (gl.getProgramInfoLog(this.program): any));
+        // assert(gl.getProgramParameter(this.program, gl.LINK_STATUS), (gl.getProgramInfoLog(this.program): any));
 
         gl.deleteShader(vertexShader);
         gl.deleteShader(fragmentShader);
