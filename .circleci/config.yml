@@ -68,12 +68,6 @@ workflows:
           filters:
             tags:
               only: /.*/
-      - test-browser:
-          requires:
-            - prepare-linux
-          filters:
-            tags:
-              only: /.*/
       - test-webpack:
           requires:
             - build
@@ -327,27 +321,6 @@ jobs:
             yarn run codegen
             git add -A && git diff --staged --exit-code | tee check.patch
 
-  test-browser:
-    <<: *linux-defaults
-    steps:
-      - attach_workspace:
-          at: ~/
-      - browser-tools/install-browser-tools:
-          chrome-version: "114.0.5735.90"
-      - run: yarn run build-token
-      - run:
-          name: Test Chrome
-          environment:
-            SELENIUM_BROWSER: chrome
-            TAP_COLORS: 1
-          command: yarn run test-browser
-      - run:
-          name: Test Firefox
-          environment:
-            SELENIUM_BROWSER: firefox
-            TAP_COLORS: 1
-          command: yarn run test-browser
-
   test-expressions:
     <<: *linux-defaults
     steps:
@@ -550,4 +523,11 @@ jobs:
           name: Trigger SLA performance tests
           command: |
             sha=$(git rev-parse HEAD)
-            curl --location --request POST 'https://circleci.com/api/v2/project/github/mapbox/mapbox-gl-js-performance-internal/pipeline' --header 'Content-Type: application/json' -u $CIRCLECI_API_TOKEN: -d "{ \"parameters\": { \"setup_sha\": \"$sha\", \"setup_source_branch\": \"internal\" } }"
+            response_code=$(curl --location --write-out "%{http_code}" --output /dev/stderr --request POST 'https://circleci.com/api/v2/project/github/mapbox/mapbox-gl-js-performance-internal/pipeline' --header 'Content-Type: application/json' -u $CIRCLECI_API_TOKEN: -d "{ \"parameters\": { \"setup_sha\": \"$sha\", \"setup_source_branch\": \"internal\" } }")
+
+            if [[ "$response_code" =~ ^2 ]]; then
+                echo "Success: HTTP 2xx response"
+            else
+                echo "Error: Non-2xx response code - $response_code"
+                exit 1
+            fi

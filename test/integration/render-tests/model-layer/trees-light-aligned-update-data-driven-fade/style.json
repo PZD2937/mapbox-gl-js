@@ -13,7 +13,6 @@
   "sources": {
     "mapbox": {
       "type": "vector",
-      "maxzoom": 15,
       "tiles": [
         "local://tiles/{z}-{x}-{y}.vector.pbf"
       ]
@@ -114,7 +113,6 @@
       "source": "mapbox",
       "minzoom": 14,
       "paint": {
-        "fill-extrusion-opacity": 0.7,
         "fill-extrusion-color": "white",
         "fill-extrusion-height": [
           "number",
@@ -130,7 +128,7 @@
             "min_height"
           ]
         ],
-        "fill-extrusion-cutoff-fade-range": 0.2
+        "fill-extrusion-cutoff-fade-range": 1
       },
       "filter": [
         "==",

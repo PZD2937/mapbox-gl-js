@@ -293,6 +293,8 @@ class VectorTileWorkerSource extends Evented implements WorkerSource {
                     done();
                 }
             }
+        } else {
+            callback(null, undefined);
         }
     }
 

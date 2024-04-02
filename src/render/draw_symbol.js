@@ -32,7 +32,8 @@ import {getSymbolTileProjectionMatrix} from '../geo/projection/projection_util.j
 import type Painter from './painter.js';
 import type SourceCache from '../source/source_cache.js';
 import type SymbolStyleLayer from '../style/style_layer/symbol_style_layer.js';
-import type SymbolBucket, {SymbolBuffers} from '../data/bucket/symbol_bucket.js';
+import type SymbolBucket from '../data/bucket/symbol_bucket.js';
+import type {SymbolBuffers} from '../data/bucket/symbol_bucket.js';
 import Texture from '../render/texture.js';
 import type ColorMode from '../gl/color_mode.js';
 import {OverscaledTileID} from '../source/tile_id.js';
@@ -87,6 +88,7 @@ function drawSymbols(painter: Painter, sourceCache: SourceCache, layer: SymbolSt
             layer.layout.get('icon-rotation-alignment'),
             layer.layout.get('icon-pitch-alignment'),
             layer.layout.get('icon-keep-upright'),
+            layer.paint.get('icon-color-saturation'),
             stencilMode, colorMode
         );
     }
@@ -98,6 +100,7 @@ function drawSymbols(painter: Painter, sourceCache: SourceCache, layer: SymbolSt
             layer.layout.get('text-rotation-alignment'),
             layer.layout.get('text-pitch-alignment'),
             layer.layout.get('text-keep-upright'),
+            layer.paint.get('icon-color-saturation'),
             stencilMode, colorMode
         );
     }
@@ -268,7 +271,7 @@ function getSymbolProgramName(isSDF: boolean, isText: boolean, bucket: SymbolBuc
     }
 }
 
-function drawLayerSymbols(painter: Painter, sourceCache: SourceCache, layer: SymbolStyleLayer, coords: Array<OverscaledTileID>, isText: boolean, translate: [number, number], translateAnchor: 'map' | 'viewport', rotationAlignment: Alignment, pitchAlignment: Alignment, keepUpright: boolean, stencilMode: StencilMode, colorMode: ColorMode) {
+function drawLayerSymbols(painter: Painter, sourceCache: SourceCache, layer: SymbolStyleLayer, coords: Array<OverscaledTileID>, isText: boolean, translate: [number, number], translateAnchor: 'map' | 'viewport', rotationAlignment: Alignment, pitchAlignment: Alignment, keepUpright: boolean, iconSaturation: number, stencilMode: StencilMode, colorMode: ColorMode) {
     const context = painter.context;
     const gl = context.gl;
     const tr = painter.transform;
@@ -410,8 +413,11 @@ function drawLayerSymbols(painter: Painter, sourceCache: SourceCache, layer: Sym
                     matrix, uLabelPlaneMatrix, uglCoordMatrix, texSize, texSizeIcon, coord, globeToMercator, mercatorCenter, invMatrix, cameraUpVector, bucket.getProjection());
             }
         } else {
+            if (iconSaturation < 1) {
+                baseDefines.push('SATURATION');
+            }
             uniformValues = symbolIconUniformValues(sizeData.kind, size, rotateInShader, pitchWithMap, painter, matrix,
-                uLabelPlaneMatrix, uglCoordMatrix, isText, texSize, coord, globeToMercator, mercatorCenter, invMatrix, cameraUpVector, bucket.getProjection(), transitionProgress);
+                uLabelPlaneMatrix, uglCoordMatrix, isText, texSize, coord, globeToMercator, mercatorCenter, invMatrix, cameraUpVector, bucket.getProjection(), iconSaturation, transitionProgress);
         }
 
         const program = painter.getOrCreateProgram(getSymbolProgramName(isSDF, isText, bucket), {config: programConfiguration, defines: baseDefines});
@@ -464,12 +470,12 @@ function drawLayerSymbols(painter: Painter, sourceCache: SourceCache, layer: Sym
         }
         context.activeTexture.set(gl.TEXTURE0);
         if (state.atlasTexture) {
-            state.atlasTexture.bind(state.atlasInterpolation, gl.CLAMP_TO_EDGE);
+            state.atlasTexture.bind(state.atlasInterpolation, gl.CLAMP_TO_EDGE, true);
         }
         if (state.atlasTextureIcon) {
             context.activeTexture.set(gl.TEXTURE1);
             if (state.atlasTextureIcon) {
-                state.atlasTextureIcon.bind(state.atlasInterpolationIcon, gl.CLAMP_TO_EDGE);
+                state.atlasTextureIcon.bind(state.atlasInterpolationIcon, gl.CLAMP_TO_EDGE, true);
             }
         }
 

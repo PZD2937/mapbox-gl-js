@@ -1,5 +1,5 @@
-/* global WebAssembly: false */
-/* eslint-disable new-cap, flowtype/require-valid-file-annotation */
+// @noflow
+/* eslint-disable new-cap */
 
 // Emscripten-based JavaScript wrapper for Google Draco WASM decoder, manually optimized for much smaller size
 export function DracoDecoderModule(wasmPromise) {

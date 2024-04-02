@@ -15,13 +15,18 @@ uniform float u_roughnessFactor;
 uniform float u_emissive_strength;
 
 
-varying highp vec4 v_position_height;
-varying lowp vec4 v_color_mix;
+in highp vec4 v_position_height;
+in lowp vec4 v_color_mix;
 
 #ifdef RENDER_SHADOWS
-varying vec4 v_pos_light_view_0;
-varying vec4 v_pos_light_view_1;
-varying float v_depth_shadows;
+in vec4 v_pos_light_view_0;
+in vec4 v_pos_light_view_1;
+in float v_depth_shadows;
+#endif
+
+#ifdef OCCLUSION_TEXTURE_TRANSFORM
+// offset[0], offset[1], scale[0], scale[1]
+uniform vec4 u_occlusionTextureTransform;
 #endif
 
 #pragma mapbox: define-attribute highp vec3 normal_3f
@@ -35,8 +40,8 @@ varying float v_depth_shadows;
 #pragma mapbox: initialize-attribute highp vec2 uv_2f
 
 #ifdef HAS_ATTRIBUTE_a_pbr
-varying lowp vec4 v_roughness_metallic_emissive_alpha;
-varying mediump vec4 v_height_based_emission_params;
+in lowp vec4 v_roughness_metallic_emissive_alpha;
+in mediump vec4 v_height_based_emission_params;
 #endif
 
 #ifdef HAS_TEXTURE_u_baseColorTexture
@@ -61,22 +66,27 @@ uniform sampler2D u_emissionTexture;
 #endif
 
 #ifdef TERRAIN_FRAGMENT_OCCLUSION
-varying highp float v_depth;
+in highp float v_depth;
 uniform sampler2D u_depthTexture;
 uniform vec2 u_inv_depth_size;
 
 bool isOccluded() {
     vec2 coord = gl_FragCoord.xy * u_inv_depth_size;
-    highp float depth = unpack_depth(texture2D(u_depthTexture, coord));
+    highp float depth = unpack_depth(texture(u_depthTexture, coord));
     // Add some marging to avoid depth precision issues
     return v_depth > depth + 0.0005;
 }
 #endif
 
-const float M_PI = 3.141592653589793;
-
 #define saturate(_x) clamp(_x, 0., 1.)
 
+// linear to sRGB approximation
+vec3 linearTosRGB(vec3 color) {
+    return pow(color, vec3(1./2.2));
+}
+vec3 sRGBToLinear(vec3 srgbIn) {
+    return pow(srgbIn, vec3(2.2));
+}
 
 float calculate_NdotL(vec3 normal, vec3 lightDir) {
     // Use slightly modified dot product for lambertian diffuse shading. This increase the range of NdotL to cover surfaces facing up to 45 degrees away from the light source.
@@ -125,7 +135,7 @@ vec4 getBaseColor() {
 
     // texture Color
 #if defined (HAS_TEXTURE_u_baseColorTexture) && defined (HAS_ATTRIBUTE_a_uv_2f)
-    vec4 texColor = texture2D(u_baseColorTexture, uv_2f);
+    vec4 texColor = texture(u_baseColorTexture, uv_2f);
     if(u_alphaMask) {
         if (texColor.w < u_alphaCutoff) {
             discard;
@@ -139,15 +149,14 @@ vec4 getBaseColor() {
     }
     texColor.w = 1.0;
 #endif
-    // Convert to linear
-    texColor.rgb = sRGBToLinear(texColor.rgb);
+
     if(u_baseTextureIsAlpha) {
-        if (texColor.w < 0.5) {
+        if (texColor.r < 0.5) {
             discard;
         }
-        albedo *= mix(vec4(texColor.rgb, texColor.a), vec4(texColor.a), float(u_baseTextureIsAlpha));
     } else {
         // gltf material
+        texColor.rgb = sRGBToLinear(texColor.rgb);
         albedo *= texColor;
     }
 #endif
@@ -198,7 +207,7 @@ highp vec3 getNormal(){
 
 #if defined(HAS_TEXTURE_u_normalTexture) && defined(HAS_ATTRIBUTE_a_uv_2f)
     // Perturb normal
-    vec3 nMap = texture2D( u_normalTexture, uv_2f).xyz;
+    vec3 nMap = texture( u_normalTexture, uv_2f).xyz;
     nMap = normalize(2.0* nMap - vec3(1.0));
     highp vec3 v = normalize(-v_position_height.xyz);
     highp mat3 TBN = cotangentFrame(n, v, uv_2f);
@@ -230,7 +239,7 @@ Material getPBRMaterial() {
     mat.baseColor.w *= v_roughness_metallic_emissive_alpha.w;
 #endif
 #if defined(HAS_TEXTURE_u_metallicRoughnessTexture) && defined(HAS_ATTRIBUTE_a_uv_2f) 
-    vec4 mrSample = texture2D(u_metallicRoughnessTexture, uv_2f);
+    vec4 mrSample = texture(u_metallicRoughnessTexture, uv_2f);
     mat.perceptualRoughness *= mrSample.g;
     mat.metallic *= mrSample.b;
 #endif
@@ -294,7 +303,7 @@ float D_GGX(highp float NdotH, float alphaRoughness)
 {
     highp float a4 = alphaRoughness * alphaRoughness;
     highp float f = (NdotH * a4 -NdotH) * NdotH + 1.0;
-    return a4 / (M_PI * f * f);
+    return a4 / (PI * f * f);
 }
 
 // Disney Implementation of diffuse from Physically-Based Shading at Disney by Brent Burley. See Section 5.3.
@@ -303,7 +312,7 @@ vec3 diffuseBurley(Material mat, float LdotH, float NdotL, float NdotV)
 {
     float f90 = 2.0 * LdotH * LdotH * mat.alphaRoughness - 0.5;
 
-    return (mat.diffuseColor / M_PI) * (1.0 + f90 * pow((1.0 - NdotL), 5.0)) * (1.0 + f90 * pow((1.0 - NdotV), 5.0));
+    return (mat.diffuseColor / PI) * (1.0 + f90 * pow((1.0 - NdotL), 5.0)) * (1.0 + f90 * pow((1.0 - NdotV), 5.0));
 }
 
 vec3 diffuseLambertian(Material mat)
@@ -313,7 +322,7 @@ vec3 diffuseLambertian(Material mat)
     // remove the PI division to achieve more integrated colors
     return mat.diffuseColor;
 #else
-    return mat.diffuseColor / M_PI;
+    return mat.diffuseColor / PI;
 #endif
 
 }
@@ -423,16 +432,17 @@ void main() {
 vec4 finalColor;
 #ifdef DIFFUSE_SHADED
     vec3 N = getNormal();
-    vec3 diffuse = getDiffuseShadedColor(getBaseColor().rgb, N, lightDir, lightColor);
+    vec3 baseColor = getBaseColor().rgb;
+    vec3 diffuse = getDiffuseShadedColor(baseColor, N, lightDir, lightColor);
     // Ambient Occlusion
 #ifdef HAS_TEXTURE_u_occlusionTexture
     // For b3dm tiles where models contains occlusion textures we interpret them similarly to how
     // we handle baseColorTexture as an alpha mask (i.e one channel).
     // This is why we read the alpha component here (refer to getBaseColor to see how baseColorTexture.w is used to implement alpha masking).
-    float ao = (texture2D(u_occlusionTexture, uv_2f).r - 1.0) * u_aoIntensity + 1.0;
+    float ao = (texture(u_occlusionTexture, uv_2f).r - 1.0) * u_aoIntensity + 1.0;
     diffuse *= ao;
 #endif
-    finalColor = vec4(diffuse, 1.0) * u_opacity;
+    finalColor = vec4(mix(diffuse, baseColor, u_emissive_strength), 1.0) * u_opacity;
 #else // DIFFUSE_SHADED
     Material mat = getPBRMaterial();
     vec3 color = computeLightContribution(mat, lightDir, lightColor);
@@ -440,14 +450,20 @@ vec4 finalColor;
     // Ambient Occlusion
     float ao = 1.0;
 #if defined (HAS_TEXTURE_u_occlusionTexture) && defined(HAS_ATTRIBUTE_a_uv_2f)
-    ao = (texture2D(u_occlusionTexture, uv_2f).x - 1.0) * u_aoIntensity + 1.0;
+
+#ifdef OCCLUSION_TEXTURE_TRANSFORM
+    vec2 uv = uv_2f.xy * u_occlusionTextureTransform.zw + u_occlusionTextureTransform.xy;
+#else
+    vec2 uv = uv_2f;
+#endif
+    ao = (texture(u_occlusionTexture, uv).x - 1.0) * u_aoIntensity + 1.0;
     color *= ao;
 #endif
     // Emission
     vec4 emissive = u_emissiveFactor;
 
 #if defined(HAS_TEXTURE_u_emissionTexture) && defined(HAS_ATTRIBUTE_a_uv_2f)
-    emissive.rgb *= sRGBToLinear(texture2D(u_emissionTexture, uv_2f).rgb);
+    emissive.rgb *= sRGBToLinear(texture(u_emissionTexture, uv_2f).rgb);
 #endif
     color += emissive.rgb;
 
@@ -488,10 +504,10 @@ vec4 finalColor;
     finalColor = applyCutout(finalColor);
 #endif
 
-    gl_FragColor = finalColor;
+    glFragColor = finalColor;
 
 #ifdef OVERDRAW_INSPECTOR
-    gl_FragColor = vec4(1.0);
+    glFragColor = vec4(1.0);
 #endif
 
     HANDLE_WIREFRAME_DEBUG;

@@ -14,7 +14,6 @@
 ******************************************************************************/
 
 import config from './config.js';
-import window from './window.js';
 import webpSupported from './webp_supported.js';
 import {createSkuToken, SKU_ID} from './sku_token.js';
 import {version as sdkVersion} from '../../package.json';
@@ -363,12 +362,12 @@ class TelemetryEvent {
         if (isLocalStorageAvailable) {
             //Retrieve cached data
             try {
-                const data = window.localStorage.getItem(storageKey);
+                const data = localStorage.getItem(storageKey);
                 if (data) {
                     this.eventData = JSON.parse(data);
                 }
 
-                const uuid = window.localStorage.getItem(uuidKey);
+                const uuid = localStorage.getItem(uuidKey);
                 if (uuid) this.anonId = uuid;
             } catch (e) {
                 warnOnce('Unable to read from LocalStorage');
@@ -380,11 +379,12 @@ class TelemetryEvent {
         const isLocalStorageAvailable = storageAvailable('localStorage');
         const storageKey =  this.getStorageKey();
         const uuidKey = this.getStorageKey('uuid');
-        if (isLocalStorageAvailable) {
+        const anonId = this.anonId;
+        if (isLocalStorageAvailable && anonId) {
             try {
-                window.localStorage.setItem(uuidKey, this.anonId);
+                localStorage.setItem(uuidKey, anonId);
                 if (Object.keys(this.eventData).length >= 1) {
-                    window.localStorage.setItem(storageKey, JSON.stringify(this.eventData));
+                    localStorage.setItem(storageKey, JSON.stringify(this.eventData));
                 }
             } catch (e) {
                 warnOnce('Unable to write to LocalStorage');
@@ -526,6 +526,11 @@ export class MapLoadEvent extends TelemetryEvent {
 
         }, customAccessToken);
     }
+
+    remove() {
+        // $FlowFixMe[incompatible-type]
+        this.errorCb = null;
+    }
 }
 
 export class MapSessionAPI extends TelemetryEvent {
@@ -587,6 +592,11 @@ export class MapSessionAPI extends TelemetryEvent {
                 if (id) this.success[id] = true;
             }
         }, customAccessToken);
+    }
+
+    remove() {
+        // $FlowFixMe[incompatible-type]
+        this.errorCb = null;
     }
 }
 
@@ -664,17 +674,17 @@ const turnstileEvent_ = new TurnstileEvent();
 // $FlowFixMe[method-unbinding]
 export const postTurnstileEvent: (tileUrls: Array<string>, customAccessToken?: ?string) => void = turnstileEvent_.postTurnstileEvent.bind(turnstileEvent_);
 
-const mapLoadEvent_ = new MapLoadEvent();
+export const mapLoadEvent: MapLoadEvent = new MapLoadEvent();
 // $FlowFixMe[method-unbinding]
-export const postMapLoadEvent: (number, string, ?string, EventCallback) => void = mapLoadEvent_.postMapLoadEvent.bind(mapLoadEvent_);
+export const postMapLoadEvent: (number, string, ?string, EventCallback) => void = mapLoadEvent.postMapLoadEvent.bind(mapLoadEvent);
 
 export const performanceEvent_: PerformanceEvent = new PerformanceEvent();
 // $FlowFixMe[method-unbinding]
 export const postPerformanceEvent: (?string, LivePerformanceData) => void = performanceEvent_.postPerformanceEvent.bind(performanceEvent_);
 
-const mapSessionAPI_ = new MapSessionAPI();
+export const mapSessionAPI: MapSessionAPI = new MapSessionAPI();
 // $FlowFixMe[method-unbinding]
-export const getMapSessionAPI: (number, string, ?string, EventCallback) => void = mapSessionAPI_.getSessionAPI.bind(mapSessionAPI_);
+export const getMapSessionAPI: (number, string, ?string, EventCallback) => void = mapSessionAPI.getSessionAPI.bind(mapSessionAPI);
 
 const authenticatedMaps = new Set();
 export function storeAuthState(gl: WebGL2RenderingContext, state: boolean) {

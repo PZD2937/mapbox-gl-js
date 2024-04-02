@@ -22,9 +22,6 @@ import {properties as ambientProps} from '../../3d-style/style/ambient_light_pro
 import {properties as directionalProps} from '../../3d-style/style/directional_light_properties.js';
 import {createExpression} from '../style-spec/expression/index.js';
 
-import type {LightProps as Ambient} from '../../3d-style/style/ambient_light_properties.js';
-import type {LightProps as Directional} from '../../3d-style/style/directional_light_properties.js';
-import type {Vec3} from 'gl-matrix';
 import {
     validateStyle,
     validateSource,
@@ -60,6 +57,8 @@ import CrossTileSymbolIndex from '../symbol/cross_tile_symbol_index.js';
 import {validateCustomStyleLayer} from './style_layer/custom_style_layer.js';
 import {isFQID, makeFQID, getNameFromFQID, getScopeFromFQID} from '../util/fqid.js';
 import {shadowDirectionFromProperties} from '../../3d-style/render/shadow_renderer.js';
+import ModelManager from '../../3d-style/render/model_manager.js';
+import {DEFAULT_MAX_ZOOM, DEFAULT_MIN_ZOOM} from '../geo/transform.js';
 
 // We're skipping validation errors with the `source.canvas` identifier in order
 // to continue to allow canvas sources to be added at runtime/updated in
@@ -67,6 +66,9 @@ import {shadowDirectionFromProperties} from '../../3d-style/render/shadow_render
 const emitValidationErrors = (evented: Evented, errors: ?ValidationErrors) =>
     _emitValidationErrors(evented, errors && errors.filter(error => error.identifier !== 'source.canvas'));
 
+import type {LightProps as Ambient} from '../../3d-style/style/ambient_light_properties.js';
+import type {LightProps as Directional} from '../../3d-style/style/directional_light_properties.js';
+import type {Vec3} from 'gl-matrix';
 import type {default as MapboxMap} from '../ui/map.js';
 import type Transform from '../geo/transform.js';
 import type {StyleImage} from './style_image.js';
@@ -103,10 +105,7 @@ import type {QueryFeature} from '../util/vectortile_to_geojson.js';
 import type {FeatureStates} from '../source/source_state.js';
 import type {PointLike} from '@mapbox/point-geometry';
 import type {Source, SourceClass} from '../source/source.js';
-import type {TransitionParameters} from './properties.js';
-import ModelManager from '../../3d-style/render/model_manager.js';
-import type {Expression} from '../style-spec/expression/expression.js';
-import {DEFAULT_MAX_ZOOM, DEFAULT_MIN_ZOOM} from '../geo/transform.js';
+import type {TransitionParameters, ConfigOptions} from './properties.js';
 import type {QueryRenderedFeaturesParams} from '../source/query_features.js';
 
 const supportedDiffOperations = pick(diffOperations, [
@@ -155,11 +154,14 @@ export type StyleOptions = {
     glyphManager?: GlyphManager,
     modelManager?: ModelManager,
     styleChanges?: StyleChanges,
+    configOptions?: ConfigOptions,
 
     scope?: string,
     importDepth?: number,
     importsCache?: Map<string, StyleSpecification>,
     resolvedImports?: Set<string>,
+    config?: ?ConfigSpecification,
+    configDependentLayers?: Set<string>;
 };
 
 export type StyleSetterOptions = {
@@ -193,6 +195,7 @@ class Style extends Evented {
     directionalLight: ?Lights<Directional>;
     light: Light;
     terrain: ?Terrain;
+    disableElevatedTerrain: ?boolean;
     fog: ?Fog;
     camera: CameraSpecification;
     transition: TransitionSpecification;
@@ -206,7 +209,7 @@ class Style extends Evented {
     // Keeps track of ancestors' Style URLs.
     resolvedImports: Set<string>;
 
-    options: Map<string, Expression>;
+    options: ConfigOptions;
 
     // Merged layers and sources
     _mergedOrder: Array<string>;
@@ -235,6 +238,7 @@ class Style extends Evented {
     _markersNeedUpdate: boolean;
     _brightness: ?number;
     _configDependentLayers: Set<string>;
+    _config: ?ConfigSpecification;
     _buildingIndex: BuildingIndex;
     _transition: TransitionSpecification;
 
@@ -326,8 +330,9 @@ class Style extends Evented {
         this._order = [];
         this._markersNeedUpdate = false;
 
-        this.options = new Map();
-        this._configDependentLayers = new Set();
+        this.options = options.configOptions ? options.configOptions : new Map();
+        this._configDependentLayers = options.configDependentLayers ? options.configDependentLayers : new Set();
+        this._config = options.config;
 
         this.dispatcher.broadcast('setReferrer', getReferrer());
 
@@ -424,8 +429,11 @@ class Style extends Evented {
         for (const importSpec of imports) {
             const style = this._createFragmentStyle(importSpec);
 
-            // Merge everything and update layers after the import style is loaded.
-            const waitForStyle = new Promise(resolve => style.once('style.import.load', resolve))
+            // Merge everything and update layers after the import style is settled.
+            const waitForStyle = new Promise((resolve) => {
+                style.once('style.import.load', resolve);
+                style.once('error', resolve);
+            })
                 .then(() => this.mergeAll());
             waitForStyles.push(waitForStyle);
 
@@ -474,12 +482,13 @@ class Style extends Evented {
             imageManager: this.imageManager,
             glyphManager: this.glyphManager,
             modelManager: this.modelManager,
+            config: importSpec.config,
+            configOptions: this.options,
+            configDependentLayers: this._configDependentLayers
         });
 
         // Bubble all events fired by the style to the map.
         style.setEventedParent(this.map, {style});
-
-        style.setConfig(importSpec.config);
 
         return style;
     }
@@ -487,6 +496,7 @@ class Style extends Evented {
     _reloadImports() {
         this.mergeAll();
         this._updateMapProjection();
+        this.updateConfigDependencies();
         this.map._triggerCameraUpdate(this.camera);
 
         this.dispatcher.broadcast('setLayers', {
@@ -512,7 +522,7 @@ class Style extends Evented {
             return;
         }
 
-        this.updateSchema(schema);
+        this.setConfig(this._config, schema);
 
         if (validate && emitValidationErrors(this, validateStyle(json))) {
             return;
@@ -557,8 +567,7 @@ class Style extends Evented {
         this._layers = {};
         this._serializedLayers = {};
         for (const layer of layers) {
-            const styleLayer = createStyleLayer(layer, this.options);
-            styleLayer.setScope(this.scope);
+            const styleLayer = createStyleLayer(layer, this.scope, this.options);
             if (styleLayer.isConfigDependent) this._configDependentLayers.add(styleLayer.fqid);
             styleLayer.setEventedParent(this, {layer: {id: styleLayer.id}});
             this._layers[styleLayer.id] = styleLayer;
@@ -577,8 +586,17 @@ class Style extends Evented {
         }
 
         const terrain = this.stylesheet.terrain;
-        if (terrain && !this.terrainSetForDrapingOnly()) {
-            this._createTerrain(terrain, DrapeRenderMode.elevated);
+        if (terrain) {
+            // This workaround disables terrain and hillshade
+            // if there is noise in the Canvas2D operations used for image decoding.
+            if (this.disableElevatedTerrain === undefined)
+                this.disableElevatedTerrain = browser.hasCanvasFingerprintNoise();
+
+            if (this.disableElevatedTerrain) {
+                warnOnce('Terrain and hillshade are disabled because of Canvas2D limitations when fingerprinting protection is enabled (e.g. in private browsing mode).');
+            } else if (!this.terrainSetForDrapingOnly()) {
+                this._createTerrain(terrain, DrapeRenderMode.elevated);
+            }
         }
 
         if (this.stylesheet.fog) {
@@ -612,6 +630,11 @@ class Style extends Evented {
         let transition;
         let camera;
 
+        // Reset terrain that might have been set by a previous merge
+        if (this.terrain && this.terrain.scope !== this.scope) {
+            delete this.terrain;
+        }
+
         this.forEachFragmentStyle((style: Style) => {
             if (!style.stylesheet) return;
 
@@ -628,14 +651,11 @@ class Style extends Evented {
                 }
             }
 
-            const isGlobe = style.stylesheet.projection && style.stylesheet.projection.name === 'globe';
-            if ((style.stylesheet.terrain || isGlobe) && style.terrain != null) {
-                const nextIsElevated = style.terrain.drapeRenderMode === DrapeRenderMode.elevated;
-                const prevIsDeffered = terrain && terrain.drapeRenderMode === DrapeRenderMode.deferred;
-                if (!terrain || prevIsDeffered || nextIsElevated) {
-                    terrain = style.terrain;
-                }
-            }
+            terrain = this._prioritizeTerrain(
+                terrain,
+                style.terrain,
+                style.stylesheet.terrain,
+            );
 
             if (style.stylesheet.fog && style.fog != null)
                 fog = style.fog;
@@ -654,8 +674,13 @@ class Style extends Evented {
         this.light = light;
         this.ambientLight = ambientLight;
         this.directionalLight = directionalLight;
-        this.terrain = terrain;
         this.fog = fog;
+
+        if (terrain === null) {
+            delete this.terrain;
+        } else {
+            this.terrain = terrain;
+        }
 
         // Use perspective camera as a fallback if no camera is specified
         this.camera = camera || {'camera-projection': 'perspective'};
@@ -678,20 +703,55 @@ class Style extends Evented {
         traverse(this);
     }
 
+    _prioritizeTerrain(prevTerrain: ?Terrain, nextTerrain: ?Terrain, nextTerrainSpec: ?TerrainSpecification): ?Terrain {
+        // Given the previous and next terrain during imports merging, in order of priority, we select:
+        // 1. null, if the next terrain is explicitly disabled and we are not using the globe
+        // 2. next terrain if it is not null
+        // 3. previous terrain
+
+        const prevIsDeffered = prevTerrain && prevTerrain.drapeRenderMode === DrapeRenderMode.deferred;
+        const nextIsDeffered = nextTerrain && nextTerrain.drapeRenderMode === DrapeRenderMode.deferred;
+
+        // Disable terrain if it was explicitly set to null and we are not using globe
+        if (nextTerrainSpec === null) {
+            // First, check if the terrain is deferred
+            // If so, we are using the globe and should keep the terrain
+            if (nextIsDeffered) return nextTerrain;
+            if (prevIsDeffered) return prevTerrain;
+
+            return null;
+        }
+
+        // Use next terrain if there is no previous terrain or if it is deferred
+        if (nextTerrain != null) {
+            const nextIsElevated = nextTerrain && nextTerrain.drapeRenderMode === DrapeRenderMode.elevated;
+            if (!prevTerrain || prevIsDeffered || nextIsElevated) return nextTerrain;
+        }
+
+        return prevTerrain;
+    }
+
     mergeTerrain() {
         let terrain;
 
+        // Reset terrain that might have been set by a previous merge
+        if (this.terrain && this.terrain.scope !== this.scope) {
+            delete this.terrain;
+        }
+
         this.forEachFragmentStyle((style: Style) => {
-            if (style.terrain != null) {
-                const nextIsElevated = style.terrain.drapeRenderMode === DrapeRenderMode.elevated;
-                const prevIsDeffered = terrain && terrain.drapeRenderMode === DrapeRenderMode.deferred;
-                if (!terrain || prevIsDeffered || nextIsElevated) {
-                    terrain = style.terrain;
-                }
-            }
+            terrain = this._prioritizeTerrain(
+                terrain,
+                style.terrain,
+                style.stylesheet.terrain,
+            );
         });
 
-        this.terrain = terrain;
+        if (terrain === null) {
+            delete this.terrain;
+        } else {
+            this.terrain = terrain;
+        }
     }
 
     mergeProjection() {
@@ -1423,6 +1483,19 @@ class Style extends Evented {
         return sources;
     }
 
+    areTilesLoaded(): boolean {
+        const sources = this._mergedSourceCaches;
+        for (const id in sources) {
+            const source = sources[id];
+            const tiles = source._tiles;
+            for (const t in tiles) {
+                const tile = tiles[t];
+                if (!(tile.state === 'loaded' || tile.state === 'errored')) return false;
+            }
+        }
+        return true;
+    }
+
     setLights(lights: ?Array<LightsSpecification>) {
         this._checkLoaded();
 
@@ -1547,7 +1620,9 @@ class Style extends Evented {
     getConfigProperty(fragmentId: string, key: string): ?any {
         const fragmentStyle = this.getFragmentStyle(fragmentId);
         if (!fragmentStyle) return null;
-        const expression = fragmentStyle.options.get(key);
+        const fqid = makeFQID(key, fragmentStyle.scope);
+        const expressions = fragmentStyle.options.get(fqid);
+        const expression = expressions ? expressions.value || expressions.default : null;
         return expression ? expression.serialize() : null;
     }
 
@@ -1562,35 +1637,53 @@ class Style extends Evented {
 
         const fragmentStyle = this.getFragmentStyle(fragmentId);
         if (!fragmentStyle) return;
-        fragmentStyle.options.set(key, expression);
-        fragmentStyle.updateConfigDependencies();
+
+        const fqid = makeFQID(key, fragmentStyle.scope);
+        const expressions = fragmentStyle.options.get(fqid);
+        if (!expressions) return;
+
+        this.options.set(fqid, {...expressions, value: expression});
+        this.updateConfigDependencies();
     }
 
     setConfig(config: ?ConfigSpecification, schema: ?SchemaSpecification) {
-        this.options.clear();
-        if (!config) return;
+        this._config = config;
 
-        for (const key in config) {
-            const expressionParsed = createExpression(config[key]);
-            if (expressionParsed.result === 'success') {
-                this.options.set(key, expressionParsed.value.expression);
-            }
+        if (!config && !schema) return;
+
+        if (!schema) {
+            this.fire(new ErrorEvent(new Error(`Attempting to set config for a style without schema.`)));
+            return;
         }
 
-        this.updateSchema(schema);
-    }
-
-    updateSchema(schema: ?SchemaSpecification) {
-        if (!schema) return;
-
         for (const id in schema) {
-            // already set by config
-            if (this.options.has(id)) continue;
+            let defaultExpression;
+            let configExpression;
 
             const expression = schema[id].default;
             const expressionParsed = createExpression(expression);
             if (expressionParsed.result === 'success') {
-                this.options.set(id, expressionParsed.value.expression);
+                defaultExpression = expressionParsed.value.expression;
+            }
+
+            if (config && config[id] !== undefined) {
+                const expressionParsed = createExpression(config[id]);
+                if (expressionParsed.result === 'success') {
+                    configExpression = expressionParsed.value.expression;
+                }
+            }
+
+            const {minValue, maxValue, stepValue, type, values} = schema[id];
+
+            if (defaultExpression) {
+                const fqid = makeFQID(id, this.scope);
+                this.options.set(fqid, {
+                    default: defaultExpression,
+                    value: configExpression,
+                    minValue, maxValue, stepValue, type, values
+                });
+            } else {
+                this.fire(new ErrorEvent(new Error(`No schema defined for config option "${id}".`)));
             }
         }
     }
@@ -1604,13 +1697,11 @@ class Style extends Evented {
             }
         }
 
-        // If the root style uses the lights from the updated fragment,
-        // update the configs in the corresponding light instances.
-        if (this.ambientLight && this.ambientLight.scope === this.scope) {
+        if (this.ambientLight) {
             this.ambientLight.updateConfig(this.options);
         }
 
-        if (this.directionalLight && this.directionalLight.scope === this.scope) {
+        if (this.directionalLight) {
             this.directionalLight.updateConfig(this.options);
         }
 
@@ -1638,7 +1729,7 @@ class Style extends Evented {
         let layer;
         if (layerObject.type === 'custom') {
             if (emitValidationErrors(this, validateCustomStyleLayer(layerObject))) return;
-            layer = createStyleLayer(layerObject, this.options);
+            layer = createStyleLayer(layerObject, this.scope, this.options);
         } else {
             if (typeof layerObject.source === 'object') {
                 this.addSource(id, layerObject.source);
@@ -1650,7 +1741,7 @@ class Style extends Evented {
             if (this._validate(validateLayer,
                 `layers.${id}`, layerObject, {arrayIndex: -1}, options)) return;
 
-            layer = createStyleLayer(layerObject, this.options);
+            layer = createStyleLayer(layerObject, this.scope, this.options);
             this._validateLayer(layer);
 
             layer.setEventedParent(this, {layer: {id}});
@@ -1658,7 +1749,6 @@ class Style extends Evented {
         }
 
         if (layer.isConfigDependent) this._configDependentLayers.add(layer.fqid);
-        layer.setScope(this.scope);
 
         let index = this._order.length;
         if (before) {
@@ -2049,7 +2139,9 @@ class Style extends Evented {
         this._checkLoaded();
 
         const terrain = this.getTerrain();
-        const scopedTerrain = terrain && this.terrain && this.terrain.scope === this.scope ? terrain : undefined;
+        const scopedTerrain = terrain && this.terrain && this.terrain.scope === this.scope ?
+            terrain :
+            this.stylesheet.terrain;
 
         return filterObject({
             version: this.stylesheet.version,
@@ -2310,13 +2402,20 @@ class Style extends Evented {
         // Disabling
         if (!terrainOptions) {
             delete this.terrain;
-            delete this.stylesheet.terrain;
+
+            if (terrainOptions === null) {
+                this.stylesheet.terrain = null;
+            } else {
+                delete this.stylesheet.terrain;
+            }
+
             this._force3DLayerUpdate();
             this._markersNeedUpdate = true;
             return;
         }
 
         let options: TerrainSpecification = terrainOptions;
+        const isUpdating = terrainOptions.source == null;
         if (drapeRenderMode === DrapeRenderMode.elevated) {
             // Input validation and source object unrolling
             if (typeof options.source === 'object') {
@@ -2326,13 +2425,25 @@ class Style extends Evented {
                 options = extend(options, {source: id});
             }
 
-            if (this._validate(validateTerrain, 'terrain', options)) {
+            const validationOptions = extend({}, options);
+            const validationProps = {};
+
+            if (this.terrain && isUpdating) {
+                validationOptions.source = this.terrain.get().source;
+
+                const fragmentStyle = this.terrain ? this.getFragmentStyle(this.terrain.scope) : null;
+                if (fragmentStyle) {
+                    validationProps.style = fragmentStyle.serialize();
+                }
+            }
+
+            if (this._validate(validateTerrain, 'terrain', validationOptions, validationProps)) {
                 return;
             }
         }
 
         // Enabling
-        if (!this.terrain || this.terrain.scope !== this.scope || (this.terrain && drapeRenderMode !== this.terrain.drapeRenderMode)) {
+        if (!this.terrain || (this.terrain.scope !== this.scope && !isUpdating) || (this.terrain && drapeRenderMode !== this.terrain.drapeRenderMode)) {
             if (!options) return;
             this._createTerrain(options, drapeRenderMode);
             this.fire(new Event('data', {dataType: 'style'}));
@@ -2445,7 +2556,12 @@ class Style extends Evented {
     _createTerrain(terrainOptions: TerrainSpecification, drapeRenderMode: number) {
         const terrain = this.terrain = new Terrain(terrainOptions, drapeRenderMode, this.scope, this.options);
 
-        this.stylesheet.terrain = terrainOptions;
+        // We need to update the stylesheet only for the elevated mode,
+        // i.e., mock terrain shouldn't be propagated to the stylesheet
+        if (drapeRenderMode === DrapeRenderMode.elevated) {
+            this.stylesheet.terrain = terrainOptions;
+        }
+
         this.mergeTerrain();
         this.updateDrapeFirstLayers();
         this._force3DLayerUpdate();
@@ -2732,7 +2848,8 @@ class Style extends Evented {
 
         fragment.config = config;
         fragment.style.setConfig(config, schema);
-        fragment.style.updateConfigDependencies();
+
+        this.updateConfigDependencies();
 
         return this;
     }
@@ -2923,6 +3040,9 @@ class Style extends Evented {
 
     destroy() {
         this._clearWorkerCaches();
+        this.fragments.forEach(fragment => {
+            fragment.style._remove();
+        });
         if (this.terrainSetForDrapingOnly()) {
             delete this.terrain;
             delete this.stylesheet.terrain;

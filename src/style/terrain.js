@@ -5,8 +5,7 @@ import {Evented} from '../util/evented.js';
 import {Properties, Transitionable, Transitioning, PossiblyEvaluated, DataConstantProperty} from './properties.js';
 
 import EvaluationParameters from './evaluation_parameters.js';
-import type {Expression} from '../../src/style-spec/expression/expression.js';
-import type {TransitionParameters} from './properties.js';
+import type {ConfigOptions, TransitionParameters} from './properties.js';
 import type {TerrainSpecification} from '../style-spec/types.js';
 import {ZoomDependentExpression} from '../style-spec/expression/index.js';
 
@@ -32,10 +31,10 @@ class Terrain extends Evented {
     properties: PossiblyEvaluated<Props>;
     drapeRenderMode: number;
 
-    constructor(terrainOptions: TerrainSpecification, drapeRenderMode: number, scope: string, configOptions?: ?Map<string, Expression>) {
+    constructor(terrainOptions: TerrainSpecification, drapeRenderMode: number, scope: string, configOptions?: ?ConfigOptions) {
         super();
         this.scope = scope;
-        this._transitionable = new Transitionable(properties, configOptions);
+        this._transitionable = new Transitionable(properties, scope, configOptions);
         this._transitionable.setTransitionOrValue<TerrainSpecification>(terrainOptions, configOptions);
         this._transitioning = this._transitionable.untransitioned();
         this.drapeRenderMode = drapeRenderMode;
@@ -45,7 +44,7 @@ class Terrain extends Evented {
         return (this._transitionable.serialize(): any);
     }
 
-    set(terrain: TerrainSpecification, configOptions?: ?Map<string, Expression>) {
+    set(terrain: TerrainSpecification, configOptions?: ?ConfigOptions) {
         this._transitionable.setTransitionOrValue<TerrainSpecification>(terrain, configOptions);
     }
 

@@ -3,10 +3,19 @@
 import {version} from '../../package.json';
 import {asyncAll, extend, bindAll, warnOnce, uniqueId, isSafariWithAntialiasingBug} from '../util/util.js';
 import browser from '../util/browser.js';
-import window from '../util/window.js';
 import * as DOM from '../util/dom.js';
 import {getImage, getJSON, ResourceType} from '../util/ajax.js';
-import {RequestManager, postPerformanceEvent, storeAuthState, removeAuthState} from '../util/mapbox.js';
+import {
+    RequestManager,
+    mapSessionAPI,
+    mapLoadEvent,
+    getMapSessionAPI,
+    postPerformanceEvent,
+    postMapLoadEvent,
+    AUTH_ERR_MSG,
+    storeAuthState,
+    removeAuthState
+} from '../util/mapbox.js';
 import Style from '../style/style.js';
 import EvaluationParameters from '../style/evaluation_parameters.js';
 import Painter from '../render/painter.js';
@@ -36,6 +45,7 @@ import {Debug} from '../util/debug.js';
 import config from '../util/config.js';
 import {isFQID} from '../util/fqid.js';
 
+import type {Listener} from '../util/evented.js';
 import type {PointLike} from '@mapbox/point-geometry';
 import type {RequestTransformFunction} from '../util/mapbox.js';
 import type {LngLatLike} from '../geo/lng_lat.js';
@@ -49,7 +59,8 @@ import type ScrollZoomHandler from './handler/scroll_zoom.js';
 import type BoxZoomHandler from './handler/box_zoom.js';
 import type {TouchPitchHandler} from './handler/touch_zoom_rotate.js';
 import type DragRotateHandler from './handler/shim/drag_rotate.js';
-import type DragPanHandler, {DragPanOptions} from './handler/shim/drag_pan.js';
+import type DragPanHandler from './handler/shim/drag_pan.js';
+import type {DragPanOptions} from './handler/shim/drag_pan.js';
 import type KeyboardHandler from './handler/keyboard.js';
 import type DoubleClickZoomHandler from './handler/shim/dblclick_zoom.js';
 import type TouchZoomRotateHandler from './handler/shim/touch_zoom_rotate.js';
@@ -77,6 +88,8 @@ import type {QueryFeature} from '../util/vectortile_to_geojson.js';
 import type {QueryResult} from '../data/feature_index.js';
 import type {EasingOptions} from './camera.js';
 import type {ContextOptions} from '../gl/context.js';
+
+import * as TP from '../tracked-parameters/tracked_parameters.js';
 
 export type ControlPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 /* eslint-disable no-use-before-define */
@@ -143,6 +156,7 @@ type MapOptions = {
     collectResourceTiming?: boolean,
     respectPrefersReducedMotion?: boolean,
     contextCreateOptions?: ContextOptions,
+    devtools?: boolean
 };
 
 const defaultMinZoom = -2;
@@ -201,6 +215,27 @@ const defaultOptions = {
     collectResourceTiming: false,
     testMode: false,
 };
+
+class DebugParams {
+    showOverdrawInspector: boolean;
+    showTileBoundaries: boolean;
+    continuousRedraw: boolean;
+
+    showTerrainWireframe: boolean;
+    showLayers2DWireframe: boolean;
+    showLayers3DWireframe: boolean;
+
+    constructor() {
+        this.showOverdrawInspector = false;
+        this.showTileBoundaries = false;
+
+        this.continuousRedraw = false;
+
+        this.showTerrainWireframe = false;
+        this.showLayers2DWireframe = false;
+        this.showLayers3DWireframe = false;
+    }
+}
 
 /**
  * The `Map` object represents the map on your page. It exposes methods
@@ -471,6 +506,8 @@ class Map extends Camera {
     touchPitch: TouchPitchHandler;
 
     _contextCreateOptions: ContextOptions;
+    _tp: TP.TrackedParameters | TP.TrackedParametersMock;
+    _debugParams: DebugParams;
 
     constructor(options: MapOptions) {
         LivePerformanceUtils.mark(PerformanceMarkers.create);
@@ -504,6 +541,7 @@ class Map extends Camera {
         const transform = new Transform(options.minZoom, options.maxZoom, options.minPitch, options.maxPitch, options.renderWorldCopies);
         super(transform, options);
 
+        this._repaint = false;
         this._interactive = options.interactive;
         this._minTileCacheSize = options.minTileCacheSize;
         this._maxTileCacheSize = options.maxTileCacheSize;
@@ -550,12 +588,14 @@ class Map extends Camera {
         }
 
         if (typeof options.container === 'string') {
-            this._container = window.document.getElementById(options.container);
-
-            if (!this._container) {
+            const container = document.getElementById(options.container);
+            if (container) {
+                this._container = container;
+            } else {
                 throw new Error(`Container '${options.container.toString()}' not found.`);
             }
-        } else if (options.container instanceof window.HTMLElement) {
+
+        } else if (options.container instanceof HTMLElement) {
             this._container = options.container;
         } else {
             throw new Error(`Invalid type: 'container' must be a String or HTMLElement.`);
@@ -579,6 +619,19 @@ class Map extends Camera {
         ], this);
 
         this._setupContainer();
+        this._debugParams = new DebugParams();
+        if (options.devtools) {
+            this._tp = new TP.TrackedParameters(this);
+        } else {
+            this._tp = new TP.TrackedParametersMock();
+        }
+        this._tp.registerParameter(this._debugParams, ["Debug"], "showOverdrawInspector", undefined, () => { this._update(); });
+        this._tp.registerParameter(this._debugParams, ["Debug"], "showTileBoundaries", undefined, () => { this._update(); });
+        this._tp.registerParameter(this._debugParams, ["Debug"], "continuousRedraw", undefined, (value) => { this.repaint = value; });
+        this._tp.registerParameter(this._debugParams, ["Debug", "Wireframe"], "showTerrainWireframe", undefined, () => { this._update(); });
+        this._tp.registerParameter(this._debugParams, ["Debug", "Wireframe"], "showLayers2DWireframe", undefined, () => { this._update(); });
+        this._tp.registerParameter(this._debugParams, ["Debug", "Wireframe"], "showLayers3DWireframe", undefined, () => { this._update(); });
+
         this._setupPainter();
         if (this.painter === undefined) {
             throw new Error(`Failed to initialize WebGL.`);
@@ -588,22 +641,20 @@ class Map extends Camera {
         this.on('moveend', () => this._update(false));
         this.on('zoom', () => this._update(true));
 
-        if (typeof window !== 'undefined') {
-            this._fullscreenchangeEvent = 'onfullscreenchange' in window.document ?
-                'fullscreenchange' :
-                'webkitfullscreenchange';
+        this._fullscreenchangeEvent = 'onfullscreenchange' in document ?
+            'fullscreenchange' :
+            'webkitfullscreenchange';
 
-            // $FlowFixMe[method-unbinding]
-            window.addEventListener('online', this._onWindowOnline, false);
-            // $FlowFixMe[method-unbinding]
-            window.addEventListener('resize', this._onWindowResize, false);
-            // $FlowFixMe[method-unbinding]
-            window.addEventListener('orientationchange', this._onWindowResize, false);
-            // $FlowFixMe[method-unbinding]
-            window.addEventListener(this._fullscreenchangeEvent, this._onWindowResize, false);
-            // $FlowFixMe[method-unbinding]
-            window.addEventListener('visibilitychange', this._onVisibilityChange, false);
-        }
+        // $FlowFixMe[method-unbinding]
+        window.addEventListener('online', this._onWindowOnline, false);
+        // $FlowFixMe[method-unbinding]
+        window.addEventListener('resize', this._onWindowResize, false);
+        // $FlowFixMe[method-unbinding]
+        window.addEventListener('orientationchange', this._onWindowResize, false);
+        // $FlowFixMe[method-unbinding]
+        window.addEventListener(this._fullscreenchangeEvent, this._onWindowResize, false);
+        // $FlowFixMe[method-unbinding]
+        window.addEventListener('visibilitychange', this._onVisibilityChange, false);
 
         this.handlers = new HandlerManager(this, options);
 
@@ -1125,10 +1176,10 @@ class Map extends Camera {
     }
 
     _parseLanguage(language?: 'auto' | ?string | ?string[]): ?string | ?string[] {
-        if (language === 'auto') return window.navigator.language;
+        if (language === 'auto') return navigator.language;
         if (Array.isArray(language)) return language.length === 0 ?
             undefined :
-            language.map(l => l === 'auto' ? window.navigator.language : l);
+            language.map(l => l === 'auto' ? navigator.language : l);
 
         return language;
     }
@@ -1565,7 +1616,7 @@ class Map extends Camera {
      * @see [Example: Create a hover effect](https://docs.mapbox.com/mapbox-gl-js/example/hover-styles/)
      * @see [Example: Display popup on click](https://docs.mapbox.com/mapbox-gl-js/example/popup-on-click/)
      */
-    on(type: MapEvent, layerIds: any, listener: any): this {
+    on(type: MapEvent, layerIds: any, listener?: Listener): this {
         if (listener === undefined) {
             return super.on(type, layerIds);
         }
@@ -1634,7 +1685,7 @@ class Map extends Camera {
      * @see [Example: Animate the camera around a point with 3D terrain](https://docs.mapbox.com/mapbox-gl-js/example/free-camera-point/)
      * @see [Example: Play map locations as a slideshow](https://docs.mapbox.com/mapbox-gl-js/example/playback-locations/)
      */
-    once(type: MapEvent, layerIds: any, listener: any): this | Promise<Event> {
+    once(type: MapEvent, layerIds: any, listener?: Listener): this | Promise<Event> {
 
         if (listener === undefined) {
             return super.once(type, layerIds);
@@ -1686,7 +1737,7 @@ class Map extends Camera {
      * });
      * @see [Example: Create a draggable point](https://docs.mapbox.com/mapbox-gl-js/example/drag-a-point/)
      */
-    off(type: MapEvent, layerIds: any, listener: any): this {
+    off(type: MapEvent, layerIds: any, listener?: Listener): this {
         if (listener === undefined) {
             return super.off(type, layerIds);
         }
@@ -2049,7 +2100,12 @@ class Map extends Camera {
         return this.style.loaded();
     }
 
-    _isValidId(id: string): boolean {
+    _isValidId(id: ?string): boolean {
+        if (id == null) {
+            this.fire(new ErrorEvent(new Error(`IDs can't be empty.`)));
+            return false;
+        }
+
         // Disallow using fully qualified IDs in the public APIs
         if (isFQID(id)) {
             this.fire(new ErrorEvent(new Error(`IDs can't contain special symbols: "${id}".`)));
@@ -2128,18 +2184,8 @@ class Map extends Camera {
      * @example
      * const tilesLoaded = map.areTilesLoaded();
      */
-
     areTilesLoaded(): boolean {
-        const sources = this.style && this.style._sourceCaches;
-        for (const id in sources) {
-            const source = sources[id];
-            const tiles = source._tiles;
-            for (const t in tiles) {
-                const tile = tiles[t];
-                if (!(tile.state === 'loaded' || tile.state === 'errored')) return false;
-            }
-        }
-        return true;
+        return this.style.areTilesLoaded();
     }
 
     /**
@@ -2254,7 +2300,7 @@ class Map extends Camera {
         this._lazyInitEmptyStyle();
         const version = 0;
 
-        if (image instanceof window.HTMLImageElement || (window.ImageBitmap && image instanceof window.ImageBitmap)) {
+        if (image instanceof HTMLImageElement || (ImageBitmap && image instanceof ImageBitmap)) {
             const {width, height, data} = browser.getImageData(image);
             this.style.addImage(id, {data: new RGBAImage({width, height}, data), pixelRatio, stretchX, stretchY, content, sdf, version});
         } else if (image.width === undefined || image.height === undefined) {
@@ -2315,7 +2361,7 @@ class Map extends Camera {
                 'The map has no image with that id. If you are adding a new image use `map.addImage(...)` instead.')));
             return;
         }
-        const imageData = (image instanceof window.HTMLImageElement || (window.ImageBitmap && image instanceof window.ImageBitmap)) ? browser.getImageData(image) : image;
+        const imageData = (image instanceof HTMLImageElement || (ImageBitmap && image instanceof ImageBitmap)) ? browser.getImageData(image) : image;
         const {width, height} = imageData;
         // Flow can't refine the type enough to exclude ImageBitmap
         const data = ((imageData: any).data: Uint8Array | Uint8ClampedArray);
@@ -2335,7 +2381,7 @@ class Map extends Camera {
             return;
         }
 
-        const copy = !(image instanceof window.HTMLImageElement || (window.ImageBitmap && image instanceof window.ImageBitmap));
+        const copy = !(image instanceof HTMLImageElement || (ImageBitmap && image instanceof ImageBitmap));
         existingImage.data.replace(data, copy);
 
         this.style.updateImage(id, existingImage);
@@ -2400,7 +2446,7 @@ class Map extends Camera {
      */
     loadImage(url: string, callback: Function) {
         getImage(this._requestManager.transformRequest(url, ResourceType.Image), (err, img) => {
-            callback(err, img instanceof window.HTMLImageElement ? browser.getImageData(img) : img);
+            callback(err, img instanceof HTMLImageElement ? browser.getImageData(img) : img);
         });
     }
 
@@ -3036,6 +3082,7 @@ class Map extends Camera {
      *
      * @param {TerrainSpecification} terrain Terrain properties to set. Must conform to the [Terrain Style Specification](https://docs.mapbox.com/mapbox-gl-js/style-spec/terrain/).
      *     If `null` or `undefined` is provided, function removes terrain.
+     *     Exaggeration could be updated for the existing terrain without explicitly specifying the `source`.
      * @returns {Map} Returns itself to allow for method chaining.
      * @example
      * map.addSource('mapbox-dem', {
@@ -3046,6 +3093,8 @@ class Map extends Camera {
      * });
      * // add the DEM source as a terrain layer with exaggerated height
      * map.setTerrain({'source': 'mapbox-dem', 'exaggeration': 1.5});
+     * // update the exaggeration for the existing terrain
+     * map.setTerrain({'exaggeration': 2});
      */
     setTerrain(terrain: TerrainSpecification): this {
         this._lazyInitEmptyStyle();
@@ -3410,7 +3459,7 @@ class Map extends Camera {
 
         storeAuthState(gl, true);
 
-        this.painter = new Painter(gl, this._contextCreateOptions, this.transform);
+        this.painter = new Painter(gl, this._contextCreateOptions, this.transform, this._tp);
         this.on('data', (event: MapDataEvent) => {
             if (event.dataType === 'source') {
                 this.painter.setTileLoadedFlag(true);
@@ -3544,8 +3593,8 @@ class Map extends Camera {
         this.painter.setBaseState();
 
         if (this.isMoving() || this.isRotating() || this.isZooming()) {
-            this._interactionRange[0] = Math.min(this._interactionRange[0], window.performance.now());
-            this._interactionRange[1] = Math.max(this._interactionRange[1], window.performance.now());
+            this._interactionRange[0] = Math.min(this._interactionRange[0], performance.now());
+            this._interactionRange[1] = Math.max(this._interactionRange[1], performance.now());
         }
 
         this._renderTaskQueue.run(paintStartTimeStamp);
@@ -3589,7 +3638,7 @@ class Map extends Camera {
         if (this.style && this._sourcesDirty) {
             this._sourcesDirty = false;
             this.painter._updateFog(this.style);
-            this._updateTerrain(); // Terrain DEM source updates here and skips update in style._updateSources.
+            this._updateTerrain(); // Terrain DEM source updates here and skips update in Style#updateSources.
             averageElevationChanged = this._updateAverageElevation(frameStartTime);
             this.style.updateSources(this.transform);
             // Update positions of markers and popups on enabling/disabling terrain
@@ -3603,13 +3652,13 @@ class Map extends Camera {
         // Actually draw
         if (this.style) {
             this.painter.render(this.style, {
-                showTileBoundaries: this.showTileBoundaries,
+                showTileBoundaries: this.showTileBoundaries || this._debugParams.showTileBoundaries,
                 wireframe: {
-                    terrain: this.showTerrainWireframe,
-                    layers2D: this.showLayers2DWireframe,
-                    layers3D: this.showLayers3DWireframe
+                    terrain: this.showTerrainWireframe || this._debugParams.showTerrainWireframe,
+                    layers2D: this.showLayers2DWireframe || this._debugParams.showLayers2DWireframe,
+                    layers3D: this.showLayers3DWireframe || this._debugParams.showLayers3DWireframe
                 },
-                showOverdrawInspector: this._showOverdrawInspector,
+                showOverdrawInspector: this._showOverdrawInspector || this._debugParams.showOverdrawInspector,
                 showQueryGeometry: !!this._showQueryGeometry,
                 showTileAABBs: this.showTileAABBs,
                 rotating: this.isRotating(),
@@ -3653,7 +3702,8 @@ class Map extends Camera {
                     cpuTime: renderCPUTime,
                     gpuTime: renderGPUTime
                 }));
-                window.performance.mark('frame-gpu', {
+                // $FlowFixMe extra-arg: fixed in later Flow versions
+                performance.mark('frame-gpu', {
                     startTime: frameStartTime,
                     detail: {
                         gpuTime: renderGPUTime
@@ -3691,7 +3741,7 @@ class Map extends Camera {
         //
         // Even though `_styleDirty` and `_sourcesDirty` are reset in this
         // method, synchronous events fired during Style#update or
-        // Style#_updateSources could have caused them to be set again.
+        // Style#updateSources could have caused them to be set again.
         const somethingDirty = this._sourcesDirty || this._styleDirty || this._placementDirty || averageElevationChanged;
         if (somethingDirty || this._repaint) {
             this.triggerRepaint();
@@ -3920,18 +3970,16 @@ class Map extends Camera {
         this.handlers = undefined;
         this.setStyle(null);
 
-        if (typeof window !== 'undefined') {
-            // $FlowFixMe[method-unbinding]
-            window.removeEventListener('resize', this._onWindowResize, false);
-            // $FlowFixMe[method-unbinding]
-            window.removeEventListener('orientationchange', this._onWindowResize, false);
-            // $FlowFixMe[method-unbinding]
-            window.removeEventListener(this._fullscreenchangeEvent, this._onWindowResize, false);
-            // $FlowFixMe[method-unbinding]
-            window.removeEventListener('online', this._onWindowOnline, false);
-            // $FlowFixMe[method-unbinding]
-            window.removeEventListener('visibilitychange', this._onVisibilityChange, false);
-        }
+        // $FlowFixMe[method-unbinding]
+        window.removeEventListener('resize', this._onWindowResize, false);
+        // $FlowFixMe[method-unbinding]
+        window.removeEventListener('orientationchange', this._onWindowResize, false);
+        // $FlowFixMe[method-unbinding]
+        window.removeEventListener(this._fullscreenchangeEvent, this._onWindowResize, false);
+        // $FlowFixMe[method-unbinding]
+        window.removeEventListener('online', this._onWindowOnline, false);
+        // $FlowFixMe[method-unbinding]
+        window.removeEventListener('visibilitychange', this._onVisibilityChange, false);
 
         const extension = this.painter.context.gl.getExtension('WEBGL_lose_context');
         if (extension) extension.loseContext();
@@ -3956,6 +4004,10 @@ class Map extends Camera {
 
         PerformanceUtils.clearMetrics();
         removeAuthState(this.painter.context.gl);
+
+        mapSessionAPI.remove();
+        mapLoadEvent.remove();
+
         this._removed = true;
         this.fire(new Event('remove'));
     }
@@ -4017,7 +4069,7 @@ class Map extends Camera {
     }
 
     _onVisibilityChange() {
-        if (window.document.visibilityState === 'hidden') {
+        if (document.visibilityState === 'hidden') {
             this._visibilityHidden++;
         }
     }

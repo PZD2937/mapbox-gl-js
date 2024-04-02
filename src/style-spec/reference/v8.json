@@ -92,13 +92,13 @@
         "basic functionality": {
           "js": "3.0.0",
           "android": "11.0.0",
-          "ios": "11.0.0",
-          "macos": "11.0.0"
+          "ios": "11.0.0"
         }
       }
     },
     "terrain": {
       "type": "terrain",
+      "optional": true,
       "doc": "A global modifier that elevates layers and markers based on a DEM data source."
     },
     "fog": {
@@ -117,8 +117,7 @@
         "basic functionality": {
           "js": "3.0.0",
           "android": "11.0.0",
-          "ios": "11.0.0",
-          "macos": "11.0.0"
+          "ios": "11.0.0"
         }
       }
     },
@@ -129,8 +128,7 @@
         "basic functionality": {
           "js": "3.0.0",
           "android": "11.0.0",
-          "ios": "11.0.0",
-          "macos": "11.0.0"
+          "ios": "11.0.0"
         }
       }
     },
@@ -630,12 +628,12 @@
     },
     "url": {
       "type": "string",
-      "doc": "A URL to a TileJSON resource. Supported protocols are `http:`, `https:`, and `mapbox://<Tileset ID>`."
+      "doc": "A URL to a TileJSON resource. Supported protocols are `http:`, `https:`, and `mapbox://<Tileset ID>`. Required if `tiles` is not provided."
     },
     "tiles": {
       "type": "array",
       "value": "string",
-      "doc": "An array of one or more tile source URLs, as in the TileJSON spec."
+      "doc": "An array of one or more tile source URLs, as in the TileJSON spec. Required if `url` is not provided."
     },
     "bounds": {
       "type": "array",
@@ -709,12 +707,12 @@
     },
     "url": {
       "type": "string",
-      "doc": "A URL to a TileJSON resource. Supported protocols are `http:`, `https:`, and `mapbox://<Tileset ID>`."
+      "doc": "A URL to a TileJSON resource. Supported protocols are `http:`, `https:`, and `mapbox://<Tileset ID>`. Required if `tiles` is not provided."
     },
     "tiles": {
       "type": "array",
       "value": "string",
-      "doc": "An array of one or more tile source URLs, as in the TileJSON spec."
+      "doc": "An array of one or more tile source URLs, as in the TileJSON spec. Required if `url` is not provided."
     },
     "bounds": {
       "type": "array",
@@ -790,12 +788,12 @@
     },
     "url": {
       "type": "string",
-      "doc": "A URL to a TileJSON resource. Supported protocols are `http:`, `https:`, and `mapbox://<Tileset ID>`."
+      "doc": "A URL to a TileJSON resource. Supported protocols are `http:`, `https:`, and `mapbox://<Tileset ID>`. Required if `tiles` is not provided."
     },
     "tiles": {
       "type": "array",
       "value": "string",
-      "doc": "An array of one or more tile source URLs, as in the TileJSON spec."
+      "doc": "An array of one or more tile source URLs, as in the TileJSON spec. Required if `url` is not provided."
     },
     "bounds": {
       "type": "array",
@@ -871,12 +869,12 @@
     },
     "url": {
       "type": "string",
-      "doc": "A URL to a TileJSON resource. Supported protocols are `http:`, `https:`, and `mapbox://<Tileset ID>`."
+      "doc": "A URL to a TileJSON resource. Supported protocols are `http:`, `https:`, and `mapbox://<Tileset ID>`. Required if `tiles` is not provided."
     },
     "tiles": {
       "type": "array",
       "value": "string",
-      "doc": "An array of one or more tile source URLs, as in the TileJSON spec."
+      "doc": "An array of one or more tile source URLs, as in the TileJSON spec. Required if `url` is not provided."
     },
     "bounds": {
       "type": "array",
@@ -1101,8 +1099,7 @@
             "basic functionality": {
               "js": "0.10.0",
               "android": "2.0.1",
-              "ios": "2.0.0",
-              "macos": "0.1.0"
+              "ios": "2.0.0"
             }
           }
         },
@@ -1112,8 +1109,7 @@
             "basic functionality": {
               "js": "0.10.0",
               "android": "2.0.1",
-              "ios": "2.0.0",
-              "macos": "0.1.0"
+              "ios": "2.0.0"
             }
           }
         },
@@ -1123,8 +1119,7 @@
             "basic functionality": {
               "js": "0.10.0",
               "android": "2.0.1",
-              "ios": "2.0.0",
-              "macos": "0.1.0"
+              "ios": "2.0.0"
             }
           }
         },
@@ -1134,8 +1129,7 @@
             "basic functionality": {
               "js": "0.10.0",
               "android": "2.0.1",
-              "ios": "2.0.0",
-              "macos": "0.1.0"
+              "ios": "2.0.0"
             }
           }
         },
@@ -1145,8 +1139,7 @@
             "basic functionality": {
               "js": "0.41.0",
               "android": "6.0.0",
-              "ios": "4.0.0",
-              "macos": "0.7.0"
+              "ios": "4.0.0"
             }
           }
         },
@@ -1156,8 +1149,7 @@
             "basic functionality": {
               "js": "0.27.0",
               "android": "5.1.0",
-              "ios": "3.6.0",
-              "macos": "0.5.0"
+              "ios": "3.6.0"
             }
           }
         },
@@ -1167,8 +1159,7 @@
             "basic functionality": {
               "js": "0.10.0",
               "android": "2.0.1",
-              "ios": "2.0.0",
-              "macos": "0.1.0"
+              "ios": "2.0.0"
             }
           }
         },
@@ -1178,8 +1169,7 @@
             "basic functionality": {
               "js": "0.43.0",
               "android": "6.0.0",
-              "ios": "4.0.0",
-              "macos": "0.7.0"
+              "ios": "4.0.0"
             }
           }
         },
@@ -1199,8 +1189,7 @@
             "basic functionality": {
               "js": "0.10.0",
               "android": "2.0.1",
-              "ios": "2.0.0",
-              "macos": "0.1.0"
+              "ios": "2.0.0"
             }
           }
         },
@@ -1220,8 +1209,7 @@
             "basic functionality": {
               "js": "3.0.0",
               "android": "11.0.0",
-              "ios": "11.0.0",
-              "macos": "11.0.0"
+              "ios": "11.0.0"
             }
           }
         }
@@ -1239,7 +1227,7 @@
     },
     "source-layer": {
       "type": "string",
-      "doc": "Layer to use from a vector tile source. Required for vector tile sources; prohibited for all other source types, including GeoJSON sources."
+      "doc": "Layer to use from a vector tile source. Required for vector and raster-array sources; prohibited for all other source types, including GeoJSON sources."
     },
     "slot": {
       "type": "string",
@@ -1248,8 +1236,7 @@
         "basic functionality": {
           "js": "3.0.0",
           "android": "11.0.0",
-          "ios": "11.0.0",
-          "macos": "11.0.0"
+          "ios": "11.0.0"
         }
       }
     },
@@ -1308,14 +1295,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "expressions support": {
           "js": "3.0.0",
           "android": "11.0.0",
-          "ios": "11.0.0",
-          "macos": "11.0.0"
+          "ios": "11.0.0"
         }
       },
       "expression": {
@@ -1346,8 +1331,7 @@
         "expressions support": {
           "js": "3.0.0",
           "android": "11.0.0",
-          "ios": "11.0.0",
-          "macos": "11.0.0"
+          "ios": "11.0.0"
         }
       },
       "expression": {
@@ -1373,8 +1357,7 @@
         "basic functionality": {
           "js": "3.0.0",
           "android": "11.0.0",
-          "ios": "11.0.0",
-          "macos": "11.0.0"
+          "ios": "11.0.0"
         }
       },
       "expression": {
@@ -1424,14 +1407,12 @@
         "basic functionality": {
           "js": "1.2.0",
           "android": "9.1.0",
-          "ios": "5.8.0",
-          "macos": "0.15.0"
+          "ios": "5.8.0"
         },
         "data-driven styling": {
           "js": "1.2.0",
           "android": "9.1.0",
-          "ios": "5.8.0",
-          "macos": "0.15.0"
+          "ios": "5.8.0"
         }
       },
       "expression": {
@@ -1459,14 +1440,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "expressions support": {
           "js": "3.0.0",
           "android": "11.0.0",
-          "ios": "11.0.0",
-          "macos": "11.0.0"
+          "ios": "11.0.0"
         }
       },
       "expression": {
@@ -1483,14 +1462,12 @@
         "basic functionality": {
           "js": "1.2.0",
           "android": "9.2.0",
-          "ios": "5.9.0",
-          "macos": "0.16.0"
+          "ios": "5.9.0"
         },
         "data-driven styling": {
           "js": "1.2.0",
           "android": "9.2.0",
-          "ios": "5.9.0",
-          "macos": "0.16.0"
+          "ios": "5.9.0"
         }
       },
       "expression": {
@@ -1518,14 +1495,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "expressions support": {
           "js": "3.0.0",
           "android": "11.0.0",
-          "ios": "11.0.0",
-          "macos": "11.0.0"
+          "ios": "11.0.0"
         }
       },
       "expression": {
@@ -1551,14 +1526,12 @@
         "basic functionality": {
           "js": "0.41.0",
           "android": "6.0.0",
-          "ios": "4.0.0",
-          "macos": "0.7.0"
+          "ios": "4.0.0"
         },
         "expressions support": {
           "js": "3.0.0",
           "android": "11.0.0",
-          "ios": "11.0.0",
-          "macos": "11.0.0"
+          "ios": "11.0.0"
         }
       },
       "expression": {
@@ -1584,14 +1557,12 @@
         "basic functionality": {
           "js": "0.27.0",
           "android": "5.1.0",
-          "ios": "3.6.0",
-          "macos": "0.5.0"
+          "ios": "3.6.0"
         },
         "expressions support": {
           "js": "3.0.0",
           "android": "11.0.0",
-          "ios": "11.0.0",
-          "macos": "11.0.0"
+          "ios": "11.0.0"
         }
       },
       "expression": {
@@ -1615,8 +1586,7 @@
         "expressions support": {
           "js": "3.0.0",
           "android": "11.0.0",
-          "ios": "11.0.0",
-          "macos": "11.0.0"
+          "ios": "11.0.0"
         }
       },
       "expression": {
@@ -1645,8 +1615,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "2.3.0"
@@ -1680,14 +1649,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.40.0",
           "android": "5.2.0",
-          "ios": "3.7.0",
-          "macos": "0.6.0"
+          "ios": "3.7.0"
         }
       },
       "expression": {
@@ -1712,8 +1679,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -1737,8 +1703,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -1756,14 +1721,12 @@
         "basic functionality": {
           "js": "1.2.0",
           "android": "9.1.0",
-          "ios": "5.8.0",
-          "macos": "0.15.0"
+          "ios": "5.8.0"
         },
         "data-driven styling": {
           "js": "1.2.0",
           "android": "9.1.0",
-          "ios": "5.8.0",
-          "macos": "0.15.0"
+          "ios": "5.8.0"
         }
       },
       "expression": {
@@ -1791,14 +1754,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "expressions support": {
           "js": "3.0.0",
           "android": "11.0.0",
-          "ios": "11.0.0",
-          "macos": "11.0.0"
+          "ios": "11.0.0"
         }
       },
       "expression": {
@@ -1848,14 +1809,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "`line-center` value": {
           "js": "0.47.0",
           "android": "6.4.0",
-          "ios": "4.3.0",
-          "macos": "0.10.0"
+          "ios": "4.3.0"
         }
       },
       "expression": {
@@ -1881,8 +1840,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -1901,8 +1859,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -1920,14 +1877,12 @@
         "basic functionality": {
           "js": "0.53.0",
           "android": "7.4.0",
-          "ios": "4.11.0",
-          "macos": "0.14.0"
+          "ios": "4.11.0"
         },
         "data-driven styling": {
           "js": "0.53.0",
           "android": "7.4.0",
-          "ios": "4.11.0",
-          "macos": "0.14.0"
+          "ios": "4.11.0"
         }
       },
       "expression": {
@@ -1958,8 +1913,7 @@
         "basic functionality": {
           "js": "0.49.0",
           "android": "6.6.0",
-          "ios": "4.5.0",
-          "macos": "0.12.0"
+          "ios": "4.5.0"
         }
       },
       "expression": {
@@ -2012,8 +1966,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -2035,8 +1988,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -2059,8 +2011,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -2093,14 +2044,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "`auto` value": {
           "js": "0.25.0",
           "android": "4.2.0",
-          "ios": "3.4.0",
-          "macos": "0.3.0"
+          "ios": "3.4.0"
         }
       },
       "expression": {
@@ -2124,14 +2073,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.35.0",
           "android": "5.1.0",
-          "ios": "3.6.0",
-          "macos": "0.5.0"
+          "ios": "3.6.0"
         }
       },
       "expression": {
@@ -2169,14 +2116,12 @@
         "basic functionality": {
           "js": "0.21.0",
           "android": "4.2.0",
-          "ios": "3.4.0",
-          "macos": "0.2.1"
+          "ios": "3.4.0"
         },
         "stretchable icons": {
           "js": "1.6.0",
           "android": "9.2.0",
-          "ios": "5.8.0",
-          "macos": "0.15.0"
+          "ios": "5.8.0"
         },
         "data-driven styling": {
           "js": "3.0.0",
@@ -2220,8 +2165,7 @@
         "basic functionality": {
           "js": "0.21.0",
           "android": "4.2.0",
-          "ios": "3.4.0",
-          "macos": "0.2.1"
+          "ios": "3.4.0"
         },
         "data-driven styling": {
           "js": "3.0.0",
@@ -2246,14 +2190,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.35.0",
           "android": "5.1.0",
-          "ios": "3.6.0",
-          "macos": "0.5.0"
+          "ios": "3.6.0"
         }
       },
       "expression": {
@@ -2278,14 +2220,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.21.0",
           "android": "5.0.0",
-          "ios": "3.5.0",
-          "macos": "0.4.0"
+          "ios": "3.5.0"
         }
       },
       "expression": {
@@ -2310,8 +2250,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -2342,8 +2281,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -2370,14 +2308,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.29.0",
           "android": "5.0.0",
-          "ios": "3.5.0",
-          "macos": "0.4.0"
+          "ios": "3.5.0"
         }
       },
       "expression": {
@@ -2429,14 +2365,12 @@
         "basic functionality": {
           "js": "0.40.0",
           "android": "5.2.0",
-          "ios": "3.7.0",
-          "macos": "0.6.0"
+          "ios": "3.7.0"
         },
         "data-driven styling": {
           "js": "0.40.0",
           "android": "5.2.0",
-          "ios": "3.7.0",
-          "macos": "0.6.0"
+          "ios": "3.7.0"
         }
       },
       "expression": {
@@ -2470,8 +2404,7 @@
         "basic functionality": {
           "js": "0.39.0",
           "android": "5.2.0",
-          "ios": "3.7.0",
-          "macos": "0.6.0"
+          "ios": "3.7.0"
         }
       },
       "expression": {
@@ -2504,14 +2437,12 @@
         "basic functionality": {
           "js": "0.21.0",
           "android": "4.2.0",
-          "ios": "3.4.0",
-          "macos": "0.2.1"
+          "ios": "3.4.0"
         },
         "`auto` value": {
           "js": "0.25.0",
           "android": "4.2.0",
-          "ios": "3.4.0",
-          "macos": "0.3.0"
+          "ios": "3.4.0"
         }
       },
       "expression": {
@@ -2544,14 +2475,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "`auto` value": {
           "js": "0.25.0",
           "android": "4.2.0",
-          "ios": "3.4.0",
-          "macos": "0.3.0"
+          "ios": "3.4.0"
         }
       },
       "expression": {
@@ -2571,14 +2500,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.33.0",
           "android": "5.0.0",
-          "ios": "3.5.0",
-          "macos": "0.4.0"
+          "ios": "3.5.0"
         }
       },
       "expression": {
@@ -2605,14 +2532,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.43.0",
           "android": "6.0.0",
-          "ios": "4.0.0",
-          "macos": "0.7.0"
+          "ios": "4.0.0"
         }
       },
       "expression": {
@@ -2637,14 +2562,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.35.0",
           "android": "5.1.0",
-          "ios": "3.6.0",
-          "macos": "0.5.0"
+          "ios": "3.6.0"
         }
       },
       "expression": {
@@ -2674,14 +2597,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.40.0",
           "android": "5.2.0",
-          "ios": "3.7.0",
-          "macos": "0.6.0"
+          "ios": "3.7.0"
         }
       },
       "expression": {
@@ -2705,8 +2626,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "2.3.0",
@@ -2735,14 +2655,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.40.0",
           "android": "5.2.0",
-          "ios": "3.7.0",
-          "macos": "0.6.0"
+          "ios": "3.7.0"
         }
       },
       "expression": {
@@ -2779,20 +2697,17 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.39.0",
           "android": "5.2.0",
-          "ios": "3.7.0",
-          "macos": "0.6.0"
+          "ios": "3.7.0"
         },
         "auto": {
           "js": "0.54.0",
           "android": "7.4.0",
-          "ios": "4.10.0",
-          "macos": "0.14.0"
+          "ios": "4.10.0"
         }
       },
       "expression": {
@@ -2813,14 +2728,12 @@
         "basic functionality": {
           "js": "0.54.0",
           "android": "7.4.0",
-          "ios": "4.10.0",
-          "macos": "0.14.0"
+          "ios": "4.10.0"
         },
         "data-driven styling": {
           "js": "0.54.0",
           "android": "7.4.0",
-          "ios": "4.10.0",
-          "macos": "0.14.0"
+          "ios": "4.10.0"
         }
       },
       "requires": [
@@ -2880,8 +2793,7 @@
         "basic functionality": {
           "js": "0.54.0",
           "android": "7.4.0",
-          "ios": "4.10.0",
-          "macos": "0.14.0"
+          "ios": "4.10.0"
         }
       },
       "expression": {
@@ -2935,14 +2847,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.39.0",
           "android": "5.2.0",
-          "ios": "3.7.0",
-          "macos": "0.6.0"
+          "ios": "3.7.0"
         }
       },
       "expression": {
@@ -2972,8 +2882,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -3003,8 +2912,7 @@
         "basic functionality": {
           "js": "1.3.0",
           "android": "8.3.0",
-          "ios": "5.3.0",
-          "macos": "0.15.0"
+          "ios": "5.3.0"
         }
       },
       "expression": {
@@ -3028,14 +2936,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.35.0",
           "android": "5.1.0",
-          "ios": "3.6.0",
-          "macos": "0.5.0"
+          "ios": "3.6.0"
         }
       },
       "expression": {
@@ -3060,8 +2966,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -3092,8 +2997,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -3126,14 +3030,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.33.0",
           "android": "5.0.0",
-          "ios": "3.5.0",
-          "macos": "0.4.0"
+          "ios": "3.5.0"
         }
       },
       "expression": {
@@ -3165,14 +3067,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.35.0",
           "android": "5.1.0",
-          "ios": "3.6.0",
-          "macos": "0.5.0"
+          "ios": "3.6.0"
         }
       },
       "expression": {
@@ -3195,8 +3095,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -3218,8 +3117,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -3242,8 +3140,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -3270,14 +3167,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "expressions support": {
           "js": "3.0.0",
           "android": "11.0.0",
-          "ios": "11.0.0",
-          "macos": "11.0.0"
+          "ios": "11.0.0"
         }
       },
       "expression": {
@@ -3303,14 +3198,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "expressions support": {
           "js": "3.0.0",
           "android": "11.0.0",
-          "ios": "11.0.0",
-          "macos": "11.0.0"
+          "ios": "11.0.0"
         }
       },
       "expression": {
@@ -3336,14 +3229,12 @@
         "basic functionality": {
           "js": "0.43.0",
           "android": "6.0.0",
-          "ios": "4.0.0",
-          "macos": "0.7.0"
+          "ios": "4.0.0"
         },
         "expressions support": {
           "js": "3.0.0",
           "android": "11.0.0",
-          "ios": "11.0.0",
-          "macos": "11.0.0"
+          "ios": "11.0.0"
         }
       },
       "expression": {
@@ -3573,8 +3464,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -3585,8 +3475,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -3597,8 +3486,7 @@
           "basic functionality": {
             "js": "3.0.0",
             "android": "11.0.0",
-            "ios": "11.0.0",
-            "macos": "11.0.0"
+            "ios": "11.0.0"
           }
         }
       },
@@ -3609,8 +3497,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -3621,8 +3508,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -3633,8 +3519,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -3645,8 +3530,7 @@
           "basic functionality": {
             "js": "1.6.0",
             "android": "9.1.0",
-            "ios": "5.8.0",
-            "macos": "0.15.0"
+            "ios": "5.8.0"
           }
         }
       },
@@ -3679,8 +3563,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -3691,8 +3574,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -3703,8 +3585,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -3715,8 +3596,7 @@
           "basic functionality": {
             "js": "0.42.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -3727,8 +3607,7 @@
           "basic functionality": {
             "js": "0.42.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -3757,8 +3636,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -3769,8 +3647,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -3781,8 +3658,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -3793,8 +3669,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -3805,8 +3680,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -3817,8 +3691,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -3829,8 +3702,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -3841,8 +3713,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -3853,8 +3724,7 @@
           "basic functionality": {
             "js": "0.45.0",
             "android": "6.5.0",
-            "ios": "4.2.0",
-            "macos": "0.9.0"
+            "ios": "4.2.0"
           }
         }
       },
@@ -3865,32 +3735,27 @@
           "basic functionality": {
             "js": "0.48.0",
             "android": "6.7.0",
-            "ios": "4.6.0",
-            "macos": "0.12.0"
+            "ios": "4.6.0"
           },
           "text-font": {
             "js": "0.48.0",
             "android": "6.7.0",
-            "ios": "4.6.0",
-            "macos": "0.12.0"
+            "ios": "4.6.0"
           },
           "font-scale": {
             "js": "0.48.0",
             "android": "6.7.0",
-            "ios": "4.6.0",
-            "macos": "0.12.0"
+            "ios": "4.6.0"
           },
           "text-color": {
             "js": "1.3.0",
             "android": "7.3.0",
-            "ios": "4.10.0",
-            "macos": "0.14.0"
+            "ios": "4.10.0"
           },
           "image": {
             "js": "1.6.0",
             "android": "8.6.0",
-            "ios": "5.7.0",
-            "macos": "0.15.0"
+            "ios": "5.7.0"
           }
         }
       },
@@ -3901,8 +3766,7 @@
           "basic functionality": {
             "js": "1.4.0",
             "android": "8.6.0",
-            "ios": "5.7.0",
-            "macos": "0.15.0"
+            "ios": "5.7.0"
           }
         }
       },
@@ -3913,8 +3777,7 @@
           "basic functionality": {
             "js": "0.54.0",
             "android" : "8.4.0",
-            "ios": "5.4.0",
-            "macos": "0.15.0"
+            "ios": "5.4.0"
           }
         }
       },
@@ -3925,8 +3788,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -3937,8 +3799,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -3949,8 +3810,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -3961,8 +3821,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -3973,8 +3832,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -3985,8 +3843,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -3997,8 +3854,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4031,8 +3887,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4043,8 +3898,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4055,8 +3909,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4067,8 +3920,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4090,8 +3942,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4102,8 +3953,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4114,8 +3964,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4159,8 +4008,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4171,8 +4019,7 @@
           "basic functionality": {
             "js": "0.45.0",
             "android": "6.5.0",
-            "ios": "4.6.0",
-            "macos": "0.12.0"
+            "ios": "4.6.0"
           }
         }
       },
@@ -4194,8 +4041,7 @@
           "basic functionality": {
             "js": "0.53.0",
             "android": "8.4.0",
-            "ios": "5.5.0",
-            "macos": "0.15.0"
+            "ios": "5.5.0"
           }
         }
       },
@@ -4206,8 +4052,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4218,8 +4063,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4230,8 +4074,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4242,8 +4085,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4254,8 +4096,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4266,8 +4107,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4278,8 +4118,7 @@
           "basic functionality": {
             "js": "0.42.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4290,8 +4129,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4302,8 +4140,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4314,8 +4151,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4326,8 +4162,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4338,8 +4173,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4350,8 +4184,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4362,8 +4195,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4374,8 +4206,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4386,8 +4217,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4398,8 +4228,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4410,8 +4239,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4422,8 +4250,7 @@
           "basic functionality": {
             "js": "0.45.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4434,8 +4261,7 @@
           "basic functionality": {
             "js": "0.45.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4446,8 +4272,7 @@
           "basic functionality": {
             "js": "0.45.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4458,8 +4283,7 @@
           "basic functionality": {
             "js": "0.45.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4470,8 +4294,7 @@
           "basic functionality": {
             "js": "3.0.0",
             "android": "9.2.0",
-            "ios": "5.9.0",
-            "macos": "0.16.0"
+            "ios": "5.9.0"
           }
         }
       },
@@ -4482,14 +4305,12 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           },
           "collator": {
             "js": "0.45.0",
             "android": "6.5.0",
-            "ios": "4.2.0",
-            "macos": "0.9.0"
+            "ios": "4.2.0"
           }
         }
       },
@@ -4500,14 +4321,12 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           },
           "collator": {
             "js": "0.45.0",
             "android": "6.5.0",
-            "ios": "4.2.0",
-            "macos": "0.9.0"
+            "ios": "4.2.0"
           }
         }
       },
@@ -4518,14 +4337,12 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           },
           "collator": {
             "js": "0.45.0",
             "android": "6.5.0",
-            "ios": "4.2.0",
-            "macos": "0.9.0"
+            "ios": "4.2.0"
           }
         }
       },
@@ -4536,14 +4353,12 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           },
           "collator": {
             "js": "0.45.0",
             "android": "6.5.0",
-            "ios": "4.2.0",
-            "macos": "0.9.0"
+            "ios": "4.2.0"
           }
         }
       },
@@ -4554,14 +4369,12 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           },
           "collator": {
             "js": "0.45.0",
             "android": "6.5.0",
-            "ios": "4.2.0",
-            "macos": "0.9.0"
+            "ios": "4.2.0"
           }
         }
       },
@@ -4572,14 +4385,12 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           },
           "collator": {
             "js": "0.45.0",
             "android": "6.5.0",
-            "ios": "4.2.0",
-            "macos": "0.9.0"
+            "ios": "4.2.0"
           }
         }
       },
@@ -4590,8 +4401,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4602,8 +4412,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4614,8 +4423,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4626,8 +4434,7 @@
           "basic functionality": {
             "js": "1.9.0",
             "android": "9.1.0",
-            "ios": "5.8.0",
-            "macos": "0.15.0"
+            "ios": "5.8.0"
           }
         }
       },
@@ -4638,8 +4445,7 @@
           "basic functionality": {
             "js": "0.45.0",
             "android": "6.6.0",
-            "ios": "4.1.0",
-            "macos": "0.8.0"
+            "ios": "4.1.0"
           }
         }
       },
@@ -4650,8 +4456,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4662,8 +4467,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4674,8 +4478,7 @@
           "basic functionality": {
             "js": "0.41.0",
             "android": "6.0.0",
-            "ios": "4.0.0",
-            "macos": "0.7.0"
+            "ios": "4.0.0"
           }
         }
       },
@@ -4686,8 +4489,7 @@
           "basic functionality": {
             "js": "0.45.0",
             "android": "6.5.0",
-            "ios": "4.2.0",
-            "macos": "0.9.0"
+            "ios": "4.2.0"
           }
         }
       },
@@ -4985,8 +4787,7 @@
         "basic functionality": {
           "js": "0.27.0",
           "android": "5.1.0",
-          "ios": "3.6.0",
-          "macos": "0.5.0"
+          "ios": "3.6.0"
         }
       }
     },
@@ -5017,8 +4818,7 @@
         "basic functionality": {
           "js": "0.27.0",
           "android": "5.1.0",
-          "ios": "3.6.0",
-          "macos": "0.5.0"
+          "ios": "3.6.0"
         }
       }
     },
@@ -5038,8 +4838,7 @@
         "basic functionality": {
           "js": "0.27.0",
           "android": "5.1.0",
-          "ios": "3.6.0",
-          "macos": "0.5.0"
+          "ios": "3.6.0"
         }
       }
     },
@@ -5061,8 +4860,7 @@
         "basic functionality": {
           "js": "0.27.0",
           "android": "5.1.0",
-          "ios": "3.6.0",
-          "macos": "0.5.0"
+          "ios": "3.6.0"
         }
       }
     }
@@ -5223,8 +5021,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -5246,14 +5043,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.21.0",
           "android": "5.0.0",
-          "ios": "3.5.0",
-          "macos": "0.4.0"
+          "ios": "3.5.0"
         }
       },
       "expression": {
@@ -5281,14 +5076,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.19.0",
           "android": "5.0.0",
-          "ios": "3.5.0",
-          "macos": "0.4.0"
+          "ios": "3.5.0"
         }
       },
       "expression": {
@@ -5318,14 +5111,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.19.0",
           "android": "5.0.0",
-          "ios": "3.5.0",
-          "macos": "0.4.0"
+          "ios": "3.5.0"
         }
       },
       "expression": {
@@ -5354,8 +5145,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -5385,8 +5175,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -5405,13 +5194,11 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.49.0",
           "android": "6.5.0",
-          "macos": "0.11.0",
           "ios": "4.4.0"
         }
       },
@@ -5463,8 +5250,7 @@
         "basic functionality": {
           "js": "0.27.0",
           "android": "5.1.0",
-          "ios": "3.6.0",
-          "macos": "0.5.0"
+          "ios": "3.6.0"
         }
       },
       "expression": {
@@ -5489,14 +5275,12 @@
         "basic functionality": {
           "js": "0.27.0",
           "android": "5.1.0",
-          "ios": "3.6.0",
-          "macos": "0.5.0"
+          "ios": "3.6.0"
         },
         "data-driven styling": {
           "js": "0.27.0",
           "android": "5.1.0",
-          "ios": "3.6.0",
-          "macos": "0.5.0"
+          "ios": "3.6.0"
         }
       },
       "expression": {
@@ -5525,8 +5309,7 @@
         "basic functionality": {
           "js": "0.27.0",
           "android": "5.1.0",
-          "ios": "3.6.0",
-          "macos": "0.5.0"
+          "ios": "3.6.0"
         }
       },
       "expression": {
@@ -5556,8 +5339,7 @@
         "basic functionality": {
           "js": "0.27.0",
           "android": "5.1.0",
-          "ios": "3.6.0",
-          "macos": "0.5.0"
+          "ios": "3.6.0"
         }
       },
       "expression": {
@@ -5576,13 +5358,11 @@
         "basic functionality": {
           "js": "0.27.0",
           "android": "5.1.0",
-          "ios": "3.6.0",
-          "macos": "0.5.0"
+          "ios": "3.6.0"
         },
         "data-driven styling": {
           "js": "0.49.0",
           "android": "6.5.0",
-          "macos": "0.11.0",
           "ios": "4.4.0"
         }
       },
@@ -5606,14 +5386,12 @@
         "basic functionality": {
           "js": "0.27.0",
           "android": "5.1.0",
-          "ios": "3.6.0",
-          "macos": "0.5.0"
+          "ios": "3.6.0"
         },
         "data-driven styling": {
           "js": "0.27.0",
           "android": "5.1.0",
-          "ios": "3.6.0",
-          "macos": "0.5.0"
+          "ios": "3.6.0"
         }
       },
       "expression": {
@@ -5640,14 +5418,12 @@
         "basic functionality": {
           "js": "0.27.0",
           "android": "5.1.0",
-          "ios": "3.6.0",
-          "macos": "0.5.0"
+          "ios": "3.6.0"
         },
         "data-driven styling": {
           "js": "0.27.0",
           "android": "5.1.0",
-          "ios": "3.6.0",
-          "macos": "0.5.0"
+          "ios": "3.6.0"
         }
       },
       "expression": {
@@ -5669,8 +5445,7 @@
         "basic functionality": {
           "js": "0.50.0",
           "android": "7.0.0",
-          "ios": "4.7.0",
-          "macos": "0.13.0"
+          "ios": "4.7.0"
         }
       },
       "expression": {
@@ -5696,12 +5471,6 @@
       },
       "transition": true,
       "doc": "Controls the intensity of shading near ground and concave angles between walls. Default value 0.0 disables ambient occlusion and values around 0.3 provide the most plausible results for buildings.",
-      "requires": [
-        "lights",
-        {
-          "!": "fill-extrusion-flood-light-intensity"
-        }
-      ],
       "sdk-support": {
         "basic functionality": {
           "js": "3.0.0",
@@ -5725,10 +5494,7 @@
       "transition": true,
       "doc": "Shades area near ground and concave angles between walls where the radius defines only vertical impact. Default value 3.0 corresponds to height of one floor and brings the most plausible results for buildings. This property works only with legacy light. When 3D lights are enabled `fill-extrusion-ambient-occlusion-wall-radius` and `fill-extrusion-ambient-occlusion-ground-radius` are used instead.",
       "requires": [
-        "fill-extrusion-edge-radius",
-        {
-          "!": "fill-extrusion-flood-light-intensity"
-        }
+        "fill-extrusion-edge-radius"
       ],
       "sdk-support": {
         "basic functionality": {
@@ -5753,10 +5519,7 @@
       "doc": "Shades area near ground and concave angles between walls where the radius defines only vertical impact. Default value 3.0 corresponds to height of one floor and brings the most plausible results for buildings.",
       "requires": [
         "lights",
-        "fill-extrusion-edge-radius",
-        {
-          "!": "fill-extrusion-flood-light-intensity"
-        }
+        "fill-extrusion-edge-radius"
       ],
       "sdk-support": {
         "basic functionality": {
@@ -5780,10 +5543,7 @@
       "transition": true,
       "doc": "The extent of the ambient occlusion effect on the ground beneath the extruded buildings in meters.",
       "requires": [
-        "lights",
-        {
-          "!": "fill-extrusion-flood-light-intensity"
-        }
+        "lights"
       ],
       "sdk-support": {
         "basic functionality": {
@@ -5801,10 +5561,7 @@
       "maximum": 1.0,
       "doc": "Provides a control to futher fine-tune the look of the ambient occlusion on the ground beneath the extruded buildings. Lower values give the effect a more solid look while higher values make it smoother.",
       "requires": [
-        "lights",
-        {
-          "!": "fill-extrusion-flood-light-intensity"
-        }
+        "lights"
       ],
       "transition": true,
       "expression": {
@@ -5827,10 +5584,7 @@
       "default": "#ffffff",
       "doc": "The color of the flood light effect on the walls of the extruded buildings.",
       "requires": [
-        "lights",
-        {
-          "!": "fill-extrusion-ambient-occlusion-intensity"
-        }
+        "lights"
       ],
       "transition": true,
       "expression": {
@@ -5856,10 +5610,7 @@
       "maximum": 1.0,
       "doc": "The intensity of the flood light color.",
       "requires": [
-        "lights",
-        {
-          "!": "fill-extrusion-ambient-occlusion-intensity"
-        }
+        "lights"
       ],
       "transition": true,
       "expression": {
@@ -5885,10 +5636,7 @@
       "minimum": 0,
       "doc": "The extent of the flood light effect on the walls of the extruded buildings in meters.",
       "requires": [
-        "lights",
-        {
-          "!": "fill-extrusion-ambient-occlusion-intensity"
-        }
+        "lights"
       ],
       "transition": true,
       "expression": {
@@ -5916,13 +5664,9 @@
       "type": "number",
       "units": "meters",
       "default": 0,
-      "minimum": 0,
       "doc": "The extent of the flood light effect on the ground beneath the extruded buildings in meters.",
       "requires": [
-        "lights",
-        {
-          "!": "fill-extrusion-ambient-occlusion-intensity"
-        }
+        "lights"
       ],
       "transition": true,
       "expression": {
@@ -5953,10 +5697,7 @@
       "maximum": 1.0,
       "doc": "Provides a control to futher fine-tune the look of the flood light on the ground beneath the extruded buildings. Lower values give the effect a more solid look while higher values make it smoother.",
       "requires": [
-        "lights",
-        {
-          "!": "fill-extrusion-ambient-occlusion-intensity"
-        }
+        "lights"
       ],
       "transition": true,
       "expression": {
@@ -6022,7 +5763,7 @@
       "default": 0.0,
       "minimum": 0.0,
       "maximum": 1.0,
-      "doc": "This parameter defines the range for the fade-out effect before an automatic content cutoff on pitched map views. The automatic cutoff range is calculated according to the minimum required zoom level of the source and layer. The fade range is expressed in relation to the height of the map view. A value of 1.0 indicates that the content is faded to the same extent as the map's height in pixels, while a value close to zero represents a sharp cutoff. When the value is set to 0.0, the cutoff is completely disabled. Note: The property has no effect on the map if terrain is enabled.",
+      "doc": "This parameter defines the range for the fade-out effect before an automatic content cutoff on pitched map views. Fade out is implemented by scaling down and removing buildings in the fade range in a staggered fashion. Opacity is not changed. The fade range is expressed in relation to the height of the map view. A value of 1.0 indicates that the content is faded to the same extent as the map's height in pixels, while a value close to zero represents a sharp cutoff. When the value is set to 0.0, the cutoff is completely disabled. Note: The property has no effect on the map if terrain is enabled.",
       "transition": false,
       "expression": {
         "interpolated": false
@@ -6075,14 +5816,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.29.0",
           "android": "5.0.0",
-          "ios": "3.5.0",
-          "macos": "0.4.0"
+          "ios": "3.5.0"
         }
       },
       "expression": {
@@ -6110,14 +5849,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.23.0",
           "android": "5.0.0",
-          "ios": "3.5.0",
-          "macos": "0.4.0"
+          "ios": "3.5.0"
         }
       },
       "expression": {
@@ -6146,8 +5883,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -6177,8 +5913,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -6200,14 +5935,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.39.0",
           "android": "5.2.0",
-          "ios": "3.7.0",
-          "macos": "0.6.0"
+          "ios": "3.7.0"
         }
       },
       "expression": {
@@ -6232,14 +5965,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.29.0",
           "android": "5.0.0",
-          "ios": "3.5.0",
-          "macos": "0.4.0"
+          "ios": "3.5.0"
         }
       },
       "expression": {
@@ -6263,14 +5994,12 @@
         "basic functionality": {
           "js": "0.12.1",
           "android": "3.0.0",
-          "ios": "3.1.0",
-          "macos": "0.1.0"
+          "ios": "3.1.0"
         },
         "data-driven styling": {
           "js": "0.29.0",
           "android": "5.0.0",
-          "ios": "3.5.0",
-          "macos": "0.4.0"
+          "ios": "3.5.0"
         }
       },
       "expression": {
@@ -6295,14 +6024,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.29.0",
           "android": "5.0.0",
-          "ios": "3.5.0",
-          "macos": "0.4.0"
+          "ios": "3.5.0"
         }
       },
       "expression": {
@@ -6332,8 +6059,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "2.3.0"
@@ -6356,13 +6082,11 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.49.0",
           "android": "6.5.0",
-          "macos": "0.11.0",
           "ios": "4.4.0"
         }
       },
@@ -6411,8 +6135,7 @@
         "basic functionality": {
           "js": "0.45.0",
           "android": "6.5.0",
-          "ios": "4.4.0",
-          "macos": "0.11.0"
+          "ios": "4.4.0"
         },
         "data-driven styling": {}
       },
@@ -6445,8 +6168,7 @@
         "basic functionality": {
           "js": "2.9.0",
           "android": "10.5.0",
-          "ios": "10.5.0",
-          "macos": "10.5.0"
+          "ios": "10.5.0"
         }
       },
       "property-type": "constant"
@@ -6547,14 +6269,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.18.0",
           "android": "5.0.0",
-          "ios": "3.5.0",
-          "macos": "0.4.0"
+          "ios": "3.5.0"
         }
       },
       "expression": {
@@ -6577,14 +6297,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.18.0",
           "android": "5.0.0",
-          "ios": "3.5.0",
-          "macos": "0.4.0"
+          "ios": "3.5.0"
         }
       },
       "expression": {
@@ -6607,14 +6325,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.20.0",
           "android": "5.0.0",
-          "ios": "3.5.0",
-          "macos": "0.4.0"
+          "ios": "3.5.0"
         }
       },
       "expression": {
@@ -6639,14 +6355,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.20.0",
           "android": "5.0.0",
-          "ios": "3.5.0",
-          "macos": "0.4.0"
+          "ios": "3.5.0"
         }
       },
       "expression": {
@@ -6675,8 +6389,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -6706,8 +6419,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -6734,8 +6446,7 @@
         "basic functionality": {
           "js": "0.21.0",
           "android": "4.2.0",
-          "ios": "3.4.0",
-          "macos": "0.2.1"
+          "ios": "3.4.0"
         }
       },
       "expression": {
@@ -6762,8 +6473,7 @@
         "basic functionality": {
           "js": "0.39.0",
           "android": "5.2.0",
-          "ios": "3.7.0",
-          "macos": "0.6.0"
+          "ios": "3.7.0"
         }
       },
       "expression": {
@@ -6785,14 +6495,12 @@
         "basic functionality": {
           "js": "0.29.0",
           "android": "5.0.0",
-          "ios": "3.5.0",
-          "macos": "0.4.0"
+          "ios": "3.5.0"
         },
         "data-driven styling": {
           "js": "0.29.0",
           "android": "5.0.0",
-          "ios": "3.5.0",
-          "macos": "0.4.0"
+          "ios": "3.5.0"
         }
       },
       "expression": {
@@ -6815,14 +6523,12 @@
         "basic functionality": {
           "js": "0.29.0",
           "android": "5.0.0",
-          "ios": "3.5.0",
-          "macos": "0.4.0"
+          "ios": "3.5.0"
         },
         "data-driven styling": {
           "js": "0.29.0",
           "android": "5.0.0",
-          "ios": "3.5.0",
-          "macos": "0.4.0"
+          "ios": "3.5.0"
         }
       },
       "expression": {
@@ -6847,14 +6553,12 @@
         "basic functionality": {
           "js": "0.29.0",
           "android": "5.0.0",
-          "ios": "3.5.0",
-          "macos": "0.4.0"
+          "ios": "3.5.0"
         },
         "data-driven styling": {
           "js": "0.29.0",
           "android": "5.0.0",
-          "ios": "3.5.0",
-          "macos": "0.4.0"
+          "ios": "3.5.0"
         }
       },
       "expression": {
@@ -6907,14 +6611,12 @@
         "basic functionality": {
           "js": "0.41.0",
           "android": "6.0.0",
-          "ios": "4.0.0",
-          "macos": "0.7.0"
+          "ios": "4.0.0"
         },
         "data-driven styling": {
           "js": "0.43.0",
           "android": "6.0.0",
-          "ios": "4.0.0",
-          "macos": "0.7.0"
+          "ios": "4.0.0"
         }
       },
       "expression": {
@@ -6938,14 +6640,12 @@
         "basic functionality": {
           "js": "0.41.0",
           "android": "6.0.0",
-          "ios": "4.0.0",
-          "macos": "0.7.0"
+          "ios": "4.0.0"
         },
         "data-driven styling": {
           "js": "0.41.0",
           "android": "6.0.0",
-          "ios": "4.0.0",
-          "macos": "0.7.0"
+          "ios": "4.0.0"
         }
       },
       "expression": {
@@ -6969,8 +6669,7 @@
         "basic functionality": {
           "js": "0.41.0",
           "android": "6.0.0",
-          "ios": "4.0.0",
-          "macos": "0.7.0"
+          "ios": "4.0.0"
         }
       },
       "expression": {
@@ -7010,8 +6709,7 @@
         "basic functionality": {
           "js": "0.41.0",
           "android": "6.0.0",
-          "ios": "4.0.0",
-          "macos": "0.7.0"
+          "ios": "4.0.0"
         },
         "data-driven styling": {}
       },
@@ -7034,8 +6732,7 @@
         "basic functionality": {
           "js": "0.41.0",
           "android": "6.0.0",
-          "ios": "4.0.0",
-          "macos": "0.7.0"
+          "ios": "4.0.0"
         }
       },
       "expression": {
@@ -7062,14 +6759,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.33.0",
           "android": "5.0.0",
-          "ios": "3.5.0",
-          "macos": "0.4.0"
+          "ios": "3.5.0"
         }
       },
       "expression": {
@@ -7157,14 +6852,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.33.0",
           "android": "5.0.0",
-          "ios": "3.5.0",
-          "macos": "0.4.0"
+          "ios": "3.5.0"
         }
       },
       "expression": {
@@ -7190,14 +6883,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.33.0",
           "android": "5.0.0",
-          "ios": "3.5.0",
-          "macos": "0.4.0"
+          "ios": "3.5.0"
         }
       },
       "expression": {
@@ -7225,14 +6916,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.33.0",
           "android": "5.0.0",
-          "ios": "3.5.0",
-          "macos": "0.4.0"
+          "ios": "3.5.0"
         }
       },
       "expression": {
@@ -7260,14 +6949,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.33.0",
           "android": "5.0.0",
-          "ios": "3.5.0",
-          "macos": "0.4.0"
+          "ios": "3.5.0"
         }
       },
       "expression": {
@@ -7299,8 +6986,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -7331,8 +7017,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -7387,14 +7072,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.33.0",
           "android": "5.0.0",
-          "ios": "3.5.0",
-          "macos": "0.4.0"
+          "ios": "3.5.0"
         }
       },
       "expression": {
@@ -7421,14 +7104,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.33.0",
           "android": "5.0.0",
-          "ios": "3.5.0",
-          "macos": "0.4.0"
+          "ios": "3.5.0"
         }
       },
       "expression": {
@@ -7454,14 +7135,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.33.0",
           "android": "5.0.0",
-          "ios": "3.5.0",
-          "macos": "0.4.0"
+          "ios": "3.5.0"
         }
       },
       "expression": {
@@ -7489,14 +7168,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.33.0",
           "android": "5.0.0",
-          "ios": "3.5.0",
-          "macos": "0.4.0"
+          "ios": "3.5.0"
         }
       },
       "expression": {
@@ -7524,14 +7201,12 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         },
         "data-driven styling": {
           "js": "0.33.0",
           "android": "5.0.0",
-          "ios": "3.5.0",
-          "macos": "0.4.0"
+          "ios": "3.5.0"
         }
       },
       "expression": {
@@ -7563,8 +7238,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -7595,8 +7269,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -7604,6 +7277,26 @@
         "parameters": [
           "zoom"
         ]
+      },
+      "property-type": "data-constant"
+    },
+    "icon-color-saturation": {
+      "type": "number",
+      "default": 1,
+      "minimum": 0,
+      "maximum": 1,
+      "transition": true,
+      "units": "intensity",
+      "doc": "Controls saturation level of the symbol icon. With the default value of 1 the icon color is preserved while with a value of 0 it is fully desaturated and looks black and white.",
+      "sdk-support": {
+        "basic functionality": {
+          "js": "3.1.0",
+          "android": "11.1.0",
+          "ios": "11.1.0"
+        }
+      },
+      "expression": {
+        "interpolated": false
       },
       "property-type": "data-constant"
     }
@@ -7620,8 +7313,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -7731,8 +7423,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -7754,8 +7445,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -7777,8 +7467,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -7800,8 +7489,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -7823,8 +7511,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -7851,8 +7538,7 @@
         "basic functionality": {
           "js": "0.47.0",
           "android": "6.3.0",
-          "ios": "4.2.0",
-          "macos": "0.9.0"
+          "ios": "4.2.0"
         }
       },
       "expression": {
@@ -7874,8 +7560,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -7917,7 +7602,12 @@
       "required": false,
       "property-type": "data-constant",
       "transition": false,
-      "doc": "Displayed band of raster array source layer",
+      "requires": [
+        {
+          "source": "raster-array"
+        }
+      ],
+      "doc": "Displayed band of raster array source layer. Defaults to the first band if not set.",
       "example": "band-name",
       "sdk-support": {
         "basic functionality": {
@@ -7935,7 +7625,9 @@
       "transition": true,
       "sdk-support": {
         "basic functionality": {
-          "js": "3.1.0"
+          "js": "3.1.0",
+          "android": "11.2.0",
+          "ios": "11.2.0"
         }
       },
       "expression": {
@@ -7959,8 +7651,7 @@
         "basic functionality": {
           "js": "0.43.0",
           "android": "6.0.0",
-          "ios": "4.0.0",
-          "macos": "0.7.0"
+          "ios": "4.0.0"
         }
       },
       "expression": {
@@ -7987,8 +7678,7 @@
         "basic functionality": {
           "js": "0.43.0",
           "android": "6.0.0",
-          "ios": "4.0.0",
-          "macos": "0.7.0"
+          "ios": "4.0.0"
         }
       },
       "expression": {
@@ -8010,8 +7700,7 @@
         "basic functionality": {
           "js": "0.43.0",
           "android": "6.0.0",
-          "ios": "4.0.0",
-          "macos": "0.7.0"
+          "ios": "4.0.0"
         }
       },
       "expression": {
@@ -8031,8 +7720,7 @@
         "basic functionality": {
           "js": "0.43.0",
           "android": "6.0.0",
-          "ios": "4.0.0",
-          "macos": "0.7.0"
+          "ios": "4.0.0"
         }
       },
       "expression": {
@@ -8053,8 +7741,7 @@
         "basic functionality": {
           "js": "0.43.0",
           "android": "6.0.0",
-          "ios": "4.0.0",
-          "macos": "0.7.0"
+          "ios": "4.0.0"
         }
       },
       "expression": {
@@ -8075,8 +7762,7 @@
         "basic functionality": {
           "js": "0.43.0",
           "android": "6.0.0",
-          "ios": "4.0.0",
-          "macos": "0.7.0"
+          "ios": "4.0.0"
         }
       },
       "expression": {
@@ -8130,8 +7816,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -8150,8 +7835,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -8173,8 +7857,7 @@
         "basic functionality": {
           "js": "0.10.0",
           "android": "2.0.1",
-          "ios": "2.0.0",
-          "macos": "0.1.0"
+          "ios": "2.0.0"
         }
       },
       "expression": {
@@ -8677,7 +8360,7 @@
       "minimum": 0,
       "maximum": 5,
       "units": "intensity",
-      "doc": "Strength of the emission. There is no emission for value 0. For value 1.0, only emissive component (no shading) is displayed and values above 1.0 produce light contribution to surrounding area, for some of the parts (e.g. doors). Expressions that depend on measure-light are not supported when using GeoJSON or vector tile as the model layer source.",
+      "doc": "Strength of the emission. There is no emission for value 0. For value 1.0, only emissive component (no shading) is displayed and values above 1.0 produce light contribution to surrounding area, for some of the parts (e.g. doors). Expressions that depend on measure-light are only supported as a global layer value (and not for each feature) when using GeoJSON or vector tile as the model layer source.",
       "expression": {
         "interpolated": true,
         "parameters": ["feature", "feature-state", "measure-light"]

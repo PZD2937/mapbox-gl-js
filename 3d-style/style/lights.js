@@ -1,10 +1,10 @@
 // @flow
 
-import type {LightsSpecification} from '../../src/style-spec/types.js';
-import type {Expression} from '../../src/style-spec/expression/expression.js';
 import {Evented} from '../../src/util/evented.js';
 import {Properties, Transitionable, Transitioning, PossiblyEvaluated} from '../../src/style/properties.js';
-import type {TransitionParameters} from '../../src/style/properties.js';
+
+import type {LightsSpecification} from '../../src/style-spec/types.js';
+import type {TransitionParameters, ConfigOptions} from '../../src/style/properties.js';
 import type EvaluationParameters from '../../src/style/evaluation_parameters.js';
 
 class Lights<P: Object> extends Evented {
@@ -14,19 +14,19 @@ class Lights<P: Object> extends Evented {
     _transitioning: Transitioning<P>;
     _options: LightsSpecification;
 
-    constructor(options: LightsSpecification, properties: Properties<P>, scope: string, configOptions?: ?Map<string, Expression>) {
+    constructor(options: LightsSpecification, properties: Properties<P>, scope: string, configOptions?: ?ConfigOptions) {
         super();
         this.scope = scope;
         this._options = options;
         this.properties = new PossiblyEvaluated(properties);
 
-        this._transitionable = new Transitionable(properties, new Map(configOptions));
-        this._transitionable.setTransitionOrValue<LightsSpecification['properties']>(options.properties);
+        this._transitionable = new Transitionable(properties, scope, new Map(configOptions));
+        this._transitionable.setTransitionOrValue<$PropertyType<LightsSpecification, 'properties'>>(options.properties);
         this._transitioning = this._transitionable.untransitioned();
     }
 
-    updateConfig(configOptions?: ?Map<string, Expression>) {
-        this._transitionable.setTransitionOrValue<LightsSpecification['properties']>(this._options.properties, new Map(configOptions));
+    updateConfig(configOptions?: ?ConfigOptions) {
+        this._transitionable.setTransitionOrValue<$PropertyType<LightsSpecification, 'properties'>>(this._options.properties, new Map(configOptions));
     }
 
     updateTransitions(parameters: TransitionParameters) {
@@ -42,13 +42,13 @@ class Lights<P: Object> extends Evented {
     }
 
     get(): LightsSpecification {
-        this._options.properties = (this._transitionable.serialize(): any);
+        this._options.properties = this._transitionable.serialize();
         return this._options;
     }
 
-    set(options: LightsSpecification, configOptions?: ?Map<string, Expression>) {
+    set(options: LightsSpecification, configOptions?: ?ConfigOptions) {
         this._options = options;
-        this._transitionable.setTransitionOrValue<LightsSpecification['properties']>(options.properties, configOptions);
+        this._transitionable.setTransitionOrValue<$PropertyType<LightsSpecification, 'properties'>>(options.properties, configOptions);
     }
 
     shadowsEnabled(): boolean {

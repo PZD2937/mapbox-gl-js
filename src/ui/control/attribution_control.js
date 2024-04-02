@@ -5,7 +5,8 @@ import {bindAll} from '../../util/util.js';
 import config from '../../util/config.js';
 import {getHashString} from '../hash.js';
 
-import type Map, {ControlPosition} from '../map.js';
+import type Map from '../map.js';
+import type {ControlPosition} from '../map.js';
 
 type Options = {
     compact?: boolean,
@@ -162,7 +163,7 @@ class AttributionControl {
             this.styleId = stylesheet.id;
         }
 
-        const sourceCaches = this._map.style._sourceCaches;
+        const sourceCaches = this._map.style._mergedSourceCaches;
         for (const id in sourceCaches) {
             const sourceCache = sourceCaches[id];
             if (sourceCache.used) {

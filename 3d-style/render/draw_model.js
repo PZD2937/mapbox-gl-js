@@ -1,14 +1,7 @@
 // @flow
 
-import type Painter from '../../src/render/painter.js';
-import type {CreateProgramParams} from '../../src/render/painter.js';
-import type SourceCache from '../../src/source/source_cache.js';
-import type ModelStyleLayer from '../style/style_layer/model_style_layer.js';
-
 import {modelUniformValues, modelDepthUniformValues} from './program/model_program.js';
-import type {Mesh, Node, ModelTexture} from '../data/model.js';
 import {ModelTraits, DefaultModelScale} from '../data/model.js';
-import type {DynamicDefinesType} from '../../src/render/program/program_uniforms.js';
 
 import Transform from '../../src/geo/transform.js';
 import EXTENT from '../../src/style-spec/data/extent.js';
@@ -17,13 +10,11 @@ import ColorMode from '../../src/gl/color_mode.js';
 import DepthMode from '../../src/gl/depth_mode.js';
 import CullFaceMode from '../../src/gl/cull_face_mode.js';
 import {mat4, vec3} from 'gl-matrix';
-import type {Mat4} from 'gl-matrix';
 import {getMetersPerPixelAtLatitude, mercatorZfromAltitude} from '../../src/geo/mercator_coordinate.js';
 import TextureSlots from './texture_slots.js';
 import {convertModelMatrixForGlobe} from '../util/model_util.js';
 import {clamp, warnOnce} from '../../src/util/util.js';
 import ModelBucket from '../data/bucket/model_bucket.js';
-import type VertexBuffer from '../../src/gl/vertex_buffer.js';
 import Tiled3dModelBucket from '../data/bucket/tiled_3d_model_bucket.js';
 import assert from 'assert';
 import {DEMSampler} from '../../src/terrain/elevation.js';
@@ -32,6 +23,15 @@ import {Aabb} from '../../src/util/primitives.js';
 import {getCutoffParams} from '../../src/render/cutoff.js';
 import {FOG_OPACITY_THRESHOLD} from '../../src/style/fog_helpers.js';
 import {ZoomDependentExpression} from '../../src/style-spec/expression/index.js';
+
+import type Painter from '../../src/render/painter.js';
+import type {CreateProgramParams} from '../../src/render/painter.js';
+import type SourceCache from '../../src/source/source_cache.js';
+import type ModelStyleLayer from '../style/style_layer/model_style_layer.js';
+import type {Mesh, Node, ModelTexture} from '../data/model.js';
+import type {DynamicDefinesType} from '../../src/render/program/program_uniforms.js';
+import type {Mat4} from 'gl-matrix';
+import type VertexBuffer from '../../src/gl/vertex_buffer.js';
 
 export default drawModels;
 
@@ -147,6 +147,8 @@ function drawMesh(sortedMesh: SortedMesh, painter: Painter, layer: ModelStyleLay
     const normalMatrix = mat4.invert([], lightingMatrix);
     mat4.transpose(normalMatrix, normalMatrix);
 
+    const emissiveStrength = layer.paint.get('model-emissive-strength').constantOr(0.0);
+
     const uniformValues = modelUniformValues(
         new Float32Array(sortedMesh.worldViewProjection),
         new Float32Array(lightingMatrix),
@@ -158,6 +160,7 @@ function drawMesh(sortedMesh: SortedMesh, painter: Painter, layer: ModelStyleLay
         pbr.metallicFactor,
         pbr.roughnessFactor,
         material,
+        emissiveStrength,
         layer);
 
     const programOptions: CreateProgramParams = {
@@ -604,6 +607,8 @@ function drawInstancedNode(painter: Painter, layer: ModelStyleLayer, node: Node,
                 const pbr = material.pbrMetallicRoughness;
                 const layerOpacity = layer.paint.get('model-opacity');
 
+                const emissiveStrength = layer.paint.get('model-emissive-strength').constantOr(0.0);
+
                 uniformValues = modelUniformValues(
                     coord.expandedProjMatrix,
                     Float32Array.from(node.matrix),
@@ -615,8 +620,10 @@ function drawInstancedNode(painter: Painter, layer: ModelStyleLayer, node: Node,
                     pbr.metallicFactor,
                     pbr.roughnessFactor,
                     material,
+                    emissiveStrength,
                     layer,
-                    cameraPos);
+                    cameraPos
+                );
                 if (shadowRenderer) {
                     if (!renderData.shadowUniformsInitialized) {
                         shadowRenderer.setupShadows(coord.toUnwrapped(), program, 'model-tile', coord.overscaledZ);
@@ -751,7 +758,8 @@ function drawBatchedModels(painter: Painter, source: SourceCache, layer: ModelSt
                 mat4.scale(normalMatrix, normalMatrix, normalScale);
 
                 const worldViewProjection = mat4.multiply([], tr.expandedFarZProjMatrix, modelMatrix);
-
+                const hasMapboxFeatures = modelTraits & ModelTraits.HasMapboxMeshFeatures;
+                const emissiveStrength = hasMapboxFeatures ? 0.0 : nodeInfo.evaluatedRMEA[0][2];
                 for (let i = 0; i < node.meshes.length; ++i) {
                     const mesh = node.meshes[i];
                     const isLight = i === node.lightMeshIndex;
@@ -771,8 +779,7 @@ function drawBatchedModels(painter: Painter, source: SourceCache, layer: ModelSt
                     };
                     const dynamicBuffers = [];
                     setupMeshDraw(((programOptions.defines: any): Array<string>), dynamicBuffers, mesh, painter);
-
-                    if (!(modelTraits & ModelTraits.HasMapboxMeshFeatures)) {
+                    if (!hasMapboxFeatures) {
                         (programOptions.defines: any).push('DIFFUSE_SHADED');
                     }
 
@@ -814,6 +821,7 @@ function drawBatchedModels(painter: Painter, source: SourceCache, layer: ModelSt
                     pbr.metallicFactor = 0.9;
                     pbr.roughnessFactor = 0.5;
 
+                    // Set emissive strength to zero for landmarks, as it is already used embedded in the PBR buffer.
                     const uniformValues = modelUniformValues(
                             new Float32Array(worldViewProjection),
                             new Float32Array(lightingMatrix),
@@ -825,6 +833,7 @@ function drawBatchedModels(painter: Painter, source: SourceCache, layer: ModelSt
                             pbr.metallicFactor,
                             pbr.roughnessFactor,
                             material,
+                            emissiveStrength,
                             layer
                     );
 
