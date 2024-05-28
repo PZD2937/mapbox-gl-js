@@ -1,7 +1,6 @@
 // @flow
 
-import LngLat from './lng_lat.js';
-import LngLatBounds from './lng_lat_bounds.js';
+import LngLat, {LngLatBounds} from './lng_lat.js';
 import MercatorCoordinate, {mercatorXfromLng, mercatorYfromLat, mercatorZfromAltitude, latFromMercatorY, MAX_MERCATOR_LATITUDE, circumferenceAtLatitude} from './mercator_coordinate.js';
 import {getProjection} from './projection/index.js';
 import {tileAABB} from '../geo/projection/tile_transform.js';
@@ -10,7 +9,7 @@ import {wrap, clamp, pick, radToDeg, degToRad, getAABBPointSquareDist, furthestT
 import {number as interpolate} from '../style-spec/util/interpolate.js';
 import EXTENT from '../style-spec/data/extent.js';
 import {vec4, mat4, mat2, vec3, quat} from 'gl-matrix';
-import {Frustum, FrustumCorners, Ray} from '../util/primitives.js';
+import {Frustum, FrustumCorners, Ray, Aabb} from '../util/primitives.js';
 import EdgeInsets from './edge_insets.js';
 import {FreeCamera, FreeCameraOptions, orientationFromFrame} from '../ui/free_camera.js';
 import assert from 'assert';
@@ -18,12 +17,14 @@ import getProjectionAdjustments, {getProjectionAdjustmentInverted, getScaleAdjus
 import {getPixelsToTileUnitsMatrix} from '../source/pixels_to_tile_units.js';
 import {UnwrappedTileID, OverscaledTileID, CanonicalTileID} from '../source/tile_id.js';
 import {
-    calculateGlobeMatrix,
-    polesInViewport,
-    aabbForTileOnGlobe,
     GLOBE_ZOOM_THRESHOLD_MIN,
     GLOBE_ZOOM_THRESHOLD_MAX,
     GLOBE_SCALE_MATCH_LATITUDE
+} from '../geo/projection/globe_constants.js';
+import {
+    calculateGlobeMatrix,
+    polesInViewport,
+    aabbForTileOnGlobe,
 } from '../geo/projection/globe_util.js';
 import {projectClamped} from '../symbol/projection.js';
 
@@ -34,7 +35,6 @@ import type Tile from '../source/tile.js';
 import type {ProjectionSpecification} from '../style-spec/types.js';
 import type {FeatureDistanceData} from '../style-spec/feature_filter/index.js';
 import type {Mat4, Vec3, Vec4, Quat} from 'gl-matrix';
-import type {Aabb} from '../util/primitives';
 
 const NUM_WORLD_COPIES = 3;
 export const DEFAULT_MIN_ZOOM = 0;
@@ -189,6 +189,7 @@ class Transform {
 
     cameraFrustum: Frustum;
     frustumCorners: FrustumCorners;
+    _tileCoverLift: number;
 
     freezeTileCoverage: boolean;
     cameraElevationReference: ElevationReference;
@@ -267,6 +268,8 @@ class Transform {
         this._pixelsPerMercatorPixel = 1.0;
         this.globeRadius = 0;
         this.globeCenterInViewSpace = [0, 0, 0];
+        this._tileCoverLift = 0;
+        this.freezeTileCoverage = false;
 
         this._coverTileCache = new CoverTileCache();
         this._paintStartTimeStamp = -1;
@@ -310,7 +313,7 @@ class Transform {
         return this.projection.name !== 'globe' && this._orthographicProjectionAtLowPitch && this.pitch < OrthographicPitchTranstionValue;
     }
     get elevation(): ?Elevation { return this._elevation; }
-    set elevation(elevation: ?Elevation) {
+    set elevation(elevation: Elevation | null | void) {
         if (this._elevation === elevation) return;
         this._elevation = elevation;
         this._updateCameraOnTerrain();
@@ -407,7 +410,7 @@ class Transform {
     get renderWorldCopies(): boolean {
         return this._renderWorldCopies && this.projection.supportsWorldCopies === true;
     }
-    set renderWorldCopies(renderWorldCopies?: ?boolean) {
+    set renderWorldCopies(renderWorldCopies: ?boolean | void) {
         if (renderWorldCopies === undefined) {
             renderWorldCopies = true;
         } else if (renderWorldCopies === null) {
@@ -539,6 +542,12 @@ class Transform {
         this.scale = this.zoomScale(z);
         this.tileZoom = Math.floor(z);
         this.zoomFraction = z - this.tileZoom;
+    }
+
+    get tileCoverLift(): number { return this._tileCoverLift; }
+    set tileCoverLift(lift: number) {
+        if (this._tileCoverLift === lift) return;
+        this._tileCoverLift = lift;
     }
 
     _updateCameraOnTerrain() {
@@ -2438,7 +2447,7 @@ class Transform {
         // drape raster overscale artifacts or cut terrain (see under it) as it gets clipped on
         // near plane. Returned value is in mercator coordinates.
         const MAX_DRAPE_OVERZOOM = 4;
-        const zoom = Math.min((this._seaLevelZoom != null ? this._seaLevelZoom : this._zoom) + MAX_DRAPE_OVERZOOM, this._maxZoom);
+        const zoom = Math.min((this._seaLevelZoom != null ? this._seaLevelZoom : this._zoom), this._maxZoom) + MAX_DRAPE_OVERZOOM;
         return this._mercatorZfromZoom(zoom);
     }
 

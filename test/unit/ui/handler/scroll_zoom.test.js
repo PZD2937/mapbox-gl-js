@@ -1,4 +1,4 @@
-import {describe, test, expect, waitFor, vi, createMap, equalWithPrecision} from "../../../util/vitest.js";
+import {describe, test, expect, waitFor, vi, createMap, equalWithPrecision, beforeEach} from "../../../util/vitest.js";
 import browser from '../../../../src/util/browser.js';
 import simulate from '../../../util/simulate_interaction.js';
 import {createConstElevationDEM, setMockElevationTerrain} from '../../../util/dem_mock.js';
@@ -14,8 +14,11 @@ function createMapWithCooperativeGestures() {
 }
 
 describe('ScrollZoomHandler', () => {
-    let now = 1555555555555;
-    vi.spyOn(browser, 'now').mockImplementation(() => now);
+    let now;
+    beforeEach(() => {
+        now = 1555555555555;
+        vi.spyOn(browser, 'now').mockImplementation(() => now);
+    });
 
     test('Zooms for single mouse wheel tick', () => {
         const map = createMap({
@@ -165,6 +168,32 @@ describe('ScrollZoomHandler', () => {
             map.remove();
         });
 
+        test('Should keep maxZoom level during pitch', async () => {
+            vi.useFakeTimers();
+
+            const map = createMap({
+                interactive: true,
+                maxZoom: 12,
+                zoom: 11,
+                pitch: 60,
+            });
+
+            await waitFor(map, "style.load");
+
+            setMockElevationTerrain(map, zeroElevationDem, tileSize);
+
+            await waitFor(map, "render");
+
+            for (let i = 0; i < 10; i++) {
+                simulate.wheel(map.getCanvas(), {type: 'wheel', deltaY: -100});
+                map._renderTaskQueue.run();
+            }
+
+            equalWithPrecision(map.transform.zoom, 12, 0.001);
+
+            map.remove();
+        });
+
         test('Consistent deltas if elevation changes', async () => {
             const map = createMap({
                 interactive: true
@@ -235,7 +264,7 @@ describe('ScrollZoomHandler', () => {
                 map._renderTaskQueue.run();
             }
 
-            expect(fixedNum(map.transform.zoom, 5)).toEqual(2.74029);
+            expect(fixedNum(map.transform.zoom, 5)).toEqual(2.46106);
 
             map.remove();
         });

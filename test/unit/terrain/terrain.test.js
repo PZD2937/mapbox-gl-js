@@ -1,4 +1,4 @@
-import {describe, test, beforeAll, beforeEach, afterEach, expect, waitFor, vi, createMap} from "../../util/vitest.js";
+import {describe, test, beforeAll, beforeEach, afterEach, afterAll, expect, waitFor, vi, createMap} from "../../util/vitest.js";
 import {getNetworkWorker, http, HttpResponse, getPNGResponse} from '../../util/network.js';
 import {extend} from '../../../src/util/util.js';
 import DEMData from '../../../src/data/dem_data.js';
@@ -17,7 +17,7 @@ import Popup from '../../../src/ui/popup.js';
 import simulate from '../../util/simulate_interaction.js';
 import browser from '../../../src/util/browser.js';
 import * as DOM from '../../../src/util/dom.js';
-import Map, {AVERAGE_ELEVATION_SAMPLING_INTERVAL, AVERAGE_ELEVATION_EASE_TIME} from '../../../src/ui/map.js';
+import {Map, AVERAGE_ELEVATION_SAMPLING_INTERVAL, AVERAGE_ELEVATION_EASE_TIME} from '../../../src/ui/map.js';
 import {createConstElevationDEM, setMockElevationTerrain} from '../../util/dem_mock.js';
 // eslint-disable-next-line import/no-unresolved
 import vectorStub from '../../util/fixtures/10/301/384.pbf?arraybuffer';
@@ -93,6 +93,10 @@ beforeAll(async () => {
 
 afterEach(() => {
     networkWorker.resetHandlers();
+});
+
+afterAll(() => {
+    networkWorker.stop();
 });
 
 describe('Elevation', () => {
@@ -914,7 +918,7 @@ describe('Drag pan ortho', () => {
         simulate.mouseup(map.getCanvas());
         map._renderTaskQueue.run();
         expect(dragend).toHaveBeenCalledTimes(2);
-        assertAlmostEqual(map.getZoom(), 13.37, 0.01);
+        assertAlmostEqual(map.getZoom(), 13.35, 0.01);
 
         map.setPitch(0);
         simulate.mousedown(map.getCanvas());
@@ -925,7 +929,7 @@ describe('Drag pan ortho', () => {
         simulate.mouseup(map.getCanvas());
         map._renderTaskQueue.run();
         expect(dragend).toHaveBeenCalledTimes(3);
-        assertAlmostEqual(map.getZoom(), 13.37, 0.01); // no pitch, keep old zoom.
+        assertAlmostEqual(map.getZoom(), 13.35, 0.01); // no pitch, keep old zoom.
 
         map.remove();
     });

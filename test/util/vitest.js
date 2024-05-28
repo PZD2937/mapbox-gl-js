@@ -1,11 +1,48 @@
 import {describe, test, expect, beforeEach, beforeAll, afterEach, afterAll, vi} from 'vitest';
-import Map from '../../src/ui/map.js';
+import {Map} from '../../src/ui/map.js';
 import {extend} from '../../src/util/util.js';
 
 export function waitFor(evented, event) {
     return new Promise(resolve => {
         evented.once(event, resolve);
     });
+}
+
+export function createStyleJSON(options) {
+    return {
+        version: 8,
+        sources: {},
+        layers: [],
+        ...options
+    };
+}
+
+export function doneAsync() {
+    const doneRef = {
+        reject: null,
+        resolve: null
+    };
+
+    const wait = new Promise((resolve, reject) => {
+        doneRef.resolve = resolve;
+        doneRef.reject = reject;
+    });
+
+    const withAsync = (fn) => {
+        return async (...args) => {
+            try {
+                await fn(...args, doneRef);
+            } catch (err) {
+                doneRef.reject(err);
+            }
+        };
+    };
+
+    return {
+        wait,
+        doneRef,
+        withAsync
+    };
 }
 
 export function createMap(options, callback) {

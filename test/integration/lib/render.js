@@ -221,7 +221,10 @@ async function renderMap(style, options) {
     window._renderTestNow = 0;
     mapboxgl.setNow(window._renderTestNow);
 
-    if (options.debug) map.showTileBoundaries = true;
+    if (options.debug) {
+        map.showTileBoundaries = true;
+        map.showParseStatus = false;
+    }
     if (options.showOverdrawInspector) map.showOverdrawInspector = true;
     if (options.showTerrainWireframe) map.showTerrainWireframe = true;
     if (options.showLayers2DWireframe) map.showLayers2DWireframe = true;
@@ -241,9 +244,9 @@ async function renderMap(style, options) {
     // 3. Run the operations on the map
     await applyOperations(map, options);
 
-    // 4. Wait until the map is idle
+    // 4. Wait until the map is idle and ensure that call stack is empty
     map.repaint = true;
-    await new Promise(resolve => map._requestDomTask(resolve));
+    await new Promise(resolve => requestAnimationFrame(map._requestDomTask.bind(map, resolve)));
 
     return map;
 }

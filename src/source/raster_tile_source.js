@@ -13,14 +13,15 @@ import {makeFQID} from '../util/fqid.js';
 
 import type {Source} from './source.js';
 import type {OverscaledTileID} from './tile_id.js';
-import type Map from '../ui/map.js';
+import type {Map} from '../ui/map.js';
 import type Dispatcher from '../util/dispatcher.js';
 import type Tile from './tile.js';
 import type {Callback} from '../types/callback.js';
 import type {Cancelable} from '../types/cancelable.js';
 import type {
     RasterSourceSpecification,
-    RasterDEMSourceSpecification
+    RasterDEMSourceSpecification,
+    RasterArraySourceSpecification
 } from '../style-spec/types.js';
 import Texture from '../render/texture.js';
 import {CanonicalTileID} from "./tile_id.js";
@@ -52,7 +53,7 @@ import {loadRasterTile} from "./raster_tile_worker_source.js";
  * @see [Example: Add a WMS source](https://docs.mapbox.com/mapbox-gl-js/example/wms/)
  */
 class RasterTileSource extends Evented implements Source {
-    type: 'raster' | 'raster-dem';
+    type: 'raster' | 'raster-dem' | 'raster-array';
     id: string;
     scope: string;
     minzoom: number;
@@ -74,10 +75,10 @@ class RasterTileSource extends Evented implements Source {
     showDebugTileLoadTime: ?boolean;
 
     _loaded: boolean;
-    _options: RasterSourceSpecification | RasterDEMSourceSpecification;
+    _options: RasterSourceSpecification | RasterDEMSourceSpecification | RasterArraySourceSpecification;
     _tileJSONRequest: ?Cancelable;
 
-    constructor(id: string, options: RasterSourceSpecification | RasterDEMSourceSpecification, dispatcher: Dispatcher, eventedParent: Evented) {
+    constructor(id: string, options: RasterSourceSpecification | RasterDEMSourceSpecification | RasterArraySourceSpecification, dispatcher: Dispatcher, eventedParent: Evented) {
         super();
         this.id = id;
         this.dispatcher = dispatcher;

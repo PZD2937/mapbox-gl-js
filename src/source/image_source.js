@@ -12,13 +12,13 @@ import Texture, {UserManagedTexture} from '../render/texture.js';
 import MercatorCoordinate, {MAX_MERCATOR_LATITUDE} from '../geo/mercator_coordinate.js';
 import browser from '../util/browser.js';
 import tileTransform, {getTilePoint} from '../geo/projection/tile_transform.js';
-import {GLOBE_VERTEX_GRID_SIZE} from '../geo/projection/globe_util.js';
+import {GLOBE_VERTEX_GRID_SIZE} from '../geo/projection/globe_constants.js';
 import {mat3, vec3} from 'gl-matrix';
 import LngLat from '../geo/lng_lat.js';
 
 import type {Source} from './source.js';
 import type {CanvasSourceSpecification} from './canvas_source.js';
-import type Map from '../ui/map.js';
+import type {Map} from '../ui/map.js';
 import type Dispatcher from '../util/dispatcher.js';
 import type Tile from './tile.js';
 import type {Callback} from '../types/callback.js';
@@ -326,9 +326,9 @@ class ImageSource extends Evented implements Source {
      * @param {Object} options Options object.
      * @param {string} [options.url] Required image URL.
      * @param {Array<Array<number>>} [options.coordinates] Four geographical coordinates,
-     *     represented as arrays of longitude and latitude numbers, which define the corners of the image.
-     *     The coordinates start at the top left corner of the image and proceed in clockwise order.
-     *     They do not have to represent a rectangle.
+     * represented as arrays of longitude and latitude numbers, which define the corners of the image.
+     * The coordinates start at the top left corner of the image and proceed in clockwise order.
+     * They do not have to represent a rectangle.
      * @returns {ImageSource} Returns itself to allow for method chaining.
      * @example
      * // Add to an image source to the map with some initial URL and coordinates
@@ -415,9 +415,9 @@ class ImageSource extends Evented implements Source {
      * Sets the image's coordinates and re-renders the map.
      *
      * @param {Array<Array<number>>} coordinates Four geographical coordinates,
-     *     represented as arrays of longitude and latitude numbers, which define the corners of the image.
-     *     The coordinates start at the top left corner of the image and proceed in clockwise order.
-     *     They do not have to represent a rectangle.
+     * represented as arrays of longitude and latitude numbers, which define the corners of the image.
+     * The coordinates start at the top left corner of the image and proceed in clockwise order.
+     * They do not have to represent a rectangle.
      * @returns {ImageSource} Returns itself to allow for method chaining.
      * @example
      * // Add an image source to the map with some initial coordinates

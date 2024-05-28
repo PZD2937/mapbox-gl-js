@@ -22,7 +22,6 @@
     "eslint-plugin-jsdoc"
   ],
   "rules": {
-    "linebreak-style": "off",
     // no-duplicate-imports doesn't play well with Flow
     // https://github.com/babel/eslint-plugin-babel/issues/59
     "no-duplicate-imports": "off",
@@ -86,7 +85,7 @@
     }],
     "no-multiple-empty-lines": [ "error", {
         "max": 1
-    }]
+    }],
   },
   "settings": {
     "jsdoc":{
@@ -131,6 +130,7 @@
         "jsdoc/require-property-name": "off",
         "jsdoc/require-property-type": "off",
         "jsdoc/require-returns-type": "off"
+
       }
     },
     {
@@ -144,9 +144,8 @@
         "src/ui/control/**",
         "src/ui/handler/**",
         "src/geo/lng_lat.js",
-        "src/geo/lng_lat_bounds.js",
         "src/geo/mercator_coordinate.js",
-        "src/source/**"
+        "src/source/**",
       ],
       "rules": {
         "jsdoc/check-param-names": "error",
@@ -162,7 +161,7 @@
             "matchingFileName": "src/fake_filename_for_jsdoc_examples",
             "rejectExampleCodeRegex": "<script>"
         }],
-        "jsdoc/check-line-alignment": ["error", "any", {"wrapIndent": "    "}],
+        "jsdoc/check-line-alignment": ["error"],
         "jsdoc/check-property-names": "error",
         "jsdoc/check-types": "error",
         "jsdoc/tag-lines": ["error", "any", {"startLines": 1}],
@@ -172,7 +171,7 @@
         "jsdoc/require-property-description": "error",
         "jsdoc/require-property-name": "error",
         "jsdoc/require-property-type": "error",
-        "jsdoc/require-returns-type": "error"
+        "jsdoc/require-returns-type": "error",
       }
     },
     {
@@ -203,6 +202,14 @@
           {
             "selector": "ClassProperty[value]",
             "message": "ClassProperty values are not allowed."
+          },
+          {
+            "selector": "LogicalExpression[operator='??']",
+            "message": "Nullish coalescing is not allowed."
+          },
+          {
+            "selector": "ChainExpression",
+            "message": "Optional chaining is now allowed."
           }
         ]
       }

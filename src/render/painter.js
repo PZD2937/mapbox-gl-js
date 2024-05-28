@@ -32,7 +32,8 @@ import line from './draw_line.js';
 import fill from './draw_fill.js';
 import fillExtrusion from './draw_fill_extrusion.js';
 import hillshade from './draw_hillshade.js';
-import raster from './draw_raster.js';
+import raster, {prepare as prepareRaster} from './draw_raster.js';
+import rasterParticle, {prepare as prepareRasterParticle} from './draw_raster_particle.js';
 import background from './draw_background.js';
 import debug, {drawDebugPadding, drawDebugQueryGeometry} from './draw_debug.js';
 import custom from './draw_custom.js';
@@ -48,34 +49,10 @@ import type {Source} from '../source/source.js';
 import type {CutoffParams} from '../render/cutoff.js';
 
 // 3D-style related
-import model, {upload as modelUpload} from '../../3d-style/render/draw_model.js';
+import model, {prepare as modelPrepare} from '../../3d-style/render/draw_model.js';
 import {lightsUniformValues} from '../../3d-style/render/lights.js';
-
 import {ShadowRenderer} from '../../3d-style/render/shadow_renderer.js';
-
 import {WireframeDebugCache} from "./wireframe_cache.js";
-
-import {TrackedParameters} from '../tracked-parameters/tracked_parameters.js';
-
-const draw = {
-    symbol,
-    circle,
-    heatmap,
-    line,
-    fill,
-    'fill-extrusion': fillExtrusion,
-    hillshade,
-    raster,
-    background,
-    sky,
-    debug,
-    custom,
-    model
-};
-
-const upload = {
-    modelUpload
-};
 
 import type Transform from '../geo/transform.js';
 import type {OverscaledTileID, UnwrappedTileID} from '../source/tile_id.js';
@@ -91,6 +68,7 @@ import type ResolvedImage from '../style-spec/expression/types/resolved_image.js
 import type {DynamicDefinesType} from './program/program_uniforms.js';
 import {FOG_OPACITY_THRESHOLD} from '../style/fog_helpers.js';
 import type {ContextOptions} from '../gl/context.js';
+import type {ITrackedParameters} from 'tracked_parameters_proxy';
 
 export type RenderPass = 'offscreen' | 'opaque' | 'translucent' | 'sky' | 'shadow' | 'light-beam';
 export type CanvasCopyInstances = {
@@ -114,6 +92,7 @@ type WireframeOptions = {
 type PainterOptions = {
     showOverdrawInspector: boolean,
     showTileBoundaries: boolean,
+    showParseStatus: boolean,
     showQueryGeometry: boolean,
     showTileAABBs: boolean,
     showPadding: boolean,
@@ -135,6 +114,29 @@ type TileBoundsBuffers = {|
 |};
 
 type GPUTimers = {[layerId: string]: any};
+
+const draw = {
+    symbol,
+    circle,
+    heatmap,
+    line,
+    fill,
+    'fill-extrusion': fillExtrusion,
+    hillshade,
+    raster,
+    'raster-particle': rasterParticle,
+    background,
+    sky,
+    debug,
+    custom,
+    model
+};
+
+const prepare = {
+    model: modelPrepare,
+    raster: prepareRaster,
+    'raster-particle': prepareRasterParticle
+};
 
 /**
  * Initialize a new painter object.
@@ -201,6 +203,7 @@ class Painter {
     minCutoffZoom: number;
     renderDefaultNorthPole: boolean;
     renderDefaultSouthPole: boolean;
+    renderElevatedRasterBackface: boolean;
     _fogVisible: boolean;
     _cachedTileFogOpacities: {[number]: [number, number]};
 
@@ -208,27 +211,69 @@ class Painter {
 
     _wireframeDebugCache: WireframeDebugCache;
 
-    tp: TrackedParameters;
+    tp: ITrackedParameters;
 
     _debugParams: {
         showTerrainProxyTiles: boolean;
+        fpsWindow: number;
+        continousRedraw: boolean;
+        enabledLayers: any;
     }
 
-    constructor(gl: WebGL2RenderingContext, contextCreateOptions: ContextOptions, transform: Transform, tp: TrackedParameters) {
+    _timeStamp: number;
+    _averageFPS: number;
+
+    _fpsHistory: Array<number>;
+
+    constructor(gl: WebGL2RenderingContext, contextCreateOptions: ContextOptions, transform: Transform, tp: ITrackedParameters) {
         this.context = new Context(gl, contextCreateOptions);
         this.transform = transform;
         this._tileTextures = {};
         this.frameCopies = [];
         this.loadTimeStamps = [];
         this.tp = tp;
+        this._timeStamp = new Date().getTime();
+        this._averageFPS = 0;
+        this._fpsHistory = [];
 
         this._debugParams = {
-            showTerrainProxyTiles: false
+            showTerrainProxyTiles: false,
+            fpsWindow: 30,
+            continousRedraw:false,
+            enabledLayers: {
+            }
         };
+
+        const layerTypes = ["fill", "line", "symbol", "circle", "heatmap", "fill-extrusion", "raster", "raster-particle", "hillshade", "model", "background", "sky"];
+
+        for (const layerType of layerTypes) {
+            this._debugParams.enabledLayers[layerType] = true;
+        }
 
         tp.registerParameter(this._debugParams, ["Terrain"], "showTerrainProxyTiles", {}, () => {
             this.style.map.triggerRepaint();
         });
+
+        tp.registerParameter(this._debugParams, ["FPS"], "fpsWindow", {min: 1, max: 100, step: 1});
+        tp.registerBinding(this._debugParams, ["FPS"], 'continousRedraw', {
+            readonly:true,
+            label: "continuous redraw"
+        });
+        tp.registerBinding(this, ["FPS"], '_averageFPS', {
+            readonly:true,
+            label: "value"
+        });
+        tp.registerBinding(this, ["FPS"], '_averageFPS', {
+            readonly:true,
+            label: "graph",
+            view:'graph',
+            min: 0,
+            max: 200
+        });
+        // Layers
+        for (const layerType of layerTypes) {
+            tp.registerParameter(this._debugParams.enabledLayers, ["Debug", "Layers"], layerType);
+        }
 
         this.setup();
 
@@ -572,15 +617,43 @@ class Painter {
         return this.currentLayer < this.opaquePassCutoff;
     }
 
+    updateAverageFPS() {
+        const curTime = new Date().getTime();
+        const dt = curTime - this._timeStamp;
+        this._timeStamp = curTime;
+
+        const fps = dt === 0 ? 0 : 1000.0 / dt;
+
+        this._fpsHistory.push(fps);
+        if (this._fpsHistory.length > this._debugParams.fpsWindow) {
+            this._fpsHistory.splice(0, this._fpsHistory.length - this._debugParams.fpsWindow);
+        }
+
+        this._averageFPS = Math.round(this._fpsHistory.reduce((accum: number, current: number) => { return accum + current / this._fpsHistory.length; }, 0));
+    }
+
     render(style: Style, options: PainterOptions) {
+        Debug.run(() => { this.updateAverageFPS(); });
+
         // Update debug cache, i.e. clear all unused buffers
         this._wireframeDebugCache.update(this.frameCounter);
 
+        this._debugParams.continousRedraw = style.map.repaint;
         this.style = style;
         this.options = options;
 
         const layers = this.style._mergedLayers;
-        const layerIds = this.style.order;
+
+        const layerIds = this.style.order.filter((id) => {
+            const layer = layers[id];
+
+            if (layer.type in this._debugParams.enabledLayers) {
+                return this._debugParams.enabledLayers[layer.type];
+            }
+
+            return true;
+        });
+
         const orderedLayers = layerIds.map(id => layers[id]);
         const sourceCaches = this.style._mergedSourceCaches;
 
@@ -605,6 +678,11 @@ class Painter {
             }
         }
 
+        for (const layer of orderedLayers) {
+            if (layer.isHidden(this.transform.zoom)) continue;
+            this.prepareLayer(layer);
+        }
+
         const coordsAscending: {[_: string]: Array<OverscaledTileID>} = {};
         const coordsDescending: {[_: string]: Array<OverscaledTileID>} = {};
         const coordsDescendingSymbol: {[_: string]: Array<OverscaledTileID>} = {};
@@ -622,11 +700,10 @@ class Painter {
 
         const getLayerSource = (layer: StyleLayer) => {
             const cache = this.style.getLayerSourceCache(layer);
-            if (!cache || !cache.used) {
-                return null;
-            }
+            if (!cache || !cache.used) return null;
             return cache.getSource();
         };
+
         if (conflationSourcesInStyle) {
             const conflationLayersInStyle = [];
 
@@ -742,13 +819,6 @@ class Painter {
             this.globeSharedBuffers = new GlobeSharedBuffers(this.context);
         }
 
-        // upload pass
-        for (const layer of orderedLayers) {
-            if (layer.isHidden(this.transform.zoom)) continue;
-            const sourceCache = style.getLayerSourceCache(layer);
-            this.uploadLayer(this, layer, sourceCache);
-        }
-
         if (this.style.fog && this.transform.projection.supportsFog) {
             if (!this._atmosphere) {
                 this._atmosphere = new Atmosphere(this);
@@ -776,7 +846,7 @@ class Painter {
             if (!layer.hasOffscreenPass() || layer.isHidden(this.transform.zoom)) continue;
 
             const coords = sourceCache ? coordsDescending[sourceCache.id] : undefined;
-            if (!(layer.type === 'custom' || layer.type === 'raster' || layer.isSky()) && !(coords && coords.length)) continue;
+            if (!(layer.type === 'custom' || layer.type === 'raster' || layer.type === 'raster-particle' || layer.isSky()) && !(coords && coords.length)) continue;
 
             this.renderLayer(this, sourceCache, layer, coords);
         }
@@ -876,6 +946,37 @@ class Painter {
         // Draw all other layers bottom-to-top.
         this.renderPass = 'translucent';
 
+        function coordsForTranslucentLayer(layer: StyleLayer, sourceCache?: SourceCache) {
+            // For symbol layers in the translucent pass, we add extra tiles to the renderable set
+            // for cross-tile symbol fading. Symbol layers don't use tile clipping, so no need to render
+            // separate clipping masks
+            let coords: ?Array<OverscaledTileID>;
+
+            if (sourceCache) {
+                const coordsSet = layer.type === 'symbol' ? coordsDescendingSymbol :
+                    (layer.is3D() ? coordsSortedByDistance : coordsDescending);
+
+                coords = coordsSet[sourceCache.id];
+            }
+            return coords;
+        }
+
+        // Render elevated raster layers behind the globe
+        const isGlobe = this.transform.projection.name === 'globe';
+        if (isGlobe) {
+            this.renderElevatedRasterBackface = true;
+            this.currentLayer = 0;
+            while (this.currentLayer < layerIds.length) {
+                const layer = orderedLayers[this.currentLayer];
+                if (layer.type === "raster") {
+                    const sourceCache = style.getLayerSourceCache(layer);
+                    this.renderLayer(this, sourceCache, layer, coordsForTranslucentLayer(layer, sourceCache));
+                }
+                ++this.currentLayer;
+            }
+            this.renderElevatedRasterBackface = false;
+        }
+
         this.currentLayer = 0;
         this.firstLightBeamLayer = Number.MAX_SAFE_INTEGER;
 
@@ -909,20 +1010,8 @@ class Painter {
                 continue;
             }
 
-            // For symbol layers in the translucent pass, we add extra tiles to the renderable set
-            // for cross-tile symbol fading. Symbol layers don't use tile clipping, so no need to render
-            // separate clipping masks
-            let coords: ?Array<OverscaledTileID>;
-
-            if (sourceCache) {
-                const coordsSet = layer.type === 'symbol' ? coordsDescendingSymbol :
-                    (layer.is3D() ? coordsSortedByDistance : coordsDescending);
-
-                coords = coordsSet[sourceCache.id];
-            }
-
             this._renderTileClippingMasks(layer, sourceCache, sourceCache ? coordsAscending[sourceCache.id] : undefined);
-            this.renderLayer(this, sourceCache, layer, coords);
+            this.renderLayer(this, sourceCache, layer, coordsForTranslucentLayer(layer, sourceCache));
 
             // Render ground shadows after the last shadow caster layer
             if (!terrain && shadowRenderer && shadowLayers > 0 && layer.hasShadowPass() && --shadowLayers === 0) {
@@ -952,7 +1041,7 @@ class Painter {
         }
 
         if (this.options.showTileBoundaries || this.options.showQueryGeometry || this.options.showTileAABBs) {
-            //Use source with highest maxzoom
+            // Use source with highest maxzoom
             let selectedSource = null;
             orderedLayers.forEach((layer) => {
                 const sourceCache = style.getLayerSourceCache(layer);
@@ -964,7 +1053,7 @@ class Painter {
             });
             if (selectedSource) {
                 if (this.options.showTileBoundaries) {
-                    draw.debug(this, selectedSource, selectedSource.getVisibleCoordinates(), Color.red, false);
+                    draw.debug(this, selectedSource, selectedSource.getVisibleCoordinates(), Color.red, false, this.options.showParseStatus);
                 }
 
                 Debug.run(() => {
@@ -980,7 +1069,7 @@ class Painter {
         }
 
         if (this.terrain && this._debugParams.showTerrainProxyTiles) {
-            draw.debug(this, this.terrain.proxySourceCache, this.terrain.proxyCoords, new Color(1.0, 0.8, 0.1, 1.0), true);
+            draw.debug(this, this.terrain.proxySourceCache, this.terrain.proxyCoords, new Color(1.0, 0.8, 0.1, 1.0), true, this.options.showParseStatus);
         }
 
         if (this.options.showPadding) {
@@ -1002,20 +1091,25 @@ class Painter {
         }
     }
 
-    uploadLayer(painter: Painter, layer: StyleLayer, sourceCache?: SourceCache) {
+    prepareLayer(layer: StyleLayer) {
         this.gpuTimingStart(layer);
-        if (!painter.transform.projection.unsupportedLayers || !painter.transform.projection.unsupportedLayers.includes(layer.type) ||
-            (painter.terrain && layer.type === 'custom')) {
-            if (upload[`${layer.type}Upload`]) {
-                upload[`${layer.type}Upload`](painter, sourceCache, layer.scope);
-            }
+
+        const {unsupportedLayers} = this.transform.projection;
+        const isLayerSupported = unsupportedLayers ? !unsupportedLayers.includes(layer.type) : true;
+        const isCustomLayerWithTerrain = this.terrain && layer.type === 'custom';
+
+        if (prepare[layer.type] && (isLayerSupported || isCustomLayerWithTerrain)) {
+            const sourceCache = this.style.getLayerSourceCache(layer);
+            prepare[layer.type](layer, sourceCache, this);
         }
+
         this.gpuTimingEnd();
     }
 
     renderLayer(painter: Painter, sourceCache?: SourceCache, layer: StyleLayer, coords?: Array<OverscaledTileID>) {
         if (layer.isHidden(this.transform.zoom)) return;
-        if (layer.type !== 'background' && layer.type !== 'sky' && layer.type !== 'custom' && layer.type !== 'model' && layer.type !== 'raster' && !(coords && coords.length)) return;
+        if (layer.type !== 'background' && layer.type !== 'sky' && layer.type !== 'custom' && layer.type !== 'model' && layer.type !== 'raster' && layer.type !== 'raster-particle' && !(coords && coords.length)) return;
+
         this.id = layer.id;
 
         this.gpuTimingStart(layer);

@@ -1,4 +1,4 @@
-import {describe, test, beforeAll, afterEach, expect, waitFor, vi} from "../../util/vitest.js";
+import {describe, test, beforeAll, afterEach, afterAll, expect, waitFor, vi} from "../../util/vitest.js";
 import {getNetworkWorker, http, HttpResponse} from '../../util/network.js';
 import Tile from '../../../src/source/tile.js';
 import Style from '../../../src/style/style.js';
@@ -48,7 +48,55 @@ afterEach(() => {
     networkWorker.resetHandlers();
 });
 
+afterAll(() => {
+    networkWorker.stop();
+});
+
 describe('Style#loadURL', () => {
+    test('wraps style with schema into import', async () => {
+        const style = new Style(new StubMap());
+
+        const initialStyle = createStyleJSON({
+            name: 'Mapbox Standard',
+            schema: {
+                lightPreset: {type: 'string', default: 'day'}
+            }
+        });
+
+        networkWorker.use(http.get('/style.json', () => HttpResponse.json(initialStyle)));
+
+        await new Promise(resolve => {
+            style.once('style.load', () => {
+                const rootStyle = style.serialize();
+                expect(rootStyle.imports).toEqual([{id: 'basemap', url: '', data: initialStyle}]);
+                resolve();
+            });
+
+            style.loadURL('/style.json');
+        });
+    });
+
+    test('wraps fragment into import', async () => {
+        const style = new Style(new StubMap());
+
+        const initialStyle = createStyleJSON({
+            name: 'Mapbox Standard',
+            fragment: true,
+        });
+
+        networkWorker.use(http.get('/style.json', () => HttpResponse.json(initialStyle)));
+
+        await new Promise(resolve => {
+            style.once('style.load', () => {
+                const rootStyle = style.serialize();
+                expect(rootStyle.imports).toEqual([{id: 'basemap', url: '', data: initialStyle}]);
+                resolve();
+            });
+
+            style.loadURL('/style.json');
+        });
+    });
+
     test('imports style from URL', async () => {
         const style = new Style(new StubMap());
 
@@ -611,6 +659,274 @@ describe('Style#loadJSON', () => {
     });
 });
 
+describe('Style#addImport', () => {
+    test('to the end', async () => {
+        const style = new Style(new StubMap());
+
+        const initialStyle = createStyleJSON({
+            imports: [{id: 'streets', url: '/style.json', data: createStyleJSON({
+                sources: {mapbox: {type: 'vector', tiles: []}}
+            })}],
+        });
+
+        style.loadJSON(initialStyle);
+
+        await waitFor(style, "style.load");
+
+        style.addImport({
+            id: 'land', url: '/land.json', data: createStyleJSON({
+                sources: {land: {type: 'vector', tiles: []}}
+            })
+        });
+
+        expect(style.stylesheet.imports.map(({id}) => id)).toStrictEqual([
+            'streets',
+            'land'
+        ]);
+    });
+
+    test('before another import', async () => {
+        const style = new Style(new StubMap());
+
+        const initialStyle = createStyleJSON({
+            imports: [
+                {id: 'streets', url: '/style.json', data: createStyleJSON({
+                    sources: {mapbox: {type: 'vector', tiles: []}}
+                })},
+                {id: 'streets-v2', url: '/style.json', data: createStyleJSON({
+                    sources: {mapbox: {type: 'vector', tiles: []}}
+                })}
+            ],
+        });
+
+        style.loadJSON(initialStyle);
+
+        await waitFor(style, "style.load");
+
+        style.addImport({
+            id: 'land', url: '/land.json', data: createStyleJSON({
+                sources: {land: {type: 'vector', tiles: []}}
+            })
+        }, 'streets-v2');
+
+        style.addImport({
+            id: 'land-v2', url: '/land.json', data: createStyleJSON({
+                sources: {land: {type: 'vector', tiles: []}}
+            })
+        }, 'land');
+
+        expect(style.stylesheet.imports.map(({id}) => id)).toStrictEqual([
+            'streets',
+            'land-v2',
+            'land',
+            'streets-v2'
+        ]);
+    });
+});
+
+describe('Style#updateImport', () => {
+    test('updates import with provided json', async () => {
+        const style = new Style(new StubMap());
+
+        const initialStyle = createStyleJSON({
+            imports: [{id: 'streets', url: '/style.json', data: createStyleJSON({
+                sources: {mapbox: {type: 'vector', tiles: []}},
+                schema: {
+                    lightPreset: {
+                        type: 'string',
+                        default: 'day'
+                    }
+                }
+            })}],
+        });
+
+        style.loadJSON(initialStyle);
+
+        await waitFor(style, "style.load");
+
+        style.updateImport('streets', {
+            id: 'streets',
+            data: createStyleJSON({
+                sources: {'mapbox-v12': {type: 'vector', tiles: []}}
+            }),
+            config: {
+                lightPreset: 'night'
+            }
+        });
+
+        expect(style.stylesheet.imports[style.getImportIndex('streets')].config).toStrictEqual({
+            lightPreset: 'night'
+        });
+        expect(style.fragments[0].style.stylesheet).toStrictEqual(createStyleJSON({
+            sources: {'mapbox-v12': {type: 'vector', tiles: []}}
+        }));
+    });
+
+    test('fetch style with URL after clean of data', async () => {
+        const spy = vi.fn();
+        const map = new StubMap();
+        const style = new Style(map);
+
+        networkWorker.use(
+            http.get('/style.json', ({request}) => {
+                spy(request);
+                return HttpResponse.json(initialStyle);
+            }),
+        );
+
+        const initialStyle = createStyleJSON({
+            imports: [{id: 'streets', url: '/style.json', data: createStyleJSON({
+                sources: {mapbox: {type: 'vector', tiles: []}},
+                schema: {
+                    lightPreset: {
+                        type: 'string',
+                        default: 'day'
+                    }
+                }
+            })}],
+        });
+
+        style.loadJSON(initialStyle);
+
+        await waitFor(style, "style.load");
+
+        expect(spy).not.toHaveBeenCalled();
+
+        await new Promise(resolve => {
+            map.on('style.import.load', () => {
+                expect(spy).toHaveBeenCalledTimes(1);
+                resolve();
+            });
+            style.updateImport('streets', {
+                id: 'streets',
+                url: '/style.json'
+            });
+        });
+    });
+
+    test('update URL and fetch style from new one', async () => {
+        const spy = vi.fn();
+        const map = new StubMap();
+        const style = new Style(map);
+
+        networkWorker.use(
+            http.get('/style.json', () => {
+                return HttpResponse.json(initialStyle);
+            }),
+            http.get('/style2.json', ({request}) => {
+                spy(request);
+                return HttpResponse.json(initialStyle);
+            }),
+        );
+
+        const initialStyle = createStyleJSON({
+            imports: [{id: 'streets', url: '/style.json'}],
+        });
+
+        style.loadJSON(initialStyle);
+
+        await waitFor(style, "style.load");
+
+        expect(spy).not.toHaveBeenCalled();
+
+        await new Promise(resolve => {
+            map.on('style.import.load', () => {
+                expect(spy).toHaveBeenCalledTimes(1);
+                resolve();
+            });
+            style.updateImport('streets', {
+                id: 'streets',
+                url: '/style2.json'
+            });
+        });
+    });
+});
+
+describe('Style#getImportGlobalIds', () => {
+    test('should return all imports', async () => {
+        const style = new Style(new StubMap());
+
+        networkWorker.use(
+            http.get('/standard.json', () => {
+                return HttpResponse.json(createStyleJSON());
+            }),
+            http.get('/standard-2.json', () => {
+                return HttpResponse.json(createStyleJSON());
+            }),
+            http.get('/supplement.json', () => {
+                return HttpResponse.json(createStyleJSON());
+            }),
+            http.get('/roads.json', () => {
+                return HttpResponse.json(createStyleJSON());
+            }),
+        );
+
+        style.loadJSON({
+            version: 8,
+            imports: [
+                {
+                    id: 'supplement',
+                    url: '/supplement.json',
+                    data: {
+                        version: 8,
+                        layers: [],
+                        sources: {},
+                        imports: [
+                            {
+                                id: 'inner',
+                                url: '/inner.json',
+                                data: {
+                                    version: 8,
+                                    layers: [],
+                                    sources: {},
+                                    imports: [
+                                        {
+                                            id: 'basemap-2',
+                                            url: '/standard-2.json'
+                                        }
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                },
+                {
+                    id: 'roads',
+                    url: '/roads.json'
+                },
+                {
+                    id: 'wrapper',
+                    url: '/non-standard.json',
+                    data: {
+                        version: 8,
+                        layers: [],
+                        sources: {},
+                        imports: [
+                            {
+                                id: 'basemap',
+                                url: '/standard.json'
+                            }
+                        ]
+                    }
+                }
+            ],
+            layers: [],
+            sources: {}
+        });
+
+        await waitFor(style, "style.load");
+
+        expect(style.getImportGlobalIds()).toEqual([
+            "json://2572277275",
+            "json://978922503",
+            new URL("/standard-2.json", location.href).toString(),
+            new URL("/roads.json", location.href).toString(),
+            "json://3288768429",
+            new URL("/standard.json", location.href).toString(),
+        ]);
+    });
+});
+
 describe('Style#addSource', () => {
     test('same id in different scopes', async () => {
         const style = new Style(new StubMap());
@@ -785,8 +1101,8 @@ describe('Style#addLayer', () => {
         });
 
         await new Promise(resolve => {
-            map.on('error', (error) => {
-                expect(error.error).toMatch(/does not exist on this map/);
+            map.on('error', ({error}) => {
+                expect(error.message).toMatch(/does not exist on this map/);
                 resolve();
             });
 
@@ -832,8 +1148,8 @@ describe('Style#removeLayer', () => {
         });
 
         await new Promise(resolve => {
-            map.on('error', (error) => {
-                expect(error.error).toMatch(/does not exist in the map\'s style/);
+            map.on('error', ({error}) => {
+                expect(error.message).toMatch(/does not exist in the map\'s style/);
                 resolve();
             });
 
@@ -2013,7 +2329,7 @@ test('Style#setFeatureState', async () => {
         style.on('style.load', () => {
             style.setFeatureState({source: makeFQID('mapbox', 'streets'), id: 12345}, {'hover': true});
             expect(spy).toHaveBeenCalledTimes(1);
-            expect(spy.mock.calls[0][0].error).toMatch(/does not exist in the map's style/);
+            expect(spy.mock.calls[0][0].error.message).toMatch(/does not exist in the map's style/);
             resolve();
         });
     });
@@ -2039,7 +2355,7 @@ test('Style#getFeatureState', () => {
     style.on('style.load', () => {
         expect(style.getFeatureState({source: makeFQID('mapbox', 'streets'), id: 12345})).toBeFalsy();
         expect(spy).toHaveBeenCalledTimes(1);
-        expect(spy.mock.calls[0][0].error).toMatch(/does not exist in the map's style/);
+        expect(spy.mock.calls[0][0].error.message).toMatch(/does not exist in the map's style/);
     });
 });
 
@@ -2063,7 +2379,7 @@ test('Style#removeFeatureState', () => {
     style.on('style.load', () => {
         style.removeFeatureState({source: makeFQID('mapbox', 'streets'), id: 12345}, 'hover');
         expect(spy).toHaveBeenCalledTimes(1);
-        expect(spy.mock.calls[0][0].error).toMatch(/does not exist in the map's style/);
+        expect(spy.mock.calls[0][0].error.message).toMatch(/does not exist in the map's style/);
     });
 });
 
@@ -2086,10 +2402,10 @@ test('Style#setLayoutProperty', () => {
 
     style.on('style.load', () => {
         style.setLayoutProperty(makeFQID('land', 'streets'), 'visibility', 'none');
-        expect(spy.mock.calls[0][0].error).toMatch(/does not exist in the map's style/);
+        expect(spy.mock.calls[0][0].error.message).toMatch(/does not exist in the map's style/);
 
         expect(style.getLayoutProperty(makeFQID('land', 'streets'), 'visibility')).toBeFalsy();
-        expect(spy.mock.calls[1][0].error).toMatch(/does not exist in the map's style/);
+        expect(spy.mock.calls[1][0].error.message).toMatch(/does not exist in the map's style/);
 
         expect(
             style.getLayer(makeFQID('land', 'streets')).serialize().layout['visibility']
@@ -2117,10 +2433,10 @@ test('Style#setPaintProperty', () => {
 
     style.on('style.load', () => {
         style.setPaintProperty(makeFQID('land', 'streets'), 'background-color', 'red');
-        expect(spy.mock.calls[0][0].error).toMatch(/does not exist in the map's style/);
+        expect(spy.mock.calls[0][0].error.message).toMatch(/does not exist in the map's style/);
 
         expect(style.getPaintProperty(makeFQID('land', 'streets'), 'background-color')).toBeFalsy();
-        expect(spy.mock.calls[1][0].error).toMatch(/does not exist in the map's style/);
+        expect(spy.mock.calls[1][0].error.message).toMatch(/does not exist in the map's style/);
 
         expect(
             style.getLayer(makeFQID('land', 'streets')).serialize().paint['background-color']
@@ -2147,7 +2463,7 @@ test('Style#setLayerZoomRange', () => {
 
     style.on('style.load', () => {
         style.setLayerZoomRange(makeFQID('symbol', 'streets'), 5, 12);
-        expect(spy.mock.calls[0][0].error).toMatch(/does not exist in the map's style/);
+        expect(spy.mock.calls[0][0].error.message).toMatch(/does not exist in the map's style/);
 
         expect(style.getLayer(makeFQID('symbol', 'streets')).minzoom).toEqual(0);
         expect(style.getLayer(makeFQID('symbol', 'streets')).maxzoom).toEqual(22);
@@ -2173,10 +2489,10 @@ test('Style#setFilter', () => {
 
     style.on('style.load', () => {
         style.setFilter(makeFQID('symbol', 'streets'), ['==', 'id', 1]);
-        expect(spy.mock.calls[0][0].error).toMatch(/does not exist in the map's style/);
+        expect(spy.mock.calls[0][0].error.message).toMatch(/does not exist in the map's style/);
 
         expect(style.getFilter(makeFQID('symbol', 'streets'))).toBeFalsy();
-        expect(spy.mock.calls[1][0].error).toMatch(/does not exist in the map's style/);
+        expect(spy.mock.calls[1][0].error.message).toMatch(/does not exist in the map's style/);
 
         expect(style.getLayer(makeFQID('symbol', 'streets')).filter).toEqual(['==', 'id', 0]);
     });

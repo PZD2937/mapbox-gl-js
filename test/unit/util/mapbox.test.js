@@ -63,145 +63,6 @@ describe("mapbox", () => {
         config.API_URL = 'https://api.mapbox.com';
     });
 
-    test('.isMapboxHTTPURL', () => {
-        expect(mapbox.isMapboxHTTPURL('http://mapbox.com')).toBeTruthy();
-        expect(mapbox.isMapboxHTTPURL('https://mapbox.com')).toBeTruthy();
-        expect(mapbox.isMapboxHTTPURL('https://mapbox.com/')).toBeTruthy();
-        expect(mapbox.isMapboxHTTPURL('https://mapbox.com?')).toBeTruthy();
-        expect(mapbox.isMapboxHTTPURL('https://api.mapbox.com/tiles')).toBeTruthy();
-        expect(mapbox.isMapboxHTTPURL('https://api.mapbox.cn/tiles')).toBeTruthy();
-        expect(mapbox.isMapboxHTTPURL('http://a.tiles.mapbox.cn/tiles')).toBeTruthy();
-        expect(mapbox.isMapboxHTTPURL('http://example.com/mapbox.com')).toBeFalsy();
-    });
-
-    test('.isMapboxHTTPStyleURL', () => {
-        expect(
-            mapbox.isMapboxHTTPStyleURL('https://api.mapbox.com/styles/v1/mapbox/streets-v11')
-        ).toBeTruthy();
-        expect(
-            mapbox.isMapboxHTTPStyleURL('https://api.mapbox.com/styles/v52/mapbox/streets-v11')
-        ).toBeTruthy();
-        expect(
-            mapbox.isMapboxHTTPStyleURL('https://api.mapbox.com/styles/v1/mapbox/streets-v11?')
-        ).toBeTruthy();
-        expect(
-            mapbox.isMapboxHTTPStyleURL('https://api.mapbox.cn/styles/v1/mapbox/streets-v11')
-        ).toBeTruthy();
-        expect(
-            mapbox.isMapboxHTTPStyleURL('https://api.mapbox.com/styles/v1/mapbox/streets-v11/sprite@2x.json')
-        ).toBeFalsy();
-        expect(mapbox.isMapboxHTTPStyleURL('http://example.com/mapbox.com')).toBeFalsy();
-    });
-
-    test('.isMapboxHTTPTileJSONURL', () => {
-        expect(
-            mapbox.isMapboxHTTPTileJSONURL('https://api.mapbox.com/v4/mapbox.mapbox-streets-v8,mapbox.mapbox-terrain-v2.json')
-        ).toBeTruthy();
-        expect(
-            mapbox.isMapboxHTTPTileJSONURL('https://api.mapbox.com/v52/mapbox.mapbox-streets-v8,mapbox.mapbox-terrain-v2.json')
-        ).toBeTruthy();
-        expect(
-            mapbox.isMapboxHTTPTileJSONURL('https://api.mapbox.com/v4/mapbox.mapbox-streets-v8,mapbox.mapbox-terrain-v2.json?access_token=pk.eyJ1Ijoi')
-        ).toBeTruthy();
-        expect(
-            mapbox.isMapboxHTTPTileJSONURL('https://api.mapbox.com/v4/mapbox.mapbox-streets-v8.json')
-        ).toBeTruthy();
-        expect(
-            mapbox.isMapboxHTTPTileJSONURL('https://api.mapbox.cn/v4/mapbox.mapbox-streets-v8.json')
-        ).toBeTruthy();
-        expect(
-            mapbox.isMapboxHTTPTileJSONURL('http://a.tiles.mapbox.cn/v4/mapbox.mapbox-streets-v8,mapbox.mapbox-terrain-v2.json')
-        ).toBeTruthy();
-        expect(
-            mapbox.isMapboxHTTPTileJSONURL('http://example.com/v4/mapbox.mapbox-streets-v8,mapbox.mapbox-terrain-v2.json')
-        ).toBeFalsy();
-    });
-
-    test('.isMapboxHTTPCDNURL', () => {
-        expect(
-            mapbox.isMapboxHTTPCDNURL('https://api.mapbox.com/mapbox-gl-js/v2.11.0/mapbox-gl.js')
-        ).toBeTruthy();
-        expect(
-            mapbox.isMapboxHTTPCDNURL('https://api.mapbox.com/mapbox-gl-js/v2.11.0/mapbox-gl.css')
-        ).toBeTruthy();
-        expect(
-            mapbox.isMapboxHTTPCDNURL('https://api.mapbox.com/mapbox-gl-js/v2.11.0-beta.1/mapbox-gl.js')
-        ).toBeTruthy();
-        expect(
-            mapbox.isMapboxHTTPCDNURL('https://api.mapbox.cn/mapbox-gl-js/v2.11.0/mapbox-gl.js')
-        ).toBeTruthy();
-        expect(
-            mapbox.isMapboxHTTPCDNURL('https://api.mapbox.com/other-project/v2.11.0/mapbox-gl.js')
-        ).toBeFalsy();
-        expect(
-            mapbox.isMapboxHTTPCDNURL('https://api.mapbox.cn/v4/mapbox.mapbox-streets-v8.json')
-        ).toBeFalsy();
-        expect(
-            mapbox.isMapboxHTTPCDNURL('http://example.com/mapbox-gl-js/v2.11.0/mapbox-gl.js')
-        ).toBeFalsy();
-    });
-
-    test('.isMapboxHTTPSpriteURL', () => {
-        expect(
-            mapbox.isMapboxHTTPSpriteURL('https://api.mapbox.com/styles/v1/mapbox/streets-v11/sprite@2x.json')
-        ).toBeTruthy();
-        expect(
-            mapbox.isMapboxHTTPSpriteURL('https://api.mapbox.com/styles/v52/mapbox/streets-v11/sprite@2x.json')
-        ).toBeTruthy();
-        expect(
-            mapbox.isMapboxHTTPSpriteURL('https://api.mapbox.com/styles/v1/mapbox/streets-v11/sprite@2.5x.json')
-        ).toBeTruthy();
-        expect(
-            mapbox.isMapboxHTTPSpriteURL('https://api.mapbox.com/styles/v1/mapbox/streets-v11/sprite@2x.json?access_token=pk.eyJ1Ijoi')
-        ).toBeTruthy();
-        expect(
-            mapbox.isMapboxHTTPSpriteURL('https://api.mapbox.com/styles/v1/user/style/sprite.json')
-        ).toBeTruthy();
-        expect(
-            mapbox.isMapboxHTTPSpriteURL('https://api.mapbox.com/styles/v1/user/style/sprite@2x.json')
-        ).toBeTruthy();
-        expect(
-            mapbox.isMapboxHTTPSpriteURL('https://api.mapbox.cn/styles/v1/mapbox/streets-v11/sprite@2x.json')
-        ).toBeTruthy();
-        expect(
-            mapbox.isMapboxHTTPSpriteURL('http://example.com/mapbox.com/styles/v1/user/style/sprite@2x.json')
-        ).toBeFalsy();
-        expect(
-            mapbox.isMapboxHTTPSpriteURL('http://example.com/mapbox.com/sprite@2x.json')
-        ).toBeFalsy();
-        expect(
-            mapbox.isMapboxHTTPSpriteURL('http://example.com/mapbox.com/images@2x.json')
-        ).toBeFalsy();
-        expect(
-            mapbox.isMapboxHTTPSpriteURL('https://api.mapbox.com/styles/v1/mapbox/streets-v11')
-        ).toBeFalsy();
-    });
-
-    test('.isMapboxHTTPFontsURL', () => {
-        expect(
-            mapbox.isMapboxHTTPFontsURL('https://api.mapbox.com/fonts/v1/mapbox/DIN%20Offc%20Pro%20Medium,Arial%20Unicode%20MS%20Regular/8192-8447.pbf')
-        ).toBeTruthy();
-        expect(
-            mapbox.isMapboxHTTPFontsURL('https://api.mapbox.com/fonts/v52/mapbox/DIN%20Offc%20Pro%20Medium,Arial%20Unicode%20MS%20Regular/8192-8447.pbf')
-        ).toBeTruthy();
-        expect(
-            mapbox.isMapboxHTTPFontsURL('https://api.mapbox.com/fonts/v1/mapbox/DIN%20Offc%20Pro%20Medium,Arial%20Unicode%20MS%20Regular/0-255.pbf')
-        ).toBeTruthy();
-        expect(
-            mapbox.isMapboxHTTPFontsURL('https://api.mapbox.com/fonts/v1/mapbox/DIN%20Offc%20Pro%20Medium,Arial%20Unicode%20MS%20Regular/0-255.pbf?access_token=pk.eyJ1Ijoi')
-        ).toBeTruthy();
-        expect(
-            mapbox.isMapboxHTTPFontsURL('https://api.mapbox.com/fonts/v1/mapbox/font1,font2/0-255.pbf')
-        ).toBeTruthy();
-        expect(
-            mapbox.isMapboxHTTPFontsURL('https://api.mapbox.cn/fonts/v1/mapbox/font1,font2/0-255.pbf')
-        ).toBeTruthy();
-        expect(mapbox.isMapboxHTTPFontsURL('https://example.com/file.pbf')).toBeFalsy();
-        expect(
-            mapbox.isMapboxHTTPFontsURL('https://api.mapbox.com/styles/v1/mapbox/streets-v11')
-        ).toBeFalsy();
-    });
-
     describe('RequestManager', () => {
         const manager = new mapbox.RequestManager();
 
@@ -504,6 +365,9 @@ describe("mapbox", () => {
             expect(
                 manager.canonicalizeTileURL("http://api.mapbox.com/raster/v1/a.b/{z}/{x}/{y}.png?access_token=key", tileJSONURL)
             ).toEqual("mapbox://raster/a.b/{z}/{x}/{y}.png");
+            expect(
+                manager.canonicalizeTileURL("http://api.mapbox.com/rasterarrays/v1/a.b/{z}/{x}/{y}.mrt?access_token=key", tileJSONURL)
+            ).toEqual("mapbox://rasterarrays/a.b/{z}/{x}/{y}.mrt");
 
             // We don't ever expect to see these inputs, but be safe anyway.
             expect(manager.canonicalizeTileURL("http://path")).toEqual("http://path");
@@ -609,6 +473,9 @@ describe("mapbox", () => {
                 expect(manager.normalizeTileURL("mapbox://raster/a.b/0/0/0.png")).toEqual(
                     `https://api.mapbox.com/raster/v1/a.b/0/0/0.png?sku=${manager._skuToken}&access_token=key`
                 );
+                expect(manager.normalizeTileURL("mapbox://rasterarrays/a.b/0/0/0.mrt")).toEqual(
+                    `https://api.mapbox.com/rasterarrays/v1/a.b/0/0/0.mrt?sku=${manager._skuToken}&access_token=key`
+                );
 
                 config.API_URL = 'https://api.example.com/';
                 expect(manager.normalizeTileURL("mapbox://tiles/a.b/0/0/0.png")).toEqual(
@@ -692,8 +559,8 @@ describe("mapbox", () => {
             checkMetric(performanceEvent.metadata, 'sdkVersion', version);
             checkMetric(performanceEvent.metadata, 'sdkIdentifier', 'mapbox-gl-js');
             checkMetric(performanceEvent.metadata, 'devicePixelRatio', '1');
-            checkMetric(performanceEvent.metadata, 'windowWidth', '1280');
-            checkMetric(performanceEvent.metadata, 'windowHeight', '720');
+            checkMetric(performanceEvent.metadata, 'windowWidth', '300');
+            checkMetric(performanceEvent.metadata, 'windowHeight', '150');
             checkMetric(performanceEvent.metadata, 'mapWidth', '100');
             checkMetric(performanceEvent.metadata, 'mapHeight', '50');
             checkMetric(performanceEvent.metadata, 'webglVendor', 'webgl vendor');

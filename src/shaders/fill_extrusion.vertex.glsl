@@ -37,7 +37,7 @@ uniform mat4 u_light_matrix_1;
 
 out highp vec4 v_pos_light_view_0;
 out highp vec4 v_pos_light_view_1;
-out float v_depth;
+
 #endif
 
 #if defined(ZERO_ROOF_RADIUS) && !defined(LIGHTING_3D_MODE)
@@ -163,7 +163,6 @@ void main() {
 #endif
     v_pos_light_view_0 = u_light_matrix_0 * vec4(shd_pos0, 1);
     v_pos_light_view_1 = u_light_matrix_1 * vec4(shd_pos1, 1);
-    v_depth = gl_Position.w;
 #endif
 
     float NdotL = 0.0;

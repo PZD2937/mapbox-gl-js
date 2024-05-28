@@ -114,6 +114,7 @@ function camelize (str: string) {
 
 global.camelize = camelize;
 
+import particleAttributes from '../src/data/particle_attributes.js';
 import posAttributes, {posAttributesGlobeExt} from '../src/data/pos_attributes.js';
 import boundsAttributes from '../src/data/bounds_attributes.js';
 
@@ -125,6 +126,7 @@ import {circleAttributes, circleGlobeAttributesExt} from '../src/data/bucket/cir
 import fillAttributes from '../src/data/bucket/fill_attributes.js';
 import lineAttributes from '../src/data/bucket/line_attributes.js';
 import lineAttributesExt from '../src/data/bucket/line_attributes_ext.js';
+import lineAttributesPattern from '../src/data/bucket/line_attributes_pattern.js';
 import patternAttributes from '../src/data/bucket/pattern_attributes.js';
 import dashAttributes from '../src/data/bucket/dash_attributes.js';
 import skyboxAttributes from '../src/render/skybox_attributes.js';
@@ -140,6 +142,7 @@ const layoutAttributes = {
     heatmap: circleAttributes,
     line: lineAttributes,
     lineExt: lineAttributesExt,
+    linePattern: lineAttributesPattern,
     pattern: patternAttributes,
     dash: dashAttributes
 };
@@ -237,6 +240,10 @@ createStructArrayType(`normal_layout`, normalAttributes);
 createStructArrayType(`instance_vertex`, instanceAttributes);
 createStructArrayType(`feature_vertex`, featureAttributes);
 
+// particle vertex attribute
+
+createStructArrayType('particle_index_layout', particleAttributes);
+
 // paint vertex arrays
 
 // used by SourceBinder for float properties
@@ -272,7 +279,7 @@ createStructArrayType('circle_globe_ext', circleGlobeAttributesExt);
 const layouts = Object.keys(layoutCache).map(k => layoutCache[k]);
 
 fs.writeFileSync('src/data/array_types.js',
-    `// This file is generated. Edit build/generate-struct-arrays.js, then run \`yarn run codegen\`.
+    `// This file is generated. Edit build/generate-struct-arrays.js, then run \`npm run codegen\`.
 /* eslint-disable camelcase */
 // @flow
 

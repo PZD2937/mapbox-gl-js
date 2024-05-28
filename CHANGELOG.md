@@ -1,3 +1,51 @@
+## 3.4.0
+
+### Features and improvements ✨
+- Add `dynamic: true` option for GeoJSON sources that enables partial update API with `source.updateData` method. Further optimizations for this mode are expected in future releases.
+- Add `Map` `setConfig`, `getConfig`, `setSchema` and `getSchema` methods for batch setting of style configuration options.
+- Add `config` option for the `Map` constructor and `setStyle` methods for conveniently setting style configuration options on map initialization.
+- Add `icon-color-saturation`, `icon-color-contrast`, `icon-color-brightness-min` and `icon-color-brightness-max` to control symbol layer appearance.
+- Introduce a new `line-join` mode: `none` to improve line pattern distortions around joins.
+- Extend `model-id` property to support URIs (in addition to style-defined model references).
+- Expose more parameters in map `devtools` UI.
+
+### Bug fixes 🐞
+- Fix an issue with `flyTo` ignoring `padding` in its options.
+- Respect padding in `cameraForBounds` on globe view. (h/t [@jonasnoki](https://github.com/jonasnoki)) [#13126](https://github.com/mapbox/mapbox-gl-js/pull/13126)
+- Fix `preloadOnly` not preloading tiles from style imports.
+- Fix `queryRenderedFeatures` for non-integer ID in non-tiled model sources
+- Fix `model-scale` property for large number of 3D models.
+- Fix flickering of `raster-particle` layer on globe view.
+- Improve rendering of low-resolution `raster-array` data.
+- Fix an issue with GL JS bundle not building locally on Windows.
+- Fix multiple edge cases when using `symbol-z-elevate`.
+- Fix rendering issues with `raster-particle` layer on certain Android devices.
+- Fix shadow and lighting rendering issues in certain areas when using Mapbox Standard.
+
+## 3.3.0
+
+### Features and improvements ✨
+
+- Add a new `raster-array` source type, representing a new experimental Mapbox Raster Tile format which encodes series of tiled raster data (such as weather time series).
+- Add a new `raster-particle` layer which animates particles of different speed and color based on underlying `raster-array` data.
+- Add `addImport`, `moveImport`, `updateImport`, and `removeImport` API methods.
+- Add `getSlot`, and `setSlot` API methods to control layers' slots.
+- Add landmarks and models support in `queryRenderedFeatures`.
+- Add `raster-elevation` support for tiled raster sources.
+- Add `config` expression support in fog.
+- Improve map loading performance.
+
+### Bug fixes 🐞
+
+- Fix zooming with the pitched camera and `maxZoom`.
+- Fix memory leak after removing the map. (h/t [@kamil-sienkiewicz-asi](https://github.com/kamil-sienkiewicz-asi)) [#13110](https://github.com/mapbox/mapbox-gl-js/pull/13110), [#13116](https://github.com/mapbox/mapbox-gl-js/pull/13116)
+- Fix broken horizon line for some camera values.
+- Fix broken globe draping after updating style with `setStyle`.
+- Fix the `z` offset when the opacity is evaluated at 0 on the zoom change.
+- Fix the `format` expression in the `config` expression.
+- Fix adding a marker to the map that is not loaded when fog is enabled.
+- Fix symbol and icon rendering order when using `symbol-sort-key` property.
+
 ## 3.2.0
 
 ### Features and improvements ✨

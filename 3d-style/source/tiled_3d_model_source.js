@@ -7,13 +7,18 @@ import TileBounds from '../../src/source/tile_bounds.js';
 import {extend} from '../../src/util/util.js';
 import {postTurnstileEvent} from '../../src/util/mapbox.js';
 
+// Import Tiled3dModelBucket as a module with side effects to ensure
+// it's registered as a serializable class on the main thread
+import '../data/bucket/tiled_3d_model_bucket.js';
+
+import type Tiled3dModelBucket from '../data/bucket/tiled_3d_model_bucket.js';
 import type {Source} from '../../src/source/source.js';
 import type Tile from '../../src/source/tile.js';
 import type {Callback} from '../../src/types/callback.js';
 import type {Cancelable} from '../../src/types/cancelable.js';
 import type Dispatcher from '../../src/util/dispatcher.js';
 import type {ModelSourceSpecification} from '../../src/style-spec/types.js';
-import type Map from '../../src/ui/map.js';
+import type {Map} from '../../src/ui/map.js';
 import type {OverscaledTileID} from '../../src/source/tile_id.js';
 
 class Tiled3DModelSource extends Evented implements Source {
@@ -131,9 +136,8 @@ class Tiled3DModelSource extends Evented implements Source {
         } else {
             // If the tile has already been parsed we may just need to reevaluate
             if (tile.buckets) {
-                const buckets = Object.values(tile.buckets);
+                const buckets: Tiled3dModelBucket[] = (Object.values(tile.buckets): any[]);
                 for (const bucket of buckets) {
-                    // $FlowIgnore[incompatible-use] All buckets are Tiled3DModelBuckets
                     bucket.dirty = true;
                 }
                 tile.state = 'loaded';
@@ -155,6 +159,9 @@ class Tiled3DModelSource extends Evented implements Source {
                 if (data.resourceTiming) tile.resourceTiming = data.resourceTiming;
                 if (this.map._refreshExpiredTiles) tile.setExpiryData(data);
                 tile.buckets = {...tile.buckets, ...data.buckets};
+                if (data.featureIndex) {
+                    tile.latestFeatureIndex = data.featureIndex;
+                }
             }
 
             tile.state = 'loaded';

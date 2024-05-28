@@ -1,3 +1,5 @@
+/* eslint-disable flowtype/require-valid-file-annotation */
+
 import fs from 'fs';
 import assert from 'assert';
 import spec from '../src/style-spec/reference/v8.json';
@@ -71,7 +73,15 @@ function flowObjectDeclaration(key, properties) {
 function flowObject(properties, indent, sealing = '') {
     return `{${sealing}
 ${Object.keys(properties)
-        .map(k => `    ${indent}${flowProperty(k, properties[k])}`)
+        .map(k => {
+            const property = `    ${indent}${flowProperty(k, properties[k])}`;
+            if (properties[k].transition) {
+                const propertyTransition = `    ${indent}"${k}-transition"?: TransitionSpecification`;
+                return [property, propertyTransition].join(',\n');
+            } else {
+                return property;
+            }
+        })
         .join(',\n')}
 ${indent}${sealing}}`;
 }
@@ -79,6 +89,7 @@ ${indent}${sealing}}`;
 function flowSourceTypeName(key) {
     return key.replace(/source_(.)(.*)/, (_, _1, _2) => `${_1.toUpperCase()}${_2}SourceSpecification`)
         .replace(/_dem/, 'DEM')
+        .replace(/_array/, 'Array')
         .replace(/Geojson/, 'GeoJSON');
 }
 

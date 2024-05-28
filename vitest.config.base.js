@@ -7,7 +7,6 @@ import {defineConfig} from 'vite';
 import {createFilter} from '@rollup/pluginutils';
 import alias from '@rollup/plugin-alias';
 import flowRemoveTypes from '@mapbox/flow-remove-types';
-import {nodePolyfills} from 'vite-plugin-node-polyfills';
 import arraybuffer from 'vite-plugin-arraybuffer';
 
 const TYPING_DIRS = [
@@ -78,6 +77,14 @@ function fixAssertUtil(regexp = /node_modules\/assert/) {
 }
 
 export default defineConfig({
+    pool: 'threads',
+    poolOptions: {
+        threads: {
+            isolate: false,
+            useAtomics: true,
+            singleThread: true
+        }
+    },
     test: {
         testTimeout: 5_000,
         browser: {
@@ -85,7 +92,8 @@ export default defineConfig({
             provider: 'playwright',
             enabled: true,
             headless: true,
-            slowHijackESM: false
+            slowHijackESM: false,
+            fileParallelism: false,
         },
         restoreMocks: true,
         unstubGlobals: true
@@ -102,7 +110,6 @@ export default defineConfig({
         ]
     },
     plugins: [
-        nodePolyfills(),
         flow(),
         glsl(['./src/shaders/*.glsl', './3d-style/shaders/*.glsl']),
         arraybuffer(),

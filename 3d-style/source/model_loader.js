@@ -11,16 +11,17 @@ import {TriangleIndexArray,
     Color3fLayoutArray,
     Color4fLayoutArray
 } from '../../src/data/array_types.js';
-import {GLTF_TO_ARRAY_TYPE, GLTF_COMPONENTS, GLTF_USHORT, GLTF_FLOAT} from '../util/loaders.js';
+import {GLTF_TO_ARRAY_TYPE, GLTF_COMPONENTS} from '../util/loaders.js';
 
 import Point from '@mapbox/point-geometry';
 import earcut from 'earcut';
 
-import {warnOnce, base64DecToArr} from '../../src/util/util.js';
+import {base64DecToArr} from '../../src/util/util.js';
 import assert from 'assert';
 import TriangleGridIndex from '../../src/util/triangle_grid_index.js';
 
-import type {Vec2, Vec3} from 'gl-matrix';
+import type {Class} from '../../src/types/class.js';
+import type {Vec2, Vec3, Mat4} from 'gl-matrix';
 import type {TextureImage} from '../../src/render/texture.js';
 
 function convertTextures(gltf: Object, images: Array<TextureImage>): Array<ModelTexture> {
@@ -45,15 +46,6 @@ function convertTextures(gltf: Object, images: Array<TextureImage>): Array<Model
     return textures;
 }
 
-function getBufferData(gltf: Object, accessor: Object) {
-    const bufferView = gltf.json.bufferViews[accessor.bufferView];
-    const buffer = gltf.buffers[bufferView.buffer];
-    const offset = (accessor.byteOffset || 0) + (bufferView.byteOffset || 0);
-    const ArrayType = GLTF_TO_ARRAY_TYPE[accessor.componentType];
-    const bufferData = new ArrayType(buffer, offset, accessor.count * GLTF_COMPONENTS[accessor.type]);
-    return bufferData;
-}
-
 function convertMaterial(materialDesc: Object, textures: Array<ModelTexture>): Material {
     const {
         emissiveFactor = [0, 0, 0],
@@ -73,6 +65,14 @@ function convertMaterial(materialDesc: Object, textures: Array<ModelTexture>): M
         metallicRoughnessTexture
     } = materialDesc.pbrMetallicRoughness || {};
 
+    const modelOcclusionTexture = occlusionTexture ? textures[occlusionTexture.index] : undefined;
+    // Supporting texture transform only for occlusion (mbx landmarks)
+    // Check if KHR_Texture_transform is set.
+    if (occlusionTexture && occlusionTexture.extensions && occlusionTexture.extensions['KHR_texture_transform'] && modelOcclusionTexture) {
+        const transform = occlusionTexture.extensions['KHR_texture_transform'];
+        modelOcclusionTexture.offsetScale = [transform.offset[0], transform.offset[1], transform.scale[0], transform.scale[1]];
+    }
+
     return {
         pbrMetallicRoughness: {
             baseColorFactor: new Color(...baseColorFactor),
@@ -86,7 +86,7 @@ function convertMaterial(materialDesc: Object, textures: Array<ModelTexture>): M
         alphaMode,
         alphaCutoff,
         normalTexture: normalTexture ? textures[normalTexture.index] : undefined,
-        occlusionTexture: occlusionTexture ? textures[occlusionTexture.index] : undefined,
+        occlusionTexture: modelOcclusionTexture,
         emissionTexture: emissiveTexture ? textures[emissiveTexture.index] : undefined,
         defined: materialDesc.defined === undefined // just to make the rendertests the same than native
     };
@@ -107,6 +107,47 @@ function computeCentroid(indexArray: $TypedArray, vertexArray: $TypedArray): Vec
         out[2] /= indexSize;
     }
     return out;
+}
+
+function getNormalizedScale(arrayType: Class<$TypedArray>) {
+    switch (arrayType) {
+    case Int8Array:
+        return 1 / 127;
+    case Uint8Array:
+        return 1 / 255;
+    case Int16Array:
+        return 1 / 32767;
+    case Uint16Array:
+        return 1 / 65535;
+    default:
+        return 1;
+    }
+}
+
+function getBufferData(gltf: Object, accessor: Object) {
+    const bufferView = gltf.json.bufferViews[accessor.bufferView];
+    const buffer = gltf.buffers[bufferView.buffer];
+    const offset = (accessor.byteOffset || 0) + (bufferView.byteOffset || 0);
+    const ArrayType = GLTF_TO_ARRAY_TYPE[accessor.componentType];
+    const itemBytes = GLTF_COMPONENTS[accessor.type] * ArrayType.BYTES_PER_ELEMENT;
+    const stride = (bufferView.byteStride && bufferView.byteStride !== itemBytes) ? bufferView.byteStride / ArrayType.BYTES_PER_ELEMENT : GLTF_COMPONENTS[accessor.type];
+    const bufferData = new ArrayType(buffer, offset, accessor.count * stride);
+    return bufferData;
+}
+
+function setArrayData(gltf: Object, accessor: Object, array: Object, buffer: $TypedArray) {
+    const ArrayType = GLTF_TO_ARRAY_TYPE[accessor.componentType];
+    const norm = getNormalizedScale(ArrayType);
+    const bufferView = gltf.json.bufferViews[accessor.bufferView];
+    const numElements = bufferView.byteStride ? bufferView.byteStride / ArrayType.BYTES_PER_ELEMENT : GLTF_COMPONENTS[accessor.type];
+    const float32Array = (array: any).float32;
+    const components = float32Array.length / array.capacity;
+    for (let i = 0, count = 0;  i < accessor.count * numElements; i += numElements, count += components) {
+        for (let j = 0; j < components; j++) {
+            float32Array[count + j] = buffer[i + j] * norm;
+        }
+    }
+    array._trim();
 }
 
 function convertPrimitive(primitive: Object, gltf: Object, textures: Array<ModelTexture>): Mesh {
@@ -130,6 +171,7 @@ function convertPrimitive(primitive: Object, gltf: Object, textures: Array<Model
     mesh.indexArray._trim();
     // vertices
     mesh.vertexArray = new ModelLayoutArray();
+
     const positionAccessor = gltf.json.accessors[attributeMap.POSITION];
     mesh.vertexArray.reserve(positionAccessor.count);
     const vertexArrayBuffer = getBufferData(gltf, positionAccessor);
@@ -145,67 +187,48 @@ function convertPrimitive(primitive: Object, gltf: Object, textures: Array<Model
     if (attributeMap.COLOR_0 !== undefined) {
         const colorAccessor = gltf.json.accessors[attributeMap.COLOR_0];
         const numElements = GLTF_COMPONENTS[colorAccessor.type];
-        // We only support colors in float and uint8 format for now
-        if (colorAccessor.componentType === GLTF_FLOAT) {
-            mesh.colorArray = numElements === 3 ? new Color3fLayoutArray() : new Color4fLayoutArray();
-            mesh.colorArray.reserve(colorAccessor.count);
-            const colorArrayBuffer = getBufferData(gltf, colorAccessor);
-            if (numElements === 3) { // vec3f
-                for (let i = 0;  i < colorAccessor.count; i++) {
-                    mesh.colorArray.emplaceBack(colorArrayBuffer[i * 3], colorArrayBuffer[i * 3 + 1], colorArrayBuffer[i * 3 + 2]);
-                }
-            } else { // vec4f
-                for (let i = 0;  i < colorAccessor.count; i++) {
-                    mesh.colorArray.emplaceBack(colorArrayBuffer[i * 4], colorArrayBuffer[i * 4 + 1], colorArrayBuffer[i * 4 + 2], colorArrayBuffer[i * 4 + 3]);
-                }
-            }
-            mesh.colorArray._trim();
-        } else if (colorAccessor.componentType === GLTF_USHORT && numElements === 4) {
-            mesh.colorArray = new Color4fLayoutArray();
-            mesh.colorArray.resize(colorAccessor.count);
-            const colorArrayBuffer = getBufferData(gltf, colorAccessor);
-            const norm = 1.0 / 65535;
-            const float32Array = ((mesh.colorArray: any): Color4fLayoutArray).float32;
-            for (let i = 0;  i < colorArrayBuffer.length * 4; ++i) {
-                float32Array[i] = colorArrayBuffer[i] * norm;
-            }
-        } else {
-            warnOnce(`glTF color buffer parsing for accessor ${JSON.stringify(colorAccessor)} is not supported`);
-        }
+        const colorArrayBuffer = getBufferData(gltf, colorAccessor);
+        mesh.colorArray = numElements === 3 ? new Color3fLayoutArray() : new Color4fLayoutArray();
+        mesh.colorArray.resize(colorAccessor.count);
+        setArrayData(gltf, colorAccessor, mesh.colorArray, colorArrayBuffer);
     }
 
     // normals
     if (attributeMap.NORMAL !== undefined) {
         mesh.normalArray = new NormalLayoutArray();
         const normalAccessor = gltf.json.accessors[attributeMap.NORMAL];
-        mesh.normalArray.reserve(normalAccessor.count);
+        mesh.normalArray.resize(normalAccessor.count);
         const normalArrayBuffer = getBufferData(gltf, normalAccessor);
-        for (let i = 0;  i < normalAccessor.count; i++) {
-            mesh.normalArray.emplaceBack(normalArrayBuffer[i * 3], normalArrayBuffer[i * 3 + 1], normalArrayBuffer[i * 3 + 2]);
-        }
-        mesh.normalArray._trim();
+        setArrayData(gltf, normalAccessor, mesh.normalArray, normalArrayBuffer);
     }
+
     // texcoord
     if (attributeMap.TEXCOORD_0 !== undefined && textures.length > 0) {
         mesh.texcoordArray = new TexcoordLayoutArray();
         const texcoordAccessor = gltf.json.accessors[attributeMap.TEXCOORD_0];
-        mesh.texcoordArray.reserve(texcoordAccessor.count);
+        mesh.texcoordArray.resize(texcoordAccessor.count);
         const texcoordArrayBuffer = getBufferData(gltf, texcoordAccessor);
-        for (let i = 0;  i < texcoordAccessor.count; i++) {
-            mesh.texcoordArray.emplaceBack(texcoordArrayBuffer[i * 2], texcoordArrayBuffer[i * 2 + 1]);
+        setArrayData(gltf, texcoordAccessor, mesh.texcoordArray, texcoordArrayBuffer);
+    }
+
+    // V2 tiles
+    if (attributeMap._FEATURE_ID_RGBA4444 !== undefined) {
+        const featureAccesor = gltf.json.accessors[attributeMap._FEATURE_ID_RGBA4444];
+        if (gltf.json.extensionsUsed && gltf.json.extensionsUsed.includes('EXT_meshopt_compression')) {
+            mesh.featureData = getBufferData(gltf, featureAccesor);
         }
-        mesh.texcoordArray._trim();
+    }
+
+    // V1 tiles
+    if (attributeMap._FEATURE_RGBA4444 !== undefined) {
+        const featureAccesor = gltf.json.accessors[attributeMap._FEATURE_RGBA4444];
+        mesh.featureData = new Uint32Array(getBufferData(gltf, featureAccesor).buffer);
     }
 
     // Material
     const materialIdx = primitive.material;
     const materialDesc = materialIdx !== undefined ? gltf.json.materials[materialIdx] : {defined: false};
     mesh.material = convertMaterial(materialDesc, textures);
-
-    if (attributeMap._FEATURE_RGBA4444 !== undefined) {
-        const featureAccesor = gltf.json.accessors[attributeMap._FEATURE_RGBA4444];
-        mesh.featureData = new Uint32Array(getBufferData(gltf, featureAccesor).buffer);
-    }
 
     return mesh;
 }
@@ -266,22 +289,11 @@ function convertFootprint(mesh: FootprintMesh): ?Footprint {
         return null;
     }
 
-    const [min, max] = [mesh.vertices[0].clone(), mesh.vertices[0].clone()];
-
-    for (let i = 1; i < mesh.vertices.length; ++i) {
-        const v = mesh.vertices[i];
-        min.x = Math.min(min.x, v.x);
-        min.y = Math.min(min.y, v.y);
-        max.x = Math.max(max.x, v.x);
-        max.y = Math.max(max.y, v.y);
-    }
-
     // Use a fixed size triangle grid (8x8 cells) for acceleration intersection queries
     // with an exception that the cell size should never be larger than 256 tile units
     // (equals to 32x32 subdivision).
-    const optimalCellCount = Math.ceil(Math.max(max.x - min.x, max.y - min.y) / 256);
-    const cellCount = Math.max(8, optimalCellCount);
-    const grid = new TriangleGridIndex(mesh.vertices, mesh.indices, cellCount);
+    const grid = new TriangleGridIndex(mesh.vertices, mesh.indices, 8, 256);
+    const [min, max] = [grid.min.clone(), grid.max.clone()];
 
     return {
         vertices: mesh.vertices,
@@ -359,12 +371,13 @@ function parseLegacyFootprintMesh(gltfNode: Object): ?FootprintMesh {
     return {vertices, indices};
 }
 
-function parseNodeFootprintMesh(meshes: Array<Mesh>): ?FootprintMesh {
+function parseNodeFootprintMesh(meshes: Array<Mesh>, matrix: Mat4): ?FootprintMesh {
     const vertices: Array<Point> = [];
     const indices: Array<number> = [];
 
     let baseVertex = 0;
 
+    const tempVertex = [];
     for (const mesh of meshes) {
         baseVertex = vertices.length;
 
@@ -372,7 +385,11 @@ function parseNodeFootprintMesh(meshes: Array<Mesh>): ?FootprintMesh {
         const iArray = mesh.indexArray.uint16;
 
         for (let i = 0; i < mesh.vertexArray.length; i++) {
-            vertices.push(new Point(vArray[i * 3 + 0], vArray[i * 3 + 1]));
+            tempVertex[0] = vArray[i * 3 + 0];
+            tempVertex[1] = vArray[i * 3 + 1];
+            tempVertex[2] = vArray[i * 3 + 2];
+            vec3.transformMat4(tempVertex, tempVertex, matrix);
+            vertices.push(new Point(tempVertex[0], tempVertex[1]));
         }
 
         for (let i = 0; i < mesh.indexArray.length * 3; i++) {
@@ -451,7 +468,7 @@ function convertFootprints(convertedNodes: Array<Node>, sceneNodes: any, modelNo
         let fpMesh: ?FootprintMesh = null;
 
         if (node.id in nodeFootprintLookup) {
-            fpMesh = parseNodeFootprintMesh(convertedNodes[nodeFootprintLookup[node.id]].meshes);
+            fpMesh = parseNodeFootprintMesh(convertedNodes[nodeFootprintLookup[node.id]].meshes, node.matrix);
         }
 
         if (!fpMesh) {
@@ -592,7 +609,7 @@ function createLightsMesh(lights: Array<AreaLight>, zScale: number): Mesh {
         mesh.vertexArray.emplaceBack(v2[0], v2[1], v2[2]);
         mesh.vertexArray.emplaceBack(v1extrusion[0], v1extrusion[1], v1extrusion[2]);
         mesh.vertexArray.emplaceBack(v2extrusion[0], v2extrusion[1], v2extrusion[2]);
-        // Light doesnt include light coordinates - instead it incldues offet to light area segment. Distances are
+        // Light doesnt include light coordinates - instead it includes offset to light area segment. Distances are
         // normalized by dividing by fallOff. Normalized lighting coordinate system is used where center of
         // coord system is on half of door and +Y is direction of extrusion.
         // z includes half width - this is used to calculate distance to segment.

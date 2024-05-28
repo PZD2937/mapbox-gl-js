@@ -8,12 +8,9 @@ import StencilMode from '../../src/gl/stencil_mode.js';
 import CullFaceMode from '../../src/gl/cull_face_mode.js';
 import Transform from '../../src/geo/transform.js';
 import {Frustum, Aabb} from '../../src/util/primitives.js';
-import Style from '../../src/style/style.js';
 import Color from '../../src/style-spec/util/color.js';
 import {FreeCamera} from '../../src/ui/free_camera.js';
 import {OverscaledTileID, UnwrappedTileID} from '../../src/source/tile_id.js';
-import Painter from '../../src/render/painter.js';
-import Program from '../../src/render/program.js';
 import {mercatorZfromAltitude, tileToMeter} from '../../src/geo/mercator_coordinate.js';
 import {cartesianPositionToSpherical, sphericalPositionToCartesian, clamp, linearVec3TosRGB} from '../../src/util/util.js';
 
@@ -28,6 +25,9 @@ import {groundShadowUniformValues} from './program/ground_shadow_program.js';
 import EXTENT from '../../src/style-spec/data/extent.js';
 import {getCutoffParams} from '../../src/render/cutoff.js';
 
+import type Painter from '../../src/render/painter.js';
+import type Program from '../../src/render/program.js';
+import type Style from '../../src/style/style.js';
 import type {UniformValues} from '../../src/render/uniform_binding.js';
 import type {LightProps as Directional} from '../style/directional_light_properties.js';
 import type {LightProps as Ambient} from '../style/ambient_light_properties.js';
@@ -149,6 +149,8 @@ export class ShadowRenderer {
     shadowDirection: Vec3;
     useNormalOffset: boolean;
 
+    _forceDisable: boolean;
+
     constructor(painter: Painter) {
         this.painter = painter;
         this._enabled = false;
@@ -159,11 +161,14 @@ export class ShadowRenderer {
         this._receivers = new ShadowReceivers();
         this._depthMode = new DepthMode(painter.context.gl.LEQUAL, DepthMode.ReadWrite, [0, 1]);
         this._uniformValues = defaultShadowUniformValues();
+        this._forceDisable = false;
 
         this.useNormalOffset = false;
 
+        painter.tp.registerParameter(this, ["Shadows"], "_forceDisable", {label: "forceDisable"}, () => { this.painter.style.map.triggerRepaint(); });
         painter.tp.registerParameter(shadowParameters, ["Shadows"], "cascadeCount", {min: 1, max: 2, step: 1});
         painter.tp.registerParameter(shadowParameters, ["Shadows"], "shadowMapResolution", {min: 32, max: 2048, step: 32});
+        painter.tp.registerBinding(this, ["Shadows"], "_numCascadesToRender", {readonly: true, label: 'numCascadesToRender'});
     }
 
     destroy() {
@@ -200,7 +205,7 @@ export class ShadowRenderer {
 
         this._enabled = this._shadowLayerCount > 0;
 
-        if (!this._enabled) {
+        if (!this.enabled) {
             return;
         }
 
@@ -308,7 +313,7 @@ export class ShadowRenderer {
     }
 
     get enabled(): boolean {
-        return this._enabled;
+        return this._enabled && !this._forceDisable;
     }
 
     set enabled(enabled: boolean) {
@@ -317,7 +322,7 @@ export class ShadowRenderer {
     }
 
     drawShadowPass(style: Style, sourceCoords: {[_: string]: Array<OverscaledTileID>}) {
-        if (!this._enabled) {
+        if (!this.enabled) {
             return;
         }
 
@@ -355,7 +360,7 @@ export class ShadowRenderer {
     }
 
     drawGroundShadows() {
-        if (!this._enabled) {
+        if (!this.enabled) {
             return;
         }
 
@@ -424,7 +429,7 @@ export class ShadowRenderer {
     }
 
     setupShadows(unwrappedTileID: UnwrappedTileID, program: Program<*>, normalOffsetMode: ?ShadowNormalOffsetMode, tileOverscaledZ: number = 0) {
-        if (!this._enabled) {
+        if (!this.enabled) {
             return;
         }
 
@@ -466,7 +471,7 @@ export class ShadowRenderer {
     }
 
     setupShadowsFromMatrix(worldMatrix: Mat4, program: Program<*>, normalOffset: boolean = false) {
-        if (!this._enabled) {
+        if (!this.enabled) {
             return;
         }
 

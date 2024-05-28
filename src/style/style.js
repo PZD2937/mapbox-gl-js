@@ -1,6 +1,7 @@
 // @flow
 
 import assert from 'assert';
+import murmur3 from 'murmurhash-js';
 
 import {Event, ErrorEvent, Evented} from '../util/evented.js';
 import StyleLayer from './style_layer.js';
@@ -14,7 +15,8 @@ import Terrain, {DrapeRenderMode} from './terrain.js';
 import Fog from './fog.js';
 import {pick, clone, extend, deepEqual, filterObject, cartesianPositionToSpherical, warnOnce} from '../util/util.js';
 import {getJSON, getReferrer, makeRequest, ResourceType} from '../util/ajax.js';
-import {isMapboxURL} from '../util/mapbox.js';
+import {isMapboxURL} from '../util/mapbox_url.js';
+import {stripQueryParameters} from '../util/url.js';
 import browser from '../util/browser.js';
 import Dispatcher from '../util/dispatcher.js';
 import Lights from '../../3d-style/style/lights.js';
@@ -24,6 +26,8 @@ import {createExpression} from '../style-spec/expression/index.js';
 
 import {
     validateStyle,
+    validateLayoutProperty,
+    validatePaintProperty,
     validateSource,
     validateLayer,
     validateFilter,
@@ -69,7 +73,7 @@ const emitValidationErrors = (evented: Evented, errors: ?ValidationErrors) =>
 import type {LightProps as Ambient} from '../../3d-style/style/ambient_light_properties.js';
 import type {LightProps as Directional} from '../../3d-style/style/directional_light_properties.js';
 import type {Vec3} from 'gl-matrix';
-import type {default as MapboxMap} from '../ui/map.js';
+import type {Map as MapboxMap} from '../ui/map.js';
 import type Transform from '../geo/transform.js';
 import type {StyleImage} from './style_image.js';
 import type {StyleGlyph} from './style_glyph.js';
@@ -103,7 +107,7 @@ import type {OverscaledTileID} from '../source/tile_id.js';
 import type {QueryResult} from '../data/feature_index.js';
 import type {QueryFeature} from '../util/vectortile_to_geojson.js';
 import type {FeatureStates} from '../source/source_state.js';
-import type {PointLike} from '@mapbox/point-geometry';
+import type {PointLike} from '../types/point-like.js';
 import type {Source, SourceClass} from '../source/source.js';
 import type {TransitionParameters, ConfigOptions} from './properties.js';
 import type {QueryRenderedFeaturesParams} from '../source/query_features.js';
@@ -128,9 +132,7 @@ const supportedDiffOperations = pick(diffOperations, [
     'setCamera',
     'addImport',
     'removeImport',
-    'setImportUrl',
-    'setImportData',
-    'setImportConfig',
+    'updateImport'
     // 'setGlyphs',
     // 'setSprite',
 ]);
@@ -161,6 +163,7 @@ export type StyleOptions = {
     importsCache?: Map<string, StyleSpecification>,
     resolvedImports?: Set<string>,
     config?: ?ConfigSpecification,
+    initialConfig?: {[string]: ConfigSpecification},
     configDependentLayers?: Set<string>;
 };
 
@@ -177,9 +180,6 @@ export type Fragment = {|
 
 const MAX_IMPORT_DEPTH = 5;
 const defaultTransition = {duration: 300, delay: 0};
-
-// Symbols are draped only on native and for certain cases only
-const drapedLayers = new Set(['fill', 'line', 'background', 'hillshade', 'raster']);
 
 /**
  * @private
@@ -200,6 +200,9 @@ class Style extends Evented {
     camera: CameraSpecification;
     transition: TransitionSpecification;
     projection: ProjectionSpecification;
+
+    // Serializable identifier of style, which we use for telemetry
+    globalId: string | null;
 
     scope: string;
     fragments: Array<Fragment>;
@@ -239,6 +242,7 @@ class Style extends Evented {
     _brightness: ?number;
     _configDependentLayers: Set<string>;
     _config: ?ConfigSpecification;
+    _initialConfig: ?{[string]: ConfigSpecification};
     _buildingIndex: BuildingIndex;
     _transition: TransitionSpecification;
 
@@ -263,6 +267,8 @@ class Style extends Evented {
 
         // Empty string indicates the root Style scope.
         this.scope = options.scope || '';
+
+        this.globalId = null;
 
         this.fragments = [];
         this.importDepth = options.importDepth || 0;
@@ -333,6 +339,7 @@ class Style extends Evented {
         this.options = options.configOptions ? options.configOptions : new Map();
         this._configDependentLayers = options.configDependentLayers ? options.configDependentLayers : new Set();
         this._config = options.config;
+        this._initialConfig = options.initialConfig;
 
         this.dispatcher.broadcast('setReferrer', getReferrer());
 
@@ -378,6 +385,72 @@ class Style extends Evented {
         });
     }
 
+    load(style: StyleSpecification | string | null): Style {
+        if (!style) {
+            return this;
+        }
+
+        if (typeof style === 'string') {
+            this.loadURL(style);
+        } else {
+            this.loadJSON(style);
+        }
+
+        return this;
+    }
+
+    _getGlobalId(loadedStyle?: StyleSpecification | string | null): string | null {
+        if (!loadedStyle) {
+            return null;
+        }
+
+        if (typeof loadedStyle === 'string') {
+            if (isMapboxURL(loadedStyle)) {
+                return loadedStyle;
+            }
+
+            const url = stripQueryParameters(loadedStyle);
+
+            if (!url.startsWith('http')) {
+                try {
+                    return new URL(url, location.href).toString();
+                } catch (_e) {
+                    return url;
+                }
+            }
+
+            return url;
+        }
+
+        return `json://${murmur3(JSON.stringify(loadedStyle))}`;
+    }
+
+    _diffStyle(style: StyleSpecification | string, onStarted: (err: Error | null, isUpdateNeeded: boolean) => void, onFinished?: () => void) {
+        this.globalId = this._getGlobalId(style);
+
+        const handleStyle = (json: StyleSpecification, callback: (err: Error | null, isUpdateNeeded: boolean) => void) => {
+            try {
+                callback(null, this.setState(json, onFinished));
+            } catch (e) {
+                callback(e, false);
+            }
+        };
+
+        if (typeof style === 'string') {
+            const url = this.map._requestManager.normalizeStyleURL(style);
+            const request = this.map._requestManager.transformRequest(url, ResourceType.Style);
+            getJSON(request, (error: ?Error, json: ?Object) => {
+                if (error) {
+                    this.fire(new ErrorEvent(error));
+                } else if (json) {
+                    handleStyle(json, onStarted);
+                }
+            });
+        } else if (typeof style === 'object') {
+            handleStyle(style, onStarted);
+        }
+    }
+
     loadURL(url: string, options: {
         validate?: boolean,
         accessToken?: string
@@ -387,6 +460,7 @@ class Style extends Evented {
         const validate = typeof options.validate === 'boolean' ?
             options.validate : !isMapboxURL(url);
 
+        this.globalId = this._getGlobalId(url);
         url = this.map._requestManager.normalizeStyleURL(url, options.accessToken);
         this.resolvedImports.add(url);
 
@@ -407,6 +481,8 @@ class Style extends Evented {
 
     loadJSON(json: StyleSpecification, options: StyleSetterOptions = {}): void {
         this.fire(new Event('dataloading', {dataType: 'style'}));
+
+        this.globalId = this._getGlobalId(json);
         this._request = browser.frame(() => {
             this._request = null;
             this._load(json, options.validate !== false);
@@ -418,7 +494,7 @@ class Style extends Evented {
         this._load(empty, false);
     }
 
-    _loadImports(imports: Array<ImportSpecification>, validate: boolean): Promise<any> {
+    _loadImports(imports: Array<ImportSpecification>, validate: boolean, beforeId: ?string): Promise<any> {
         // We take the root style into account when calculating the import depth.
         if (this.importDepth >= MAX_IMPORT_DEPTH - 1) {
             warnOnce(`Style doesn't support nesting deeper than ${MAX_IMPORT_DEPTH}`);
@@ -448,6 +524,13 @@ class Style extends Evented {
             const json = importSpec.data || this.importsCache.get(importSpec.url);
             if (json) {
                 style.loadJSON(json, {validate});
+
+                // Don't expose global ID for internal style to ensure
+                // that we don't send in telemetry Standard style as import
+                // because we already use it directly
+                if (this._isInternalStyle(json)) {
+                    style.globalId = null;
+                }
             } else if (importSpec.url) {
                 style.loadURL(importSpec.url, {validate});
             } else {
@@ -460,15 +543,45 @@ class Style extends Evented {
                 config: importSpec.config
             };
 
-            this.fragments.push(fragment);
+            if (beforeId) {
+                const beforeIndex = this.fragments.findIndex(({id}) => id === beforeId);
+
+                assert(beforeIndex !== -1, `Import with id "${beforeId}" does not exist on this map`);
+
+                this.fragments = this.fragments
+                    .slice(0, beforeIndex)
+                    .concat(fragment)
+                    .concat(this.fragments.slice(beforeIndex));
+            } else {
+                this.fragments.push(fragment);
+            }
+
         }
 
         // $FlowFixMe[method-unbinding]
         return Promise.allSettled(waitForStyles);
     }
 
+    getImportGlobalIds(style: Style = this, ids: Set<string> = new Set()): string[] {
+        for (const fragment of style.fragments) {
+            if (fragment.style.globalId) {
+                ids.add(fragment.style.globalId);
+            }
+            this.getImportGlobalIds(fragment.style, ids);
+        }
+
+        return [...ids.values()];
+    }
+
     _createFragmentStyle(importSpec: ImportSpecification): Style {
         const scope = this.scope ? makeFQID(importSpec.id, this.scope) : importSpec.id;
+
+        // Merge import config and initial config from the Map constructor
+        let config;
+        const initialConfig = this._initialConfig && this._initialConfig[scope];
+        if (importSpec.config || initialConfig) {
+            config = extend({}, importSpec.config, initialConfig);
+        }
 
         const style = new Style(this.map, {
             scope,
@@ -482,7 +595,7 @@ class Style extends Evented {
             imageManager: this.imageManager,
             glyphManager: this.glyphManager,
             modelManager: this.modelManager,
-            config: importSpec.config,
+            config,
             configOptions: this.options,
             configDependentLayers: this._configDependentLayers
         });
@@ -505,9 +618,11 @@ class Style extends Evented {
             options: this.options
         });
 
-        const isRootStyle = this.isRootStyle();
-        this._shouldPrecompile = isRootStyle;
-        this.fire(new Event(isRootStyle ? 'style.load' : 'style.import.load'));
+        this._shouldPrecompile = this.isRootStyle();
+    }
+
+    _isInternalStyle(json: StyleSpecification): boolean {
+        return this.isRootStyle() && (json.fragment || (!!json.schema && json.fragment !== false));
     }
 
     _load(json: StyleSpecification, validate: boolean) {
@@ -515,14 +630,14 @@ class Style extends Evented {
 
         // This style was loaded as a root style, but it is marked as a fragment and/or has a schema. We instead load
         // it as an import with the well-known ID "basemap" to make sure that we don't expose the internals.
-        if (this.isRootStyle() && (json.fragment || (schema && json.fragment !== false))) {
+        if (this._isInternalStyle(json)) {
             const basemap = {id: 'basemap', data: json, url: ''};
             const style = extend({}, empty, {imports: [basemap]});
             this._load(style, validate);
             return;
         }
 
-        this.setConfig(this._config, schema);
+        this.updateConfig(this._config, schema);
 
         if (validate && emitValidationErrors(this, validateStyle(json))) {
             return;
@@ -609,10 +724,16 @@ class Style extends Evented {
 
         this.fire(new Event('data', {dataType: 'style'}));
 
+        const isRootStyle = this.isRootStyle();
+
         if (json.imports) {
-            this._loadImports(json.imports, validate).then(() => this._reloadImports());
+            this._loadImports(json.imports, validate).then(() => {
+                this._reloadImports();
+                this.fire(new Event(isRootStyle ? 'style.load' : 'style.import.load'));
+            });
         } else {
             this._reloadImports();
+            this.fire(new Event(isRootStyle ? 'style.load' : 'style.import.load'));
         }
     }
 
@@ -873,12 +994,12 @@ class Style extends Evented {
         this.dispatcher.broadcast('setProjection', this.map.transform.projectionOptions);
 
         if (this.map.transform.projection.requiresDraping) {
-            const hasTerrain = this.getTerrain() || this.stylesheet.terrain;
+            const hasTerrain = (this.getTerrain() || this.stylesheet.terrain) && !this.disableElevatedTerrain;
             if (!hasTerrain) {
                 this.setTerrainForDraping();
             }
         } else if (this.terrainSetForDrapingOnly()) {
-            this.setTerrain(null);
+            this.setTerrain(null, DrapeRenderMode.deferred);
         }
     }
 
@@ -1051,8 +1172,7 @@ class Style extends Evented {
 
     isLayerDraped(layer: StyleLayer): boolean {
         if (!this.terrain) return false;
-        if (typeof layer.isLayerDraped === 'function') return layer.isLayerDraped(this.getLayerSourceCache(layer));
-        return drapedLayers.has(layer.type);
+        return layer.isDraped(this.getLayerSourceCache(layer));
     }
 
     _checkLoaded(): void {
@@ -1143,6 +1263,7 @@ class Style extends Evented {
             const sourceCache = this._mergedSourceCaches[sourceId];
             sourcesUsedBefore[sourceId] = sourceCache.used;
             sourceCache.used = false;
+            sourceCache.tileCoverLift = 0.0;
         }
 
         for (const layerId of this._mergedOrder) {
@@ -1150,7 +1271,11 @@ class Style extends Evented {
             layer.recalculate(parameters, this._availableImages);
             if (!layer.isHidden(parameters.zoom)) {
                 const sourceCache = this.getLayerSourceCache(layer);
-                if (sourceCache) sourceCache.used = true;
+                if (sourceCache) {
+                    sourceCache.used = true;
+                    // Select the highest elevation across all layers that are rendered with this source
+                    sourceCache.tileCoverLift = Math.max(sourceCache.tileCoverLift, layer.tileCoverLift());
+                }
             }
 
             if (!this._precompileDone && this._shouldPrecompile) {
@@ -1253,7 +1378,7 @@ class Style extends Evented {
      * @returns {boolean} true if any changes were made; false otherwise
      * @private
      */
-    setState(nextState: StyleSpecification): boolean {
+    setState(nextState: StyleSpecification, onFinish?: () => void): boolean {
         this._checkLoaded();
 
         if (emitValidationErrors(this, validateStyle(nextState))) return false;
@@ -1273,9 +1398,15 @@ class Style extends Evented {
             throw new Error(`Unimplemented: ${unimplementedOps.map(op => op.command).join(', ')}.`);
         }
 
+        const changesPromises = [];
+
         changes.forEach((op) => {
-            (this: any)[op.command].apply(this, op.args);
+            changesPromises.push((this: any)[op.command].apply(this, op.args));
         });
+
+        if (onFinish) {
+            Promise.all(changesPromises).then(onFinish);
+        }
 
         this.stylesheet = nextState;
         this.mergeAll();
@@ -1372,7 +1503,6 @@ class Style extends Evented {
         if (shouldValidate && this._validate(validateSource, `sources.${id}`, source, null, options)) return;
 
         if (this.map && this.map._collectResourceTiming) (source: any).collectResourceTiming = true;
-
         const sourceInstance = createSource(id, source, this.dispatcher, this);
         sourceInstance.scope = this.scope;
 
@@ -1617,7 +1747,7 @@ class Style extends Evented {
         }
     }
 
-    getConfigProperty(fragmentId: string, key: string): ?any {
+    getConfigProperty(fragmentId: string, key: string): mixed {
         const fragmentStyle = this.getFragmentStyle(fragmentId);
         if (!fragmentStyle) return null;
         const fqid = makeFQID(key, fragmentStyle.scope);
@@ -1626,7 +1756,13 @@ class Style extends Evented {
         return expression ? expression.serialize() : null;
     }
 
-    setConfigProperty(fragmentId: string, key: string, value: any) {
+    setConfigProperty(fragmentId: string, key: string, value: mixed) {
+        const fragmentStyle = this.getFragmentStyle(fragmentId);
+        if (!fragmentStyle) return;
+
+        const schema = fragmentStyle.stylesheet.schema;
+        if (!schema || !schema[key]) return;
+
         const expressionParsed = createExpression(value);
         if (expressionParsed.result !== 'success') {
             emitValidationErrors(this, expressionParsed.value);
@@ -1635,18 +1771,77 @@ class Style extends Evented {
 
         const expression = expressionParsed.value.expression;
 
-        const fragmentStyle = this.getFragmentStyle(fragmentId);
-        if (!fragmentStyle) return;
-
         const fqid = makeFQID(key, fragmentStyle.scope);
         const expressions = fragmentStyle.options.get(fqid);
         if (!expressions) return;
 
-        this.options.set(fqid, {...expressions, value: expression});
+        let defaultExpression;
+        const {minValue, maxValue, stepValue, type, values} = schema[key];
+        const defaultExpressionParsed = createExpression(schema[key].default);
+        if (defaultExpressionParsed.result === 'success') {
+            defaultExpression = defaultExpressionParsed.value.expression;
+        }
+
+        if (!defaultExpression) {
+            this.fire(new ErrorEvent(new Error(`No schema defined for the config option "${key}" in the "${fragmentId}" fragment.`)));
+            return;
+        }
+
+        this.options.set(fqid, {
+            ...expressions,
+            value: expression,
+            default: defaultExpression,
+            minValue, maxValue, stepValue, type, values
+        });
+
         this.updateConfigDependencies();
     }
 
-    setConfig(config: ?ConfigSpecification, schema: ?SchemaSpecification) {
+    getConfig(fragmentId: string): ?ConfigSpecification {
+        const fragmentStyle = this.getFragmentStyle(fragmentId);
+        if (!fragmentStyle) return null;
+
+        const schema = fragmentStyle.stylesheet.schema;
+        if (!schema) return null;
+
+        const config = {};
+        for (const key in schema) {
+            const fqid = makeFQID(key, fragmentStyle.scope);
+            const expressions = fragmentStyle.options.get(fqid);
+            const expression = expressions ? expressions.value || expressions.default : null;
+            config[key] = expression ? expression.serialize() : null;
+        }
+
+        return config;
+    }
+
+    setConfig(fragmentId: string, config: ?ConfigSpecification) {
+        const fragmentStyle = this.getFragmentStyle(fragmentId);
+        if (!fragmentStyle) return;
+
+        const schema = fragmentStyle.stylesheet.schema;
+        fragmentStyle.updateConfig(config, schema);
+
+        this.updateConfigDependencies();
+    }
+
+    getSchema(fragmentId: string): ?SchemaSpecification {
+        const fragmentStyle = this.getFragmentStyle(fragmentId);
+        if (!fragmentStyle) return null;
+        return fragmentStyle.stylesheet.schema;
+    }
+
+    setSchema(fragmentId: string, schema: SchemaSpecification) {
+        const fragmentStyle = this.getFragmentStyle(fragmentId);
+        if (!fragmentStyle) return;
+
+        fragmentStyle.stylesheet.schema = schema;
+        fragmentStyle.updateConfig(fragmentStyle._config, schema);
+
+        this.updateConfigDependencies();
+    }
+
+    updateConfig(config: ?ConfigSpecification, schema: ?SchemaSpecification) {
         this._config = config;
 
         if (!config && !schema) return;
@@ -1703,6 +1898,10 @@ class Style extends Evented {
 
         if (this.directionalLight) {
             this.directionalLight.updateConfig(this.options);
+        }
+
+        if (this.fog) {
+            this.fog.updateConfig(this.options);
         }
 
         this._changes.setDirty();
@@ -1894,6 +2093,7 @@ class Style extends Evented {
             sourceCache.castsShadows = shadowCastersLeft;
         }
 
+        // $FlowFixMe[method-unbinding]
         if (layer.onRemove) {
             layer.onRemove(this.map);
         }
@@ -2003,7 +2203,7 @@ class Style extends Evented {
         return clone(layer.filter);
     }
 
-    setLayoutProperty(layerId: string, name: string, value: any,  options: StyleSetterOptions = {}) {
+    setLayoutProperty(layerId: string, name: string, value: any, options: StyleSetterOptions = {}) {
         this._checkLoaded();
 
         const layer = this._checkLayer(layerId);
@@ -2011,7 +2211,23 @@ class Style extends Evented {
 
         if (deepEqual(layer.getLayoutProperty(name), value)) return;
 
-        layer.setLayoutProperty(name, value, options);
+        if (value !== null && value !== undefined && !(options && options.validate === false)) {
+            const key = `layers.${layerId}.layout.${name}`;
+            const errors = emitValidationErrors(layer, validateLayoutProperty.call(validateStyle, {
+                key,
+                layerType: layer.type,
+                objectKey: name,
+                value,
+                styleSpec,
+                // Workaround for https://github.com/mapbox/mapbox-gl-js/issues/2407
+                style: {glyphs: true, sprite: true}
+            }));
+            if (errors) {
+                return;
+            }
+        }
+
+        layer.setLayoutProperty(name, value);
         if (layer.isConfigDependent) this._configDependentLayers.add(layer.fqid);
         this._updateLayer(layer);
     }
@@ -2036,7 +2252,21 @@ class Style extends Evented {
 
         if (deepEqual(layer.getPaintProperty(name), value)) return;
 
-        const requiresRelayout = layer.setPaintProperty(name, value, options);
+        if (value !== null && value !== undefined && !(options && options.validate === false)) {
+            const key = `layers.${layerId}.paint.${name}`;
+            const errors = emitValidationErrors(layer, validatePaintProperty.call(validateStyle, {
+                key,
+                layerType: layer.type,
+                objectKey: name,
+                value,
+                styleSpec
+            }));
+            if (errors) {
+                return;
+            }
+        }
+
+        const requiresRelayout = layer.setPaintProperty(name, value);
         if (layer.isConfigDependent) this._configDependentLayers.add(layer.fqid);
         if (requiresRelayout) {
             this._updateLayer(layer);
@@ -2147,6 +2377,7 @@ class Style extends Evented {
             version: this.stylesheet.version,
             name: this.stylesheet.name,
             metadata: this.stylesheet.metadata,
+            fragment: this.stylesheet.fragment,
             imports: this._serializeImports(),
             schema: this.stylesheet.schema,
             camera: this.stylesheet.camera,
@@ -2204,7 +2435,7 @@ class Style extends Evented {
         //      This means that that the line_layer feature is above the extrusion_layer_b feature despite
         //      it being in an earlier layer.
 
-        const isLayer3D = (layerId: string) => this._mergedLayers[layerId].type === 'fill-extrusion';
+        const isLayer3D = (layerId: string) => this._mergedLayers[layerId].type === 'fill-extrusion' ||  this._mergedLayers[layerId].type === 'model';
 
         const order = this.order;
 
@@ -2332,7 +2563,7 @@ class Style extends Evented {
         return (this._flattenAndSortRenderedFeatures(sourceResults): any);
     }
 
-    querySourceFeatures(sourceID: string, params: ?{sourceLayer: ?string, filter: ?Array<any>, validate?: boolean}): Array<QueryFeature> {
+    querySourceFeatures(sourceID: string, params: ?{sourceLayer: ?string, filter?: ?Array<any>, validate?: boolean}): Array<QueryFeature> {
         if (params && params.filter) {
             this._validate(validateFilter, 'querySourceFeatures.filter', params.filter, null, params);
         }
@@ -2401,7 +2632,10 @@ class Style extends Evented {
 
         // Disabling
         if (!terrainOptions) {
-            delete this.terrain;
+            // This check prevents removing draping terrain not from #applyProjectionUpdate
+            if (!this.terrainSetForDrapingOnly() || drapeRenderMode === DrapeRenderMode.deferred) {
+                delete this.terrain;
+            }
 
             if (terrainOptions === null) {
                 this.stylesheet.terrain = null;
@@ -2476,7 +2710,7 @@ class Style extends Evented {
     }
 
     _createFog(fogOptions: FogSpecification) {
-        const fog = this.fog = new Fog(fogOptions, this.map.transform);
+        const fog = this.fog = new Fog(fogOptions, this.map.transform, this.scope, this.options);
         this.stylesheet.fog = fog.get();
         const parameters = this._getTransitionParameters({duration: 0});
         fog.updateTransitions(parameters);
@@ -2497,7 +2731,7 @@ class Style extends Evented {
         return this.fog ? this.fog.get() : null;
     }
 
-    setFog(fogOptions: FogSpecification) {
+    setFog(fogOptions?: FogSpecification) {
         this._checkLoaded();
 
         if (!fogOptions) {
@@ -2515,7 +2749,7 @@ class Style extends Evented {
             // Updating fog
             const fog = this.fog;
             if (!deepEqual(fog.get(), fogOptions)) {
-                fog.set(fogOptions);
+                fog.set(fogOptions, this.options);
                 this.stylesheet.fog = fog.get();
                 const parameters = this._getTransitionParameters({duration: 0});
                 fog.updateTransitions(parameters);
@@ -2754,6 +2988,7 @@ class Style extends Evented {
         }
 
         if (placementCommitted || symbolBucketsChanged) {
+            this._buildingIndex.onNewFrame(transform.zoom);
             for (const layerId of this._mergedOrder) {
                 const styleLayer = this._mergedLayers[layerId];
                 if (styleLayer.type !== 'symbol') continue;
@@ -2774,18 +3009,92 @@ class Style extends Evented {
 
     // Fragments and merging
 
-    addImport(importSpec: ImportSpecification): Style {
+    addImport(importSpec: ImportSpecification, beforeId: ?string): Promise<any> | void {
         this._checkLoaded();
 
         const imports = this.stylesheet.imports = this.stylesheet.imports || [];
 
         const index = imports.findIndex(({id}) => id === importSpec.id);
         if (index !== -1) {
-            return this.fire(new ErrorEvent(new Error(`Import with id '${importSpec.id}' already exists in the map's style.`)));
+            this.fire(new ErrorEvent(new Error(`Import with id '${importSpec.id}' already exists in the map's style.`)));
+            return;
         }
 
-        imports.push(importSpec);
-        this._loadImports([importSpec], true);
+        if (!beforeId) {
+            imports.push(importSpec);
+            return this._loadImports([importSpec], true);
+        }
+
+        const beforeIndex = imports.findIndex(({id}) => id === beforeId);
+
+        if (beforeIndex === -1) {
+            this.fire(new ErrorEvent(new Error(`Import with id "${beforeId}" does not exist on this map.`)));
+        }
+
+        this.stylesheet.imports = imports
+            .slice(0, beforeIndex)
+            .concat(importSpec)
+            .concat(imports.slice(beforeIndex));
+
+        return this._loadImports([importSpec], true, beforeId);
+    }
+
+    updateImport(importId: string, importSpecification: ImportSpecification | string): Style {
+        this._checkLoaded();
+
+        const imports = this.stylesheet.imports || [];
+        const index = this.getImportIndex(importId);
+        if (index === -1) return this;
+
+        if (typeof importSpecification === 'string') {
+            this.setImportUrl(importId, importSpecification);
+            return this;
+        }
+
+        if (importSpecification.url && importSpecification.url !== imports[index].url) {
+            this.setImportUrl(importId, importSpecification.url);
+        }
+
+        if (!deepEqual(importSpecification.config, imports[index].config)) {
+            this.setImportConfig(importId, importSpecification.config);
+        }
+
+        if (!deepEqual(importSpecification.data, imports[index].data)) {
+            this.setImportData(importId, importSpecification.data);
+        }
+
+        return this;
+    }
+
+    moveImport(importId: string, beforeId: string): Style {
+        this._checkLoaded();
+
+        let imports = this.stylesheet.imports || [];
+
+        const index = this.getImportIndex(importId);
+        if (index === -1) return this;
+
+        const beforeIndex = this.getImportIndex(beforeId);
+        if (beforeIndex === -1) return this;
+
+        const importSpec = imports[index];
+        const fragment = this.fragments[index];
+
+        imports = imports.filter(({id}) => id !== importId);
+
+        this.fragments = this.fragments.filter(({id}) => id !== importId);
+
+        this.stylesheet.imports = imports
+            .slice(0, beforeIndex)
+            .concat(importSpec)
+            .concat(imports.slice(beforeIndex));
+
+        this.fragments = this.fragments
+            .slice(0, beforeIndex)
+            .concat(fragment)
+            .concat(this.fragments.slice(beforeIndex));
+
+        this.mergeLayers();
         return this;
     }
 
@@ -2847,19 +3156,19 @@ class Style extends Evented {
         const schema = fragment.style.stylesheet && fragment.style.stylesheet.schema;
 
         fragment.config = config;
-        fragment.style.setConfig(config, schema);
+        fragment.style.updateConfig(config, schema);
 
         this.updateConfigDependencies();
 
         return this;
     }
 
-    removeImport(importId: string): Style {
+    removeImport(importId: string): void {
         this._checkLoaded();
 
         const imports = this.stylesheet.imports || [];
         const index = this.getImportIndex(importId);
-        if (index === -1) return this;
+        if (index === -1) return;
 
         imports.splice(index, 1);
 
@@ -2869,7 +3178,6 @@ class Style extends Evented {
         this.fragments.splice(index, 1);
 
         this._reloadImports();
-        return this;
     }
 
     getImportIndex(importId: string): number {
@@ -2928,7 +3236,17 @@ class Style extends Evented {
             this._mergedOtherSourceCaches[fqid];
     }
 
-    getSourceCaches(fqid: string): Array<SourceCache> {
+    /**
+     * Returns all source caches for a given style FQID.
+     * If no FQID is provided, returns all source caches,
+     * including source caches in imported styles.
+     * @param {string} fqid Style FQID.
+     * @returns {Array<SourceCache>} List of source caches.
+     */
+    getSourceCaches(fqid: ?string): Array<SourceCache> {
+        // $FlowFixMe[incompatible-return] - Flow can't infer result of Object.values()
+        if (fqid == null) return Object.values(this._mergedSourceCaches);
+
         const sourceCaches = [];
         if (this._mergedOtherSourceCaches[fqid]) {
             sourceCaches.push(this._mergedOtherSourceCaches[fqid]);

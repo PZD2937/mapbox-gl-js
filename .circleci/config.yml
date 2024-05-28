@@ -1,12 +1,10 @@
 version: 2.1
 orbs:
-  aws-cli: circleci/aws-cli@3.1.4
-  browser-tools: circleci/browser-tools@1.4.2
-  macos: circleci/macos@2.3.6
+  aws-cli: circleci/aws-cli@4.1.3
+  browser-tools: circleci/browser-tools@1.4.8
   win: circleci/windows@5.0.0
 
 workflows:
-  version: 2
   default:
     jobs:
       - prepare-linux:
@@ -15,7 +13,7 @@ workflows:
               only: /.*/
       - install-mbx-ci:
           requires:
-              - prepare-linux
+            - prepare-linux
           filters:
             tags:
               only: /.*/
@@ -50,9 +48,22 @@ workflows:
           filters:
             tags:
               only: /.*/
-      - test-unit:
+      - setup-playwright:
           requires:
             - prepare-linux
+          filters:
+            tags:
+              only: /.*/
+      - test-unit:
+          requires:
+            - setup-playwright
+          filters:
+            tags:
+              only: /.*/
+      - test-csp:
+          requires:
+            - setup-playwright
+            - build
           filters:
             tags:
               only: /.*/
@@ -65,6 +76,12 @@ workflows:
       - test-expressions:
           requires:
             - prepare-linux
+          filters:
+            tags:
+              only: /.*/
+      - test-typescript:
+          requires:
+            - build
           filters:
             tags:
               only: /.*/
@@ -155,14 +172,14 @@ workflows:
 
 linux-defaults: &linux-defaults
   docker:
-    - image: cimg/node:18.16-browsers
+    - image: cimg/node:18.20-browsers
   working_directory: ~/mapbox-gl-js
 
 mac-defaults: &mac-defaults
   resource_class: macos.m1.medium.gen1
   macos:
-    # https://circleci.com/docs/using-macos/#supported-xcode-versions
-    xcode: 14.3.0 # macOS 13.2 (Ventura)
+    # https://circleci.com/docs/using-macos/#supported-xcode-versions-silicon
+    xcode: 14.3.1 # macOS 13.2.1 (Ventura)
   environment:
     HOMEBREW_NO_AUTO_UPDATE: 1
   working_directory: ~/mapbox-gl-js
@@ -181,15 +198,15 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - v0-linux-yarn-{{ .Branch }}-{{ checksum "yarn.lock" }}
-            - v0-linux-yarn-{{ .Branch }}-
-            - v0-linux-yarn-
-      - run: yarn --frozen-lockfile --cache-folder ~/.cache/yarn
-      - run: yarn run build-dev
+            - v0-linux-npm-{{ .Branch }}-{{ checksum "package-lock.json" }}
+            - v0-linux-npm-{{ .Branch }}-
+            - v0-linux-npm-
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build-dev
       - save_cache:
-          key: v0-linux-yarn-{{ .Branch }}-{{ checksum "yarn.lock" }}
+          key: v0-linux-npm-{{ .Branch }}-{{ checksum "package-lock.json" }}
           paths:
-           - ~/.cache/yarn
+            - ~/.npm
       - persist_to_workspace:
           root: ~/
           paths:
@@ -222,8 +239,8 @@ jobs:
           keys:
             - v2-lint-{{ .Branch }}
             - v2-lint
-      - run: yarn run lint
-      - run: yarn run lint-css
+      - run: npm run lint
+      - run: npm run lint-css
       - save_cache:
           key: v2-lint-{{ .Branch }}-{{ .Revision }}
           paths:
@@ -234,14 +251,20 @@ jobs:
     steps:
       - attach_workspace:
           at: ~/
-      - run: yarn run build-prod-min
-      - run: yarn run build-prod
-      - run: yarn run build-csp
-      - run: yarn run build-css
-      - run: yarn run build-style-spec
-      - run: yarn run build-flow-types
-      - run: yarn run test-build
-      - run: while read l; do cp debug/$l test/release/$l; done < test/release/local_release_page_list.txt
+      - run: npm run build-prod-min
+      - run: npm run build-prod
+      - run: npm run build-csp
+      - run: npm run build-css
+      - run: npm run build-style-spec
+      - run: npm run build-flow-types
+      - run: npm run test-build
+      - run: npm run prepare-release-pages
+      - run:
+          name: Create mapbox-gl.tar.gz
+          command: |
+            TAR_PATH=mapbox-gl-${CIRCLE_TAG:-${CIRCLE_SHA1:0:6}}.tar.gz
+            tar -czvf $TAR_PATH test/release dist
+            mv $TAR_PATH test/release
       - store_artifacts:
           path: "dist"
       - store_artifacts:
@@ -251,6 +274,27 @@ jobs:
           paths:
             - mapbox-gl-js/dist
 
+  setup-playwright:
+    <<: *linux-defaults
+    steps:
+      - attach_workspace:
+          at: ~/
+      - restore_cache:
+          keys:
+            - v0-playwright-{{ checksum "package-lock.json" }}
+      - run:
+          name: Playwright version
+          command: npx playwright --version
+      - run: npx playwright install chromium
+      - save_cache:
+          key: v0-playwright-{{ checksum "package-lock.json" }}
+          paths:
+           - ~/.cache
+      - persist_to_workspace:
+          root: ~/
+          paths:
+            - .cache
+
   check-bundle-size:
     <<: *linux-defaults
     steps:
@@ -258,14 +302,14 @@ jobs:
           at: ~/
       - run:
           name: Check bundle size
-          command: yarn check-bundle-size
+          command: npm run check-bundle-size
 
   test-flow:
     <<: *linux-defaults
     steps:
       - attach_workspace:
           at: ~/
-      - run: yarn run test-flow
+      - run: npm run test-flow
 
   test-unit:
     <<: *linux-defaults
@@ -273,7 +317,7 @@ jobs:
       - attach_workspace:
           at: ~/
       - run:
-          command: yarn run test-unit
+          command: npm run test-unit
           no_output_timeout: 5m
 
   test-query:
@@ -282,11 +326,35 @@ jobs:
       - attach_workspace:
           at: ~/
       - browser-tools/install-chrome
-      - run: yarn run test-query
+      - run: npm run test-query
       - store_test_results:
           path: test/integration/query-tests
       - store_artifacts:
           path: "test/integration/query-tests/index.html"
+
+  test-typescript:
+    <<: *linux-defaults
+    steps:
+      - attach_workspace:
+          at: ~/
+      - run:
+          name: Build TypeScript
+          command: |
+            cd ./test/build/typescript &&
+            npm ci &&
+            npm run build &&
+            rm -rf node_modules
+      - store_artifacts:
+          path: "test/build/typescript"
+
+  test-csp:
+    <<:  *linux-defaults
+    steps:
+      - attach_workspace:
+          at: ~/
+      - run:
+          command: npm run test-csp
+          no_output_timeout: 5m
 
   test-webpack:
     <<: *linux-defaults
@@ -297,7 +365,7 @@ jobs:
           name: Build Webpack
           command: |
             cd ./test/build/transpilation &&
-            yarn &&
+            npm ci &&
             npm run build &&
             rm -rf node_modules
       - store_artifacts:
@@ -308,7 +376,7 @@ jobs:
     steps:
       - attach_workspace:
           at: ~/
-      - run: yarn run test-style-spec
+      - run: npm run test-style-spec
 
   verify-codegen:
     <<: *linux-defaults
@@ -318,15 +386,17 @@ jobs:
       - run:
           name: Verify codegen output
           command: |
-            yarn run codegen
+            npm run codegen
             git add -A && git diff --staged --exit-code | tee check.patch
+      - store_artifacts:
+          path: "check.patch"
 
   test-expressions:
     <<: *linux-defaults
     steps:
       - attach_workspace:
           at: ~/
-      - run: yarn run test-expressions
+      - run: npm run test-expressions
 
   deploy-release:
     <<: *linux-defaults
@@ -357,7 +427,7 @@ jobs:
       - run:
           name: Running tests in parallel
           command: |
-            yarn run test-render
+            npm run test-render
       - store_test_results:
           path: test/integration/render-tests
       - store_artifacts:
@@ -369,7 +439,7 @@ jobs:
       - attach_workspace:
           at: ~/
       - browser-tools/install-chrome
-      - run: yarn run test-render-prod
+      - run: npm run test-render-prod
       - store_test_results:
           path: test/integration/render-tests
       - store_artifacts:
@@ -381,7 +451,7 @@ jobs:
       - attach_workspace:
           at: ~/
       - browser-tools/install-chrome
-      - run: yarn run test-render-csp
+      - run: npm run test-render-csp
       - store_test_results:
           path: test/integration/render-tests
       - store_artifacts:
@@ -393,7 +463,7 @@ jobs:
       - attach_workspace:
           at: ~/
       - browser-tools/install-firefox
-      - run: yarn run test-render-firefox
+      - run: npm run test-render-firefox
       - store_test_results:
           path: test/integration/render-tests
       - store_artifacts:
@@ -405,16 +475,16 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - v0-mac-yarn-{{ .Branch }}-{{ checksum "yarn.lock" }}
-            - v0-mac-yarn-{{ .Branch }}-
-            - v0-mac-yarn-
+            - v0-mac-npm-{{ .Branch }}-{{ checksum "package-lock.json" }}
+            - v0-mac-npm-{{ .Branch }}-
+            - v0-mac-npm-
       - run: nvm install && cat .nvmrc | nvm alias default `xargs`
-      - run: yarn --frozen-lockfile --cache-folder ~/.cache/yarn
+      - run: npm ci --no-audit --no-fund
       - save_cache:
-          key: v0-mac-yarn-{{ .Branch }}-{{ checksum "yarn.lock" }}
+          key: v0-mac-npm-{{ .Branch }}-{{ checksum "package-lock.json" }}
           paths:
-           - ~/.cache/yarn
-      - run: yarn run build-dev
+           - ~/.npm
+      - run: npm run build-dev
       - persist_to_workspace:
           root: ~/
           paths:
@@ -431,7 +501,7 @@ jobs:
           name: Creating test list
           command: |
             circleci tests glob "test/integration/render-tests/**/*.json" | circleci tests split --split-by=timings > tests-to-run.txt
-      - run: yarn run test-render
+      - run: npm run test-render
       - store_test_results:
           path: test/integration/render-tests
       - store_artifacts:
@@ -442,7 +512,7 @@ jobs:
     steps:
       - attach_workspace:
           at: ~/
-      - run: yarn run test-render-safari
+      - run: npm run test-render-safari
       - store_test_results:
           path: test/integration/render-tests
       - store_artifacts:
@@ -452,24 +522,31 @@ jobs:
     <<: *windows-defaults
     steps:
       - checkout
+      - restore_cache:
+          keys:
+            - v2-windows-npm-{{ .Branch }}-{{ checksum "package-lock.json" }}
+            - v2-windows-npm-{{ .Branch }}-
+            - v2-windows-npm-
       - run:
-          name: Setup Node.js and Yarn
+          name: Setup Node.js
           command: |
             $nodeVersion = Get-Content .nvmrc
             nvm install $nodeVersion
             nvm use $nodeVersion
-            npm install -g yarn
-      - run: yarn --frozen-lockfile
-      - run: yarn run build-dev
+      - run: npm ci --no-audit --no-fund --cache ~/.npm
+      - save_cache:
+          key: v2-windows-npm-{{ .Branch }}-{{ checksum "package-lock.json" }}
+          paths:
+            - ~/log.txt
+      - store_artifacts:
+          path: "test/integration/render-tests/index.html"
+      - run: npm run build-dev
       - run:
           name: Clean up workspace to persist faster
           command: |
             Remove-Item .git -Recurse -Force;
             Remove-Item node_modules/flow-bin -Recurse -Force;
-            Remove-Item node_modules/tap -Recurse -Force;
-            Remove-Item node_modules/gl -Recurse -Force;
             Remove-Item node_modules/@mapbox/mvt-fixtures/real-world/osm-qa-* -Recurse -Force;
-            Remove-Item node_modules/react-devtools-core -Recurse -Force;
             Remove-Item node_modules/@octokit -Recurse -Force;
             Remove-Item node_modules/puppeteer-core -Recurse -Force;
             Remove-Item node_modules/lodash -Recurse -Force;
@@ -485,12 +562,11 @@ jobs:
       - attach_workspace:
           at: ~/
       - run:
-          name: Setup Node.js and Yarn
+          name: Setup Node.js
           command: |
             $nodeVersion = Get-Content .nvmrc
             nvm install $nodeVersion
             nvm use $nodeVersion
-            npm install -g yarn
       # The browser-tools orb doesn't work on Windows, so we install chrome manually.
       - run:
           name: Installing Chrome on Windows
@@ -509,7 +585,7 @@ jobs:
           name: Creating test list
           command: |
             circleci tests glob "test/integration/render-tests/**/*.json" | circleci tests split | Out-File -Encoding utf8 -FilePath tests-to-run.txt
-      - run: yarn run test-render
+      - run: npm run test-render
       - store_test_results:
           path: test/integration/render-tests
       - store_artifacts:

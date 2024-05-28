@@ -27,9 +27,6 @@ export const operationHandlers = {
 
         waitForRender(map, () => map.loaded(), doneCb);
     },
-    idle(map, params, doneCb) {
-        waitForRender(map, () => !map.isMoving(), doneCb);
-    },
     sleep(map, params, doneCb) {
         setTimeout(doneCb, params[0]);
     },
@@ -115,7 +112,7 @@ export const operationHandlers = {
     setStyle(map, params, doneCb) {
         // Disable local ideograph generation (enabled by default) for
         // consistent local ideograph rendering using fixtures in all runs of the test suite.
-        map.setStyle(params[0], {localIdeographFontFamily: false});
+        map.setStyle(params[0], {localIdeographFontFamily: false, ...params[1]});
         doneCb();
     },
     pauseSource(map, params, doneCb) {
@@ -185,15 +182,19 @@ export const operationHandlers = {
 
     },
     check(map, params, doneCb) {
-
+        // We still don't handle params[0] === "shadowPassVerticesCount" as lazy shadow map rendering is not implemented
         if (params[0] === "renderedVerticesCount") {
             const layer = map.getLayer(params[1]);
             const layerStats = layer.getLayerRenderingStats();
-            const renderedVertices = layerStats.numRenderedVerticesInShadowPass + layerStats.numRenderedVerticesInTransparentPass;
+            const renderedVertices = params[0] === "renderedVerticesCount" ? layerStats.numRenderedVerticesInTransparentPass : layerStats.numRenderedVerticesInShadowPass;
             if (renderedVertices !== params[2]) {
                 throw new Error(params[3]);
             }
         }
+        doneCb();
+    },
+    updateGeoJSONData(map, [sourceId, data], doneCb) {
+        map.getSource(sourceId).updateData(data);
         doneCb();
     }
 };

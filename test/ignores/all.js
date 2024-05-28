@@ -31,7 +31,19 @@ const todo = [
     "render-tests/model-layer/landmark-conflation-buckingham",
 
     // https://mapbox.atlassian.net/browse/MAPS3D-987
-    "render-tests/model-layer/landmark-shadows-terrain"
+    "render-tests/model-layer/landmark-shadows-terrain",
+
+    // Needs port from Native
+    // https://mapbox.atlassian.net/browse/MAPS3D-1331
+    "render-tests/model-layer/landmark-shadows-cutoff-range",
+
+    // Needs port from Native
+    // https://mapbox.atlassian.net/browse/MAPS3D-1347
+    "render-tests/model-layer/landmark-front-cutoff",
+    "render-tests/model-layer/landmark-front-cutoff-disabled",
+    "render-tests/model-layer/landmark-front-cutoff-no-fade",
+    "render-tests/model-layer/landmark-front-cutoff-opacity",
+    "render-tests/model-layer/landmark-front-cutoff-terrain"
 ];
 
 const skip = [
@@ -75,9 +87,6 @@ const skip = [
     "render-tests/text-variable-anchor/avoid-edges-tile-map-mode",
     "render-tests/text-variable-anchor/left-top-right-bottom-offset-tile-map-mode",
     "render-tests/tile-mode/streets-v11",
-
-    // Text drawn over icons
-    "render-tests/symbol-sort-key/text-ignore-placement",
 
     // Non-deterministiic when rendered in browser
     "render-tests/text-variable-anchor/pitched-rotated-debug",
@@ -172,6 +181,9 @@ const skip = [
     "render-tests/model-layer/landmark-terrain",
     "render-tests/model-layer/lighting-3d-mode/shadow",
     "render-tests/model-layer/landmark-conflation-multiple-sources",
+    "render-tests/model-layer/landmark-shadow-skip-render",
+    "render-tests/model-layer/landmark-multiple-model-layers-z-offset-hide-evaluated",
+    "render-tests/model-layer/landmark-shadows-opacity-cutoff-range",
 
     // Not implemented in gl-js
     "render-tests/fill-extrusion-partial-rendering/partial-rendering-0",
@@ -189,9 +201,7 @@ const skip = [
     // The algorithm for raster colour gradient texels stretching needs an adjustment
     "render-tests/raster-color/categorical",
 
-    // Only implemented in native for now
-    "render-tests/model-layer/landmark-mbx-meshopt",
-    "render-tests/model-layer/landmark-mbx-meshopt-colors"
+    "render-tests/model-layer/landmark-front-cutoff-high-zoom",
 ];
 
 export default {todo, skip};

@@ -39,9 +39,8 @@ export default function drawLine(painter: Painter, sourceCache: SourceCache, lay
     const capProperty = layer.layout.get('line-cap');
     const patternProperty = layer.paint.get('line-pattern');
     const image = patternProperty.constantOr((1: any));
-    const hasPattern = layer.paint.get('line-pattern').constantOr((1: any));
     const hasOpacity = layer.paint.get('line-opacity').constantOr(1.0) !== 1.0;
-    let useStencilMaskRenderPass = (!hasPattern && hasOpacity);
+    let useStencilMaskRenderPass = (!image && hasOpacity);
 
     const gradient = layer.paint.get('line-gradient');
 
@@ -102,7 +101,7 @@ export default function drawLine(painter: Painter, sourceCache: SourceCache, lay
 
         const matrix = painter.terrain ? coord.projMatrix : null;
         const uniformValues = image ?
-            linePatternUniformValues(painter, tile, layer, matrix, pixelRatio) :
+            linePatternUniformValues(painter, tile, layer, matrix, pixelRatio, [trimStart, trimEnd]) :
             lineUniformValues(painter, tile, layer, matrix, bucket.lineClipsArray.length, pixelRatio, [trimStart, trimEnd]);
 
         if (gradient) {
@@ -160,7 +159,7 @@ export default function drawLine(painter: Painter, sourceCache: SourceCache, lay
             program.draw(painter, gl.TRIANGLES, depthMode,
                 stencilMode, colorMode, CullFaceMode.disabled, uniformValues,
                 layer.id, bucket.layoutVertexBuffer, bucket.indexBuffer, bucket.segments,
-                layer.paint, painter.transform.zoom, programConfiguration, [bucket.layoutVertexBuffer2]);
+                layer.paint, painter.transform.zoom, programConfiguration, [bucket.layoutVertexBuffer2, bucket.patternVertexBuffer]);
         };
 
         if (useStencilMaskRenderPass) {

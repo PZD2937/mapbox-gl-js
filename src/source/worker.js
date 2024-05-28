@@ -5,6 +5,7 @@ import Actor from '../util/actor.js';
 import StyleLayerIndex from '../style/style_layer_index.js';
 import VectorTileWorkerSource from './vector_tile_worker_source.js';
 import RasterDEMTileWorkerSource from './raster_dem_tile_worker_source.js';
+import RasterArrayTileWorkerSource from './raster_array_tile_worker_source.js';
 import GeoJSONWorkerSource from './geojson_worker_source.js';
 import Tiled3dModelWorkerSource from '../../3d-style/source/tiled_3d_model_worker_source.js';
 import RasterTileWorkerSource from "./raster_tile_worker_source.js";
@@ -15,13 +16,17 @@ import {PerformanceUtils} from '../util/performance.js';
 import {Event} from '../util/evented.js';
 import {getProjection} from '../geo/projection/index.js';
 
+import type {Class} from '../types/class.js';
+
 import type {
     WorkerSource,
     WorkerTileParameters,
     WorkerDEMTileParameters,
     WorkerTileCallback,
     WorkerDEMTileCallback,
-    TileParameters
+    TileParameters,
+    WorkerRasterArrayTileParameters,
+    WorkerRasterArrayTileCallback
 } from '../source/worker_source.js';
 
 import type {WorkerGlobalScopeInterface} from '../util/web_worker.js';
@@ -43,6 +48,7 @@ export default class Worker {
     workerSourceTypes: {[_: string]: Class<WorkerSource> };
     workerSources: {[mapId: string]: {[scope: string]: {[sourceType: string]: {[sourceId: string]: WorkerSource}}}};
     demWorkerSources: {[mapId: string]: {[scope: string]: {[sourceId: string]: RasterDEMTileWorkerSource }}};
+    rasterArrayWorkerSource: ?RasterArrayTileWorkerSource;
     projections: {[_: string]: Projection };
     defaultProjection: Projection;
     isSpriteLoaded: {[mapId: string]: {[scope: string]: boolean}};
@@ -96,6 +102,7 @@ export default class Worker {
         delete this.availableImages[mapId];
         delete this.workerSources[mapId];
         delete this.demWorkerSources[mapId];
+        delete this.rasterArrayWorkerSource;
         callback();
     }
 
@@ -178,6 +185,10 @@ export default class Worker {
 
     loadDEMTile(mapId: string, params: WorkerDEMTileParameters, callback: WorkerDEMTileCallback) {
         this.getDEMWorkerSource(mapId, params.source, params.scope).loadTile(params, callback);
+    }
+
+    decodeRasterArray(mapId: string, params: WorkerRasterArrayTileParameters, callback: WorkerRasterArrayTileCallback) {
+        this.getRasterArrayWorkerSource().decodeRasterArray(params, callback);
     }
 
     reloadTile(mapId: string, params: WorkerTileParameters & {type: string}, callback: WorkerTileCallback) {
@@ -328,6 +339,14 @@ export default class Worker {
         }
 
         return this.demWorkerSources[mapId][scope][source];
+    }
+
+    getRasterArrayWorkerSource(): RasterArrayTileWorkerSource {
+        if (!this.rasterArrayWorkerSource) {
+            this.rasterArrayWorkerSource = new RasterArrayTileWorkerSource();
+        }
+
+        return this.rasterArrayWorkerSource;
     }
 
     enforceCacheSizeLimit(mapId: string, limit: number) {

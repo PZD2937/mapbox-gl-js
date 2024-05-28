@@ -10,9 +10,21 @@
 
 in vec2 a_pos_normal;
 in vec4 a_data;
+// Includes in order: a_uv_x, a_split_index, a_clip_start, a_clip_end
+// to reduce attribute count on older devices.
+// Only line-trim-offset will requires a_packed info.
+#ifdef RENDER_LINE_TRIM_OFFSET
+in highp vec4 a_packed;
+#endif
 in float a_linesofar;
 
+#ifdef LINE_JOIN_NONE
+in vec2 a_pattern_data; // [position_in_segment & offset_sign, segment_length];
+out vec2 v_pattern_data; // [position_in_segment, segment_length]
+#endif
+
 uniform mat4 u_matrix;
+uniform mediump float u_tile_units_to_pixels;
 uniform vec2 u_units_to_pixels;
 uniform mat2 u_pixels_to_tile_units;
 uniform lowp float u_device_pixel_ratio;
@@ -22,6 +34,9 @@ out vec2 v_width2;
 out float v_linesofar;
 out float v_gamma_scale;
 out float v_width;
+#ifdef RENDER_LINE_TRIM_OFFSET
+out highp vec4 v_uv;
+#endif
 
 #pragma mapbox: define lowp float blur
 #pragma mapbox: define lowp float opacity
@@ -90,9 +105,27 @@ void main() {
 #else
     v_gamma_scale = 1.0;
 #endif
+
+#ifdef RENDER_LINE_TRIM_OFFSET
+    float a_uv_x = a_packed[0];
+    highp float a_clip_start = a_packed[2];
+    highp float a_clip_end = a_packed[3];
+    v_uv = vec4(a_uv_x, 0.0, a_clip_start, a_clip_end);
+#endif
+
     v_linesofar = a_linesofar;
     v_width2 = vec2(outset, inset);
     v_width = floorwidth;
+
+#ifdef LINE_JOIN_NONE
+    // Needs to consider antialiasing width extension to get accurate pattern aspect ratio
+    v_width += ANTIALIASING;
+    // Offset caused by vertices extended forward or backward from line point
+    float offset_sign = (fract(a_pattern_data.x) - 0.5) * 4.0;
+    float line_progress_offset = offset_sign * v_width * 0.5 / u_tile_units_to_pixels;
+    v_linesofar += line_progress_offset;
+    v_pattern_data = vec2(a_pattern_data.x + line_progress_offset, a_pattern_data.y);
+#endif
 
 #ifdef FOG
     v_fog_pos = fog_position(pos);

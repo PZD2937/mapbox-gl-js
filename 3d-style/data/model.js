@@ -12,7 +12,6 @@ import SegmentVector from '../../src/data/segment.js';
 import {globeToMercatorTransition} from '../../src/geo/projection/globe_util.js';
 import {number as interpolate} from '../../src/style-spec/util/interpolate.js';
 import MercatorCoordinate, {getMetersPerPixelAtLatitude, getLatitudeScale, mercatorZfromAltitude} from '../../src/geo/mercator_coordinate.js';
-import Transform from '../../src/geo/transform.js';
 import {rotationScaleYZFlipMatrix, getBoxBottomFace, rotationFor3Points, convertModelMatrixForGlobe} from '../util/model_util.js';
 
 import type Point from '@mapbox/point-geometry';
@@ -23,6 +22,7 @@ import type Painter from '../../src/render/painter.js';
 import type TriangleGridIndex from '../../src/util/triangle_grid_index.js';
 import type VertexBuffer from '../../src/gl/vertex_buffer.js';
 import type {TextureImage, TextureWrap, TextureFilter} from '../../src/render/texture.js';
+import type Transform from '../../src/geo/transform.js';
 
 export type Sampler = {
     minFilter: TextureFilter;
@@ -36,6 +36,7 @@ export type ModelTexture = {
     sampler: Sampler;
     gfxTexture?: Texture;
     uploaded: boolean;
+    offsetScale?: [number, number, number, number];
 }
 
 export type PbrMetallicRoughness = {
@@ -72,7 +73,7 @@ export type Mesh = {
     texcoordBuffer: VertexBuffer;
     colorArray: StructArray;
     colorBuffer: VertexBuffer;
-    featureData: Uint32Array;
+    featureData: $TypedArray;
     featureArray: FeatureVertexArray;
     pbrBuffer: VertexBuffer;
     material: Material;
@@ -108,16 +109,134 @@ export type Node = {
     lights: Array<AreaLight>;
     lightMeshIndex: number;
     elevation: ?number;
-    anchor: ?Vec2;
+    anchor: Vec2;
 }
 
 export const ModelTraits = {
     CoordinateSpaceTile : 1,
     CoordinateSpaceYUp : 2, // not used yet.
-    HasMapboxMeshFeatures : 1 << 2
+    HasMapboxMeshFeatures : 1 << 2,
+    HasMeshoptCompression: 1 << 3
 };
 
 export const DefaultModelScale = [1, 1, 1];
+
+function positionModelOnTerrain(rotationOnTerrain: Quat, transform: Transform, aabb: Aabb, matrix: Mat4, position: LngLat): number {
+    const elevation = transform.elevation;
+    if (!elevation) {
+        return 0.0;
+    }
+    const corners = Aabb.projectAabbCorners(aabb, matrix);
+    const meterToMercator = mercatorZfromAltitude(1, position.lat) * transform.worldSize;
+    const bottomFace = getBoxBottomFace(corners, meterToMercator);
+
+    const b0 = corners[bottomFace[0]];
+    const b1 = corners[bottomFace[1]];
+    const b2 = corners[bottomFace[2]];
+    const b3 = corners[bottomFace[3]];
+
+    const e0 = elevation.getAtPointOrZero(new MercatorCoordinate(b0[0] / transform.worldSize, b0[1] / transform.worldSize), 0);
+    const e1 = elevation.getAtPointOrZero(new MercatorCoordinate(b1[0] / transform.worldSize, b1[1] / transform.worldSize), 0);
+    const e2 = elevation.getAtPointOrZero(new MercatorCoordinate(b2[0] / transform.worldSize, b2[1] / transform.worldSize), 0);
+    const e3 = elevation.getAtPointOrZero(new MercatorCoordinate(b3[0] / transform.worldSize, b3[1] / transform.worldSize), 0);
+
+    const d03 = (e0 + e3) / 2;
+    const d12 = (e1 + e2) / 2;
+
+    if (d03 > d12) {
+        if (e1 < e2) {
+            rotationFor3Points(rotationOnTerrain, b1, b3, b0, e1, e3, e0, meterToMercator);
+        } else {
+            rotationFor3Points(rotationOnTerrain, b2, b0, b3, e2, e0, e3, meterToMercator);
+        }
+    } else {
+        if (e0 < e3) {
+            rotationFor3Points(rotationOnTerrain, b0, b1, b2, e0, e1, e2, meterToMercator);
+        } else {
+            rotationFor3Points(rotationOnTerrain, b3, b2, b1, e3, e2, e1, meterToMercator);
+        }
+    }
+    return Math.max(d03, d12);
+}
+
+export function calculateModelMatrix(matrix: Mat4, model: $ReadOnly<Model>, state: Transform, position: LngLat, rotation: Vec3, scale: Vec3, translation: Vec3, applyElevation: boolean, followTerrainSlope: boolean, viewportScale: boolean = false) {
+    const zoom = state.zoom;
+    const projectedPoint = state.project(position);
+    const modelMetersPerPixel = getMetersPerPixelAtLatitude(position.lat, zoom);
+    const modelPixelsPerMeter = 1.0 / modelMetersPerPixel;
+    mat4.identity(matrix);
+    const offset = [projectedPoint.x + translation[0] * modelPixelsPerMeter, projectedPoint.y + translation[1] * modelPixelsPerMeter, translation[2]];
+    mat4.translate(matrix, matrix, offset);
+    let scaleXY = 1.0;
+    let scaleZ = 1.0;
+    const worldSize = state.worldSize;
+    if (viewportScale) {
+        if (state.projection.name === 'mercator') {
+            let elevation = 0.0;
+            if (state.elevation) {
+                elevation = state.elevation.getAtPointOrZero(new MercatorCoordinate(projectedPoint.x / worldSize, projectedPoint.y / worldSize), 0.0);
+            }
+            const mercProjPos = vec4.transformMat4([], [projectedPoint.x, projectedPoint.y, elevation, 1.0], state.projMatrix);
+            const mercProjectionScale = mercProjPos[3] / state.cameraToCenterDistance;
+            const viewMetersPerPixel = getMetersPerPixelAtLatitude(state.center.lat, zoom);
+            scaleXY = mercProjectionScale;
+            scaleZ = mercProjectionScale * viewMetersPerPixel;
+        } else if (state.projection.name === 'globe') {
+            const globeMatrix = convertModelMatrixForGlobe(matrix, state);
+            const worldViewProjection = mat4.multiply([], state.projMatrix, globeMatrix);
+            const globeProjPos =  [0, 0, 0, 1];
+            vec4.transformMat4(globeProjPos, globeProjPos, worldViewProjection);
+            const globeProjectionScale = globeProjPos[3] / state.cameraToCenterDistance;
+            const transition = globeToMercatorTransition(zoom);
+            const modelPixelConv = state.projection.pixelsPerMeter(position.lat, worldSize) * getMetersPerPixelAtLatitude(position.lat, zoom);
+            const viewPixelConv = state.projection.pixelsPerMeter(state.center.lat, worldSize) * getMetersPerPixelAtLatitude(state.center.lat, zoom);
+            const viewLatScale = getLatitudeScale(state.center.lat);
+            // Compensate XY size difference from model latitude, taking into account globe-mercator transition
+            scaleXY = globeProjectionScale / interpolate(modelPixelConv, viewLatScale, transition);
+            // Compensate height difference from model latitude.
+            // No interpolation, because the Z axis is fixed in globe projection.
+            scaleZ = globeProjectionScale * modelMetersPerPixel / modelPixelConv;
+            // In globe projection, zoom and scale do not match anymore.
+            // Use pixelScaleConversion to scale to correct worldSize.
+            scaleXY *= viewPixelConv;
+            scaleZ *= viewPixelConv;
+        }
+    } else {
+        scaleXY = modelPixelsPerMeter;
+    }
+
+    mat4.scale(matrix, matrix, [scaleXY, scaleXY, scaleZ]);
+
+    // When applying physics (rotation) we need to insert rotation matrix
+    // between model rotation and transforms above. Keep the intermediate results.
+    const modelMatrixBeforeRotationScaleYZFlip = [...matrix];
+
+    const orientation = model.orientation;
+
+    const rotationScaleYZFlip: Mat4 = [];
+    rotationScaleYZFlipMatrix(rotationScaleYZFlip,
+                          [orientation[0] + rotation[0],
+                              orientation[1] + rotation[1],
+                              orientation[2] + rotation[2]],
+                           scale);
+    mat4.multiply(matrix, modelMatrixBeforeRotationScaleYZFlip, rotationScaleYZFlip);
+
+    if (applyElevation && state.elevation) {
+        let elevate = 0;
+        const rotateOnTerrain = [];
+        if (followTerrainSlope && state.elevation) {
+            elevate = positionModelOnTerrain(rotateOnTerrain, state, model.aabb, matrix, position);
+            const rotationOnTerrain = mat4.fromQuat([], rotateOnTerrain);
+            const appendRotation = mat4.multiply([], rotationOnTerrain, rotationScaleYZFlip);
+            mat4.multiply(matrix, modelMatrixBeforeRotationScaleYZFlip, appendRotation);
+        } else {
+            elevate = state.elevation.getAtPointOrZero(new MercatorCoordinate(projectedPoint.x / worldSize, projectedPoint.y / worldSize), 0.0);
+        }
+        if (elevate !== 0) {
+            matrix[14] += elevate;
+        }
+    }
+}
 
 export default class Model {
     id: string;
@@ -163,122 +282,9 @@ export default class Model {
         }
     }
 
-    _positionModelOnTerrain(transform: Transform, rotationOnTerrain: Quat): number {
-        const elevation = transform.elevation;
-        if (!elevation) {
-            return 0.0;
-        }
-        const corners = Aabb.projectAabbCorners(this.aabb, this.matrix);
-        const meterToMercator = mercatorZfromAltitude(1, this.position.lat) * transform.worldSize;
-        const bottomFace = getBoxBottomFace(corners, meterToMercator);
-
-        const b0 = corners[bottomFace[0]];
-        const b1 = corners[bottomFace[1]];
-        const b2 = corners[bottomFace[2]];
-        const b3 = corners[bottomFace[3]];
-
-        const e0 = elevation.getAtPointOrZero(new MercatorCoordinate(b0[0] / transform.worldSize, b0[1] / transform.worldSize), 0);
-        const e1 = elevation.getAtPointOrZero(new MercatorCoordinate(b1[0] / transform.worldSize, b1[1] / transform.worldSize), 0);
-        const e2 = elevation.getAtPointOrZero(new MercatorCoordinate(b2[0] / transform.worldSize, b2[1] / transform.worldSize), 0);
-        const e3 = elevation.getAtPointOrZero(new MercatorCoordinate(b3[0] / transform.worldSize, b3[1] / transform.worldSize), 0);
-
-        const d03 = (e0 + e3) / 2;
-        const d12 = (e1 + e2) / 2;
-
-        if (d03 > d12) {
-            if (e1 < e2) {
-                rotationFor3Points(rotationOnTerrain, b1, b3, b0, e1, e3, e0, meterToMercator);
-            } else {
-                rotationFor3Points(rotationOnTerrain, b2, b0, b3, e2, e0, e3, meterToMercator);
-            }
-        } else {
-            if (e0 < e3) {
-                rotationFor3Points(rotationOnTerrain, b0, b1, b2, e0, e1, e2, meterToMercator);
-            } else {
-                rotationFor3Points(rotationOnTerrain, b3, b2, b1, e3, e2, e1, meterToMercator);
-            }
-        }
-        return Math.max(d03, d12);
-    }
-
     computeModelMatrix(painter: Painter, rotation: Vec3, scale: Vec3, translation: Vec3, applyElevation: boolean, followTerrainSlope: boolean, viewportScale: boolean = false) {
-        const state = painter.transform;
-        const zoom = state.zoom;
-        const projectedPoint = state.project(this.position);
-        const modelMetersPerPixel = getMetersPerPixelAtLatitude(this.position.lat, zoom);
-        const modelPixelsPerMeter = 1.0 / modelMetersPerPixel;
-        mat4.identity(this.matrix);
-        const offset = [projectedPoint.x + translation[0] * modelPixelsPerMeter, projectedPoint.y + translation[1] * modelPixelsPerMeter, translation[2]];
-        mat4.translate(this.matrix, this.matrix, offset);
-        let scaleXY = 1.0;
-        let scaleZ = 1.0;
-        const worldSize = state.worldSize;
-        if (viewportScale) {
-            if (state.projection.name === 'mercator') {
-                let elevation = 0.0;
-                if (state.elevation) {
-                    elevation = state.elevation.getAtPointOrZero(new MercatorCoordinate(projectedPoint.x / worldSize, projectedPoint.y / worldSize), 0.0);
-                }
-                const mercProjPos = vec4.transformMat4([], [projectedPoint.x, projectedPoint.y, elevation, 1.0], state.projMatrix);
-                const mercProjectionScale = mercProjPos[3] / state.cameraToCenterDistance;
-                const viewMetersPerPixel = getMetersPerPixelAtLatitude(state.center.lat, zoom);
-                scaleXY = mercProjectionScale;
-                scaleZ = mercProjectionScale * viewMetersPerPixel;
-            } else if (state.projection.name === 'globe') {
-                const globeMatrix = convertModelMatrixForGlobe(this.matrix, state);
-                const worldViewProjection = mat4.multiply([], state.projMatrix, globeMatrix);
-                const globeProjPos =  [0, 0, 0, 1];
-                vec4.transformMat4(globeProjPos, globeProjPos, worldViewProjection);
-                const globeProjectionScale = globeProjPos[3] / state.cameraToCenterDistance;
-                const transition = globeToMercatorTransition(zoom);
-                const modelPixelConv = state.projection.pixelsPerMeter(this.position.lat, worldSize) * getMetersPerPixelAtLatitude(this.position.lat, zoom);
-                const viewPixelConv = state.projection.pixelsPerMeter(state.center.lat, worldSize) * getMetersPerPixelAtLatitude(state.center.lat, zoom);
-                const viewLatScale = getLatitudeScale(state.center.lat);
-                // Compensate XY size difference from model latitude, taking into account globe-mercator transition
-                scaleXY = globeProjectionScale / interpolate(modelPixelConv, viewLatScale, transition);
-                // Compensate height difference from model latitude.
-                // No interpolation, because the Z axis is fixed in globe projection.
-                scaleZ = globeProjectionScale * modelMetersPerPixel / modelPixelConv;
-                // In globe projection, zoom and scale do not match anymore.
-                // Use pixelScaleConversion to scale to correct worldSize.
-                scaleXY *= viewPixelConv;
-                scaleZ *= viewPixelConv;
-            }
-        } else {
-            scaleXY = modelPixelsPerMeter;
-        }
-
-        mat4.scale(this.matrix, this.matrix, [scaleXY, scaleXY, scaleZ]);
-
-        // When applying physics (rotation) we need to insert rotation matrix
-        // between model rotation and transforms above. Keep the intermediate results.
-        const modelMatrixBeforeRotationScaleYZFlip = [...this.matrix];
-
-        const orientation = this.orientation;
-
-        const rotationScaleYZFlip: Mat4 = [];
-        rotationScaleYZFlipMatrix(rotationScaleYZFlip,
-                              [orientation[0] + rotation[0],
-                                  orientation[1] + rotation[1],
-                                  orientation[2] + rotation[2]],
-                               scale);
-        mat4.multiply(this.matrix, modelMatrixBeforeRotationScaleYZFlip, rotationScaleYZFlip);
-
-        if (applyElevation && state.elevation) {
-            let elevate = 0;
-            const rotateOnTerrain = [];
-            if (followTerrainSlope && state.elevation) {
-                elevate = this._positionModelOnTerrain(state, rotateOnTerrain);
-                const rotationOnTerrain = mat4.fromQuat([], rotateOnTerrain);
-                const appendRotation = mat4.multiply([], rotationOnTerrain, rotationScaleYZFlip);
-                mat4.multiply(this.matrix, modelMatrixBeforeRotationScaleYZFlip, appendRotation);
-            } else {
-                elevate = state.elevation.getAtPointOrZero(new MercatorCoordinate(projectedPoint.x / worldSize, projectedPoint.y / worldSize), 0.0);
-            }
-            if (elevate !== 0) {
-                this.matrix[14] += elevate;
-            }
-        }
+        // calculate the model matrix for the single instance that uses the model.
+        calculateModelMatrix(this.matrix, this, painter.transform, this.position, rotation, scale, translation, applyElevation, followTerrainSlope, viewportScale);
     }
 
     upload(context: Context) {

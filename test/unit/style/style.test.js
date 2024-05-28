@@ -1,4 +1,4 @@
-import {describe, test, beforeAll, beforeEach, afterEach, expect, waitFor, vi} from "../../util/vitest.js";
+import {describe, test, beforeAll, beforeEach, afterEach, afterAll, expect, waitFor, vi} from "../../util/vitest.js";
 import {getNetworkWorker, http, HttpResponse, getPNGResponse} from '../../util/network.js';
 import Style from '../../../src/style/style.js';
 import SourceCache from '../../../src/source/source_cache.js';
@@ -68,6 +68,10 @@ beforeAll(async () => {
 
 afterEach(() => {
     networkWorker.resetHandlers();
+});
+
+afterAll(() => {
+    networkWorker.stop();
 });
 
 describe('Style', () => {
@@ -142,12 +146,12 @@ describe('Style#loadURL', () => {
         );
 
         const style = new Style(map);
-        style.loadURL('style.json');
+        style.loadURL('/style.json');
 
         await waitFor(style, 'style.load');
 
         expect(spy).toHaveBeenCalledTimes(1);
-        expect(spy.mock.calls[0][0]).toEqual('style.json');
+        expect(spy.mock.calls[0][0]).toEqual('/style.json');
         expect(spy.mock.calls[0][1]).toEqual('Style');
     });
 
@@ -160,7 +164,7 @@ describe('Style#loadURL', () => {
             })
         );
 
-        style.loadURL('style.json');
+        style.loadURL('/style.json');
 
         const {error} = await waitFor(style, "error");
         expect(error).toBeTruthy();
@@ -994,7 +998,7 @@ describe('Style#addLayer', () => {
 
         await new Promise(resolve => {
             style.once("error", e => {
-                expect(e.error).toMatch(/already exists/);
+                expect(e.error.message).toMatch(/already exists/);
                 resolve();
             });
             style.addLayer(layer);
@@ -1055,7 +1059,7 @@ describe('Style#addLayer', () => {
 
         await new Promise(resolve => {
             style.once("error", ({error}) => {
-                expect(error).toMatch(/does not exist on this map/);
+                expect(error.message).toMatch(/does not exist on this map/);
                 resolve();
             });
             style.addLayer(layer, 'z');
@@ -1361,12 +1365,9 @@ test('respects validate option', async () => {
     });
 
     await waitFor(style, "style.load");
-    const backgroundLayer = style.getLayer('background');
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    const validate = vi.spyOn(backgroundLayer, '_validate');
 
     style.setPaintProperty('background', 'background-color', 'notacolor', {validate: false});
-    expect(validate.mock.calls[0][4]).toEqual({validate: false});
     expect(console.error).not.toHaveBeenCalled();
 
     expect(style._changes.isDirty()).toBeTruthy();
@@ -1374,7 +1375,6 @@ test('respects validate option', async () => {
 
     style.setPaintProperty('background', 'background-color', 'alsonotacolor');
     expect(console.error).toHaveBeenCalledTimes(1);
-    expect(validate.mock.calls[1][4]).toEqual({});
 });
 
 describe('Style#getPaintProperty', () => {
@@ -1463,19 +1463,15 @@ describe('Style#setLayoutProperty', () => {
         });
 
         await waitFor(style, "style.load");
-        const lineLayer = style.getLayer('line');
         vi.spyOn(console, 'error').mockImplementation(() => {});
-        const validate = vi.spyOn(lineLayer, '_validate');
 
         style.setLayoutProperty('line', 'line-cap', 'invalidcap', {validate: false});
-        expect(validate.mock.calls[0][4]).toEqual({validate: false});
         expect(console.error).not.toHaveBeenCalled();
         expect(style._changes.isDirty()).toBeTruthy();
         style.update({});
 
         style.setLayoutProperty('line', 'line-cap', 'differentinvalidcap');
         expect(console.error).toHaveBeenCalledTimes(1);
-        expect(validate.mock.calls[1][4]).toEqual({});
     });
 });
 
