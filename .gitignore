@@ -10,7 +10,6 @@ yarn.lock
 .vscode/
 *.sublime-*
 coverage
-flow-coverage
 .DS_Store
 .nyc_output
 *_generated.js
@@ -24,6 +23,7 @@ test/integration/dist/**/*.js
 test/integration/dist/**/*.json
 .eslintcache
 src/style-spec/dist/index.cjs
+src/style-spec/dist/index.d.ts
 _batfish_site
 _batfish_tmp
 _site
@@ -33,5 +33,6 @@ npm-debug.log
 .idea
 # https://github.com/vitejs/vite/issues/9470
 vitest.config.js.*
-yarn.lock
-npm.lock
+
+tsconfig.tsbuildinfo
+bundle-analysis.html

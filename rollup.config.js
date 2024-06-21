@@ -1,4 +1,3 @@
-/* eslint-disable flowtype/require-valid-file-annotation */
 import fs from 'fs';
 import path from 'path';
 import {fileURLToPath} from 'url';
@@ -25,6 +24,7 @@ function buildType(build, minified) {
         return 'dist/mapbox-gl-dev.js';
     }
 }
+
 const outputFile = buildType(BUILD, MINIFY);
 
 export default ({watch}) => {
@@ -34,10 +34,9 @@ export default ({watch}) => {
         // - rollup/build/worker.js: the worker module, plus all dependencies not shared by the main module
         // - rollup/build/shared.js: the set of modules that are dependencies of both the main module and the worker module
         //
-        // This is also where we do all of our source transformations: removing
-        // flow annotations, transpiling ES6 features using buble, inlining shader
-        // sources as strings, etc.
-        input: ['src/index.js', 'src/source/worker.js'],
+        // This is also where we do all of our source transformations:
+        // transpiling ES6 features, inlining shader sources as strings, etc.
+        input: ['src/index.ts', 'src/source/worker.ts'],
         output: {
             dir: 'rollup/build/mapboxgl',
             format: 'amd',
@@ -47,8 +46,13 @@ export default ({watch}) => {
             minifyInternalExports: production
         },
         onwarn: production ? onwarn : false,
-        treeshake: production,
-        plugins: plugins({minified, production, bench})
+        treeshake: production ? {
+            moduleSideEffects: (id, external) => {
+                return !id.endsWith("tracked_parameters.ts");
+            },
+            preset: "recommended"
+        } : false,
+        plugins: plugins({minified, production, bench, test: false, keepClassNames: false})
     }, {
         // Next, bundle together the three "chunks" produced in the previous pass
         // into a single, final bundle. See rollup/bundle_prelude.js and

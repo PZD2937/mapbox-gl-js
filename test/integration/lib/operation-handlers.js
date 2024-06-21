@@ -27,6 +27,26 @@ export const operationHandlers = {
 
         waitForRender(map, () => map.loaded(), doneCb);
     },
+    waitFrameReady(map, params, doneCb) {
+        let timeIterationInterval = 0;
+        if (params.length) {
+            timeIterationInterval = params[0];
+        }
+
+        let prevTime = Date.now();
+
+        waitForRender(map, () => {
+            if (timeIterationInterval !== 0) {
+                window._renderTestNow += timeIterationInterval;
+            } else {
+                const curTime = Date.now();
+                window._renderTestNow += curTime - prevTime;
+                prevTime = curTime;
+            }
+            mapboxgl.setNow(window._renderTestNow);
+            return map.frameReady();
+        }, doneCb);
+    },
     sleep(map, params, doneCb) {
         setTimeout(doneCb, params[0]);
     },
@@ -196,6 +216,15 @@ export const operationHandlers = {
     updateGeoJSONData(map, [sourceId, data], doneCb) {
         map.getSource(sourceId).updateData(data);
         doneCb();
+    },
+    setColorTheme(map, params, doneCb) {
+        // Update this to setColorTheme after
+        // https://mapbox.atlassian.net/browse/GLJS-842 is implemented
+        const style = map.getStyle();
+        style["color-theme"] = params[0];
+        this.setStyle(map, [style], () => {
+            doneCb();
+        });
     }
 };
 

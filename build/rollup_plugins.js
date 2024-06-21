@@ -1,24 +1,30 @@
-/* eslint-disable flowtype/require-valid-file-annotation */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable camelcase */
 
-import flowRemoveTypes from '@mapbox/flow-remove-types';
+import esbuild from 'rollup-plugin-esbuild';
 import resolve from '@rollup/plugin-node-resolve';
 import commonjs from '@rollup/plugin-commonjs';
 import unassert from 'rollup-plugin-unassert';
 import json from '@rollup/plugin-json';
 import terser from '@rollup/plugin-terser';
-import minifyStyleSpec from './rollup_plugin_minify_style_spec.js';
-import {createFilter} from '@rollup/pluginutils';
 import strip from '@rollup/plugin-strip';
 import replace from '@rollup/plugin-replace';
-import alias from '@rollup/plugin-alias';
-import {fileURLToPath} from 'url';
+import {createFilter} from '@rollup/pluginutils';
+import minifyStyleSpec from './rollup_plugin_minify_style_spec.js';
 
 // Common set of plugins/transformations shared across different rollup
 // builds (main mapboxgl bundle, style-spec package, benchmarks bundle)
 
 export const plugins = ({minified, production, test, bench, keepClassNames}) => [
-    flow(),
     minifyStyleSpec(),
+    esbuild({
+        // We target `esnext` and disable minification so esbuild
+        // doesn't transform the code, which we'll minify later with the terser
+        target: 'esnext',
+        minify: false,
+        sourceMap: true,
+    }),
     json({
         exclude: 'src/style-spec/reference/v8.json'
     }),
@@ -35,9 +41,10 @@ export const plugins = ({minified, production, test, bench, keepClassNames}) => 
     }),
     (production && !bench) ? strip({
         sourceMap: true,
-        functions: ['PerformanceUtils.*', 'WorkerPerformanceUtils.*', 'Debug.*', 'performance.mark']
+        functions: ['PerformanceUtils.*', 'WorkerPerformanceUtils.*', 'Debug.*'],
+        include:['**/*.ts']
     }) : false,
-    production || bench ? unassert() : false,
+    production || bench ? unassert({include: ['*.js', '**/*.js', '*.ts', '**/*.ts']}) : false,
     test ? replace({
         preventAssignment: true,
         values: {
@@ -47,11 +54,13 @@ export const plugins = ({minified, production, test, bench, keepClassNames}) => 
     }) : false,
     glsl(['./src/shaders/*.glsl', './3d-style/shaders/*.glsl'], production),
     minified ? terser({
+        ecma: 2020,
+        module: true,
+        keep_classnames: keepClassNames,
         compress: {
             pure_getters: true,
             passes: 3
         },
-        keep_classnames: keepClassNames
     }) : false,
     resolve({
         browser: true,
@@ -62,20 +71,8 @@ export const plugins = ({minified, production, test, bench, keepClassNames}) => 
         // global keyword handling causes Webpack compatibility issues, so we disabled it:
         // https://github.com/mapbox/mapbox-gl-js/pull/6956
         ignoreGlobal: true
-    })
+    }),
 ].filter(Boolean);
-
-// Using this instead of rollup-plugin-flow due to
-// https://github.com/leebyron/rollup-plugin-flow/issues/5
-export function flow() {
-    return {
-        name: 'flow-remove-types',
-        transform: (code) => ({
-            code: flowRemoveTypes(code).toString(),
-            map: null
-        })
-    };
-}
 
 // Using this instead of rollup-plugin-string to add minification
 function glsl(include, minify) {

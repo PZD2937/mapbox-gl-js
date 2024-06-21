@@ -109,6 +109,10 @@
       "type": "camera",
       "doc": "Global setting to control additional camera intrinsics parameters, e.g. projection type (perspective / orthographic)."
     },
+    "color-theme": {
+      "type": "colorTheme",
+      "doc": "A global modifier for the colors of the style."
+    },
     "imports": {
       "type": "array",
       "value": "import",
@@ -239,6 +243,10 @@
     "default": {
       "type": "*",
       "doc": "Default configuration value for this option.",
+      "property-type": "data-constant",
+      "expression": {
+        "interpolated": false
+      },
       "required": true
     },
     "type": {
@@ -857,6 +865,7 @@
     }
   },
   "source_raster_array": {
+    "experimental": true,
     "type": {
       "required": true,
       "type": "enum",
@@ -1190,6 +1199,7 @@
           }
         },
         "raster-particle": {
+          "experimental": true,
           "doc": "Particle animation driven by textures such as wind maps.",
           "sdk-support": {
             "basic functionality": {
@@ -1211,6 +1221,7 @@
         },
         "model": {
           "doc": "A 3D model",
+          "experimental": true,
           "sdk-support": {
             "basic functionality": {
               "js": "3.0.0",
@@ -1247,6 +1258,17 @@
               "android": "11.0.0",
               "ios": "11.0.0"
             }
+          }
+        },
+        "clip": {
+          "doc": "Layer that removes 3D content from map.",
+          "sdk-support": {
+            "basic functionality": {
+              "js": "3.5.0",
+              "android": "11.5.0",
+              "ios": "11.5.0"
+            },
+            "experimental": true
           }
         }
       },
@@ -1302,6 +1324,7 @@
     }
   },
   "layout": [
+    "layout_clip",
     "layout_fill",
     "layout_line",
     "layout_circle",
@@ -1434,6 +1457,34 @@
             "vector"
           ]
         }]
+    }
+  },
+  "layout_clip": {
+    "clip-layer-types": {
+      "type": "array",
+      "value": "enum",
+      "values": {
+        "model": {
+          "doc": "If present the clip layer would remove all 3d model layers below it. Currently only instanced models (e.g. trees) are removed."
+        },
+        "symbol": {
+          "doc": "If present the clip layer would remove all symbol layers below it."
+        }
+      },
+      "default": [],
+      "doc": "Layer types that will also be removed if fallen below this clip layer.",
+      "sdk-support": {
+        "basic functionality": {
+          "js": "3.5.0",
+          "android": "11.5.0",
+          "ios": "11.5.0"
+        }
+      },
+      "expression": {
+        "interpolated": false
+      },
+      "property-type": "data-constant",
+      "experimental": true
     }
   },
   "layout_fill": {
@@ -1609,6 +1660,7 @@
     },
     "fill-extrusion-edge-radius": {
       "type": "number",
+      "experimental": true,
       "private": true,
       "default": 0,
       "minimum": 0,
@@ -1779,6 +1831,32 @@
         "parameters": [
           "zoom",
           "feature"
+        ]
+      },
+      "property-type": "data-driven"
+    },
+    "line-z-offset": {
+      "type": "number",
+      "experimental": true,
+      "doc": "Vertical offset from ground, in meters. Defaults to 0. Not supported for globe projection at the moment.",
+      "sdk-support": {
+        "basic functionality": {
+          "js": "3.5.0",
+          "android": "11.5.0",
+          "ios": "11.5.0"
+        },
+        "data-driven styling": {
+          "js": "3.5.0",
+          "android": "11.5.0",
+          "ios": "11.5.0"
+        }
+      },
+      "expression": {
+        "interpolated": false,
+        "parameters": [
+          "zoom",
+          "feature",
+          "line-progress"
         ]
       },
       "property-type": "data-driven"
@@ -4848,6 +4926,17 @@
       "property-type": "data-constant"
     }
   },
+  "colorTheme": {
+    "data": {
+      "type": "string",
+      "doc": "Expects a base64 encoded PNG image which represents a cube strip LUT. The height of the image cannot exceed 32 pixels and the width must be equal to the height squared.",
+      "transition": false,
+      "property-type": "data-constant",
+      "expression": {
+        "interpolated": false
+      }
+    }
+  },
   "light": {
     "anchor": {
       "type": "enum",
@@ -5594,6 +5683,7 @@
     "fill-extrusion-ambient-occlusion-wall-radius": {
       "property-type": "data-constant",
       "type": "number",
+      "experimental": true,
       "default": 3.0,
       "minimum": 0,
       "expression": {
@@ -5619,6 +5709,7 @@
     "fill-extrusion-ambient-occlusion-ground-radius": {
       "property-type": "data-constant",
       "type": "number",
+      "experimental": true,
       "default": 3.0,
       "minimum": 0,
       "expression": {
@@ -5643,6 +5734,7 @@
     "fill-extrusion-ambient-occlusion-ground-attenuation": {
       "property-type": "data-constant",
       "type": "number",
+      "experimental": true,
       "default": 0.69,
       "minimum": 0.0,
       "maximum": 1.0,
@@ -5668,6 +5760,7 @@
     "fill-extrusion-flood-light-color": {
       "property-type": "data-constant",
       "type": "color",
+      "experimental": true,
       "default": "#ffffff",
       "doc": "The color of the flood light effect on the walls of the extruded buildings.",
       "requires": [
@@ -5692,6 +5785,7 @@
     "fill-extrusion-flood-light-intensity": {
       "property-type": "data-constant",
       "type": "number",
+      "experimental": true,
       "default": 0.0,
       "minimum": 0.0,
       "maximum": 1.0,
@@ -5718,6 +5812,7 @@
     "fill-extrusion-flood-light-wall-radius": {
       "property-type": "data-driven",
       "type": "number",
+      "experimental": true,
       "units": "meters",
       "default": 0,
       "minimum": 0,
@@ -5749,6 +5844,7 @@
     "fill-extrusion-flood-light-ground-radius": {
       "property-type": "data-driven",
       "type": "number",
+      "experimental": true,
       "units": "meters",
       "default": 0,
       "doc": "The extent of the flood light effect on the ground beneath the extruded buildings in meters.",
@@ -5779,6 +5875,7 @@
     "fill-extrusion-flood-light-ground-attenuation": {
       "property-type": "data-constant",
       "type": "number",
+      "experimental": true,
       "default": 0.69,
       "minimum": 0.0,
       "maximum": 1.0,
@@ -5804,6 +5901,7 @@
     "fill-extrusion-vertical-scale": {
       "property-type": "data-constant",
       "type": "number",
+      "experimental": true,
       "default": 1.0,
       "minimum": 0.0,
       "doc": "A global multiplier that can be used to scale base, height, AO, and flood light of the fill extrusions.",
@@ -5826,6 +5924,7 @@
       "property-type": "data-constant",
       "type": "boolean",
       "default": true,
+      "experimental": true,
       "doc": "Indicates whether top edges should be rounded when fill-extrusion-edge-radius has a value greater than 0. If false, rounded edges are only applied to the sides. Default is true.",
       "requires": [
         "fill-extrusion-edge-radius"
@@ -6342,6 +6441,29 @@
         ]
       },
       "property-type": "data-driven"
+    },
+    "line-occlusion-opacity": {
+      "type": "number",
+      "default": 0,
+      "minimum": 0,
+      "maximum": 1,
+      "experimental": true,
+      "doc": "Opacity multiplier (multiplies line-opacity value) of the line part that is occluded by 3D objects. Value 0 hides occluded part, value 1 means the same opacity as non-occluded part. The property is not supported when `line-opacity` has data-driven styling.",
+      "sdk-support": {
+        "basic functionality": {
+          "js": "3.5.0",
+          "android": "11.5.0",
+          "ios": "11.5.0"
+        }
+      },
+      "expression": {
+        "interpolated": true,
+        "parameters": [
+          "zoom"
+        ]
+      },
+      "transition": true,
+      "property-type": "data-constant"
     }
   },
   "paint_circle": {
@@ -6865,6 +6987,39 @@
       },
       "property-type": "data-driven"
     },
+    "icon-occlusion-opacity": {
+      "doc": "The opacity at which the icon will be drawn in case of being depth occluded. Not supported on globe zoom levels.",
+      "type": "number",
+      "default": 1.0,
+      "minimum": 0,
+      "maximum": 1,
+      "transition": true,
+      "requires": [
+        "icon-image"
+      ],
+      "sdk-support": {
+        "basic functionality": {
+          "js": "3.5.0",
+          "android": "11.5.0",
+          "ios": "11.6.0"
+        },
+        "data-driven styling": {
+          "js": "3.5.0",
+          "android": "11.5.0",
+          "ios": "11.6.0"
+        }
+      },
+      "expression": {
+        "interpolated": true,
+        "parameters": [
+          "zoom",
+          "feature",
+          "feature-state",
+          "measure-light"
+        ]
+      },
+      "property-type": "data-driven"
+    },
     "icon-emissive-strength": {
       "type": "number",
       "default": 1,
@@ -7168,6 +7323,39 @@
           "js": "0.33.0",
           "android": "5.0.0",
           "ios": "3.5.0"
+        }
+      },
+      "expression": {
+        "interpolated": true,
+        "parameters": [
+          "zoom",
+          "feature",
+          "feature-state",
+          "measure-light"
+        ]
+      },
+      "property-type": "data-driven"
+    },
+    "text-occlusion-opacity": {
+      "type": "number",
+      "doc": "The opacity at which the text will be drawn in case of being depth occluded. Not supported on globe zoom levels.",
+      "default": 1.0,
+      "minimum": 0,
+      "maximum": 1,
+      "transition": true,
+      "requires": [
+        "text-field"
+      ],
+      "sdk-support": {
+        "basic functionality": {
+          "js": "3.5.0",
+          "android": "11.5.0",
+          "ios": "11.6.0"
+        },
+        "data-driven styling": {
+          "js": "3.5.0",
+          "android": "11.5.0",
+          "ios": "11.6.0"
         }
       },
       "expression": {
@@ -7742,6 +7930,7 @@
     "raster-array-band": {
       "type": "string",
       "required": false,
+      "experimental": true,
       "property-type": "data-constant",
       "transition": false,
       "requires": [
@@ -7765,6 +7954,7 @@
       "default": 0,
       "minimum": 0,
       "transition": true,
+      "experimental": true,
       "sdk-support": {
         "basic functionality": {
           "js": "3.1.0",
