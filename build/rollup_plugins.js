@@ -12,6 +12,8 @@ import strip from '@rollup/plugin-strip';
 import replace from '@rollup/plugin-replace';
 import {createFilter} from '@rollup/pluginutils';
 import minifyStyleSpec from './rollup_plugin_minify_style_spec.js';
+import alias from "@rollup/plugin-alias";
+import {fileURLToPath} from "url";
 
 // Common set of plugins/transformations shared across different rollup
 // builds (main mapboxgl bundle, style-spec package, benchmarks bundle)

@@ -57,7 +57,7 @@ import type {UserManagedTexture, TextureImage} from '../render/texture';
 import type {VectorTileLayer} from '@mapbox/vector-tile';
 
 const CLOCK_SKEW_RETRY_TIMEOUT = 30000;
-export type TileState = // Tile data is in the process of loading.
+export type TileState = // Tile data is in the process of _loading.
 'loading' | // Tile data has been loaded. Tile can be rendered.
 'loaded' | // Tile data has been loaded but has no content for rendering.
 'empty' | // Tile data has been loaded and is being updated. Tile can be rendered.

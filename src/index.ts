@@ -207,7 +207,7 @@ const exported = {
         clearTileCache(callback);
     },
     /**
-     * Provides an interface for loading mapbox-gl's WebWorker bundle from a self-hosted URL.
+     * Provides an interface for _loading mapbox-gl's WebWorker bundle from a self-hosted URL.
      * This needs to be set only once, and before any call to `new mapboxgl.Map(..)` takes place.
      * This is useful if your site needs to operate in a strict CSP (Content Security Policy) environment
      * wherein you are not allowed to load JavaScript code from a [`Blob` URL](https://developer.mozilla.org/en-US/docs/Web/API/URL/createObjectURL), which is default behavior.
@@ -262,7 +262,7 @@ const exported = {
     },
 
     /**
-     * Provides an interface for loading Draco decoding library (draco_decoder_gltf.wasm v1.5.6) from a self-hosted URL.
+     * Provides an interface for _loading Draco decoding library (draco_decoder_gltf.wasm v1.5.6) from a self-hosted URL.
      * This needs to be set only once, and before any call to `new mapboxgl.Map(..)` takes place.
      * This is useful if your site needs to operate in a strict CSP (Content Security Policy) environment
      * wherein you are not allowed to load JavaScript code from a [`Blob` URL](https://developer.mozilla.org/en-US/docs/Web/API/URL/createObjectURL), which is default behavior.
@@ -344,8 +344,8 @@ Debug.extend(exported, {isSafari, getPerformanceMetrics: PerformanceUtils.getPer
  * @function setRTLTextPlugin
  * @param {string} pluginURL URL pointing to the Mapbox RTL text plugin source.
  * @param {Function} callback Called with an error argument if there is an error, or no arguments if the plugin loads successfully.
- * @param {boolean} lazy If set to `true`, MapboxGL will defer loading the plugin until right-to-left text is encountered, and
- * right-to-left text will be rendered only after the plugin finishes loading.
+ * @param {boolean} lazy If set to `true`, MapboxGL will defer _loading the plugin until right-to-left text is encountered, and
+ * right-to-left text will be rendered only after the plugin finishes _loading.
  * @example
  * mapboxgl.setRTLTextPlugin('https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-rtl-text/v0.2.0/mapbox-gl-rtl-text.js');
  * @see [Example: Add support for right-to-left scripts](https://www.mapbox.com/mapbox-gl-js/example/mapbox-gl-rtl-text/)
@@ -353,7 +353,7 @@ Debug.extend(exported, {isSafari, getPerformanceMetrics: PerformanceUtils.getPer
 
 /**
   * Gets the map's [RTL text plugin](https://www.mapbox.com/mapbox-gl-js/plugins/#mapbox-gl-rtl-text) status.
-  * The status can be `unavailable` (not requested or removed), `loading`, `loaded`, or `error`.
+  * The status can be `unavailable` (not requested or removed), `_loading`, `loaded`, or `error`.
   * If the status is `loaded` and the plugin is requested again, an error will be thrown.
   *
   * @function getRTLTextPluginStatus

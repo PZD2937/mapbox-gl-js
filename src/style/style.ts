@@ -11,7 +11,7 @@ import GlyphManager, {LocalGlyphMode} from '../render/glyph_manager';
 import Light from './light';
 import Terrain, {DrapeRenderMode} from './terrain';
 import Fog from './fog';
-import {pick, clone, extend, deepEqual, filterObject, cartesianPositionToSpherical, warnOnce} from '../util/util';
+import {pick, clone, extend, deepEqual, filterObject, cartesianPositionToSpherical, warnOnce, asyncAll} from '../util/util';
 import {getJSON, getReferrer, makeRequest, ResourceType} from '../util/ajax';
 import {isMapboxURL} from '../util/mapbox_url';
 import {stripQueryParameters} from '../util/url';
@@ -1146,16 +1146,28 @@ class Style extends Evented {
     }
 
     _loadSprite(url: string) {
-        this._spriteRequest = loadSprite(url, this.map._requestManager, (err, images) => {
+        const requests = [];
+        this._spriteRequest = {
+            cancel: () => requests.forEach(request => request.cancel())
+        };
+
+        const urls = url.split(',');
+
+        asyncAll(urls, (url, callback) => {
+            const request = loadSprite(url, this.map._requestManager, (err, images) => {
+                if (images) {
+                    for (const id in images) {
+                        this.imageManager.addImage(id, this.scope, images[id]);
+                    }
+                }
+                callback(err);
+            });
+            requests.push(request);
+        }, err => {
             this._spriteRequest = null;
             if (err) {
                 this.fire(new ErrorEvent(err));
-            } else if (images) {
-                for (const id in images) {
-                    this.imageManager.addImage(id, this.scope, images[id]);
-                }
             }
-
             this.imageManager.setLoaded(true, this.scope);
             this._availableImages = this.imageManager.listImages(this.scope);
             this.dispatcher.broadcast('setImages', {
@@ -1312,7 +1324,7 @@ class Style extends Evented {
 
     _checkLoaded(): void {
         if (!this._loaded) {
-            throw new Error('Style is not done loading');
+            throw new Error('Style is not done _loading');
         }
     }
 

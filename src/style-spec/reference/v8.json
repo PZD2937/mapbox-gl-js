@@ -2956,6 +2956,18 @@
         },
         "bottom-right": {
           "doc": "The bottom right corner of the text is placed closest to the anchor."
+        },
+        "image-top": {
+          "doc": "Place text top image"
+        },
+        "image-bottom": {
+          "doc": "Place text bottom image"
+        },
+        "image-right": {
+          "doc": "Place text right image"
+        },
+        "image-left": {
+          "doc": "Place text left image"
         }
       },
       "default": "center",

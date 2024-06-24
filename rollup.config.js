@@ -73,6 +73,22 @@ export default ({watch}) => {
             // This is the only reason we use Rollup for this second pass
             sourcemaps({watch}),
         ]
+    }, {
+        input: 'rollup/mapboxgl.js',
+        output: {
+            file: `${outputFile.split('.').slice(0, -1).join('.')}.es.js`,
+            format: 'es',
+            sourcemap: production ? true : 'inline',
+            indent: false,
+            intro: fs.readFileSync(fileURLToPath(new URL('./rollup/bundle_prelude.js', import.meta.url)), 'utf8'),
+            banner
+        },
+        treeshake: false,
+        plugins: [
+            // Ingest the sourcemaps produced in the first step of the build.
+            // This is the only reason we use Rollup for this second pass
+            sourcemaps({watch})
+        ],
     }];
 };
 

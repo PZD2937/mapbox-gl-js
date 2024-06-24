@@ -367,10 +367,10 @@ describe('SourceCache / Source lifecycle', () => {
     });
 
     test('forward error event', async () => {
-        const {sourceCache, eventedParent} = createSourceCache({error: 'Error loading source'});
+        const {sourceCache, eventedParent} = createSourceCache({error: 'Error _loading source'});
         await new Promise(resolve => {
             eventedParent.on('error', (err) => {
-                expect(err.error).toMatch('Error loading source');
+                expect(err.error).toMatch('Error _loading source');
                 resolve();
             });
             sourceCache.getSource().onAdd();
@@ -384,7 +384,7 @@ describe('SourceCache / Source lifecycle', () => {
     });
 
     test('loaded() true after source error', async () => {
-        const {sourceCache, eventedParent} = createSourceCache({error: 'Error loading source'});
+        const {sourceCache, eventedParent} = createSourceCache({error: 'Error _loading source'});
         await new Promise(resolve => {
             eventedParent.on('error', () => {
                 expect(sourceCache.loaded()).toBeTruthy();

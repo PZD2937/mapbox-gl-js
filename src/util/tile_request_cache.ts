@@ -4,9 +4,11 @@ import {stripQueryParameters, setQueryParameters} from './url';
 import type Dispatcher from './dispatcher';
 
 const CACHE_NAME = 'mapbox-tiles';
-let cacheLimit = 500; // 50MB / (100KB/tile) ~= 500 tiles
-let cacheCheckThreshold = 50;
+let cacheLimit = 10000; // 1000MB / (100KB/tile) ~= 10000 tiles
+let cacheCheckThreshold = 1000;
 
+// 默认时间 100年
+const EXPIRED_TIME = Date.now() + 1000 * 60 * 60 * 24 * 365 * 100;
 const MIN_TIME_UNTIL_EXPIRY = 1000 * 60 * 7; // 7 minutes. Skip caching tiles with a short enough max age.
 
 export type ResponseOptions = {
@@ -64,6 +66,8 @@ function prepareBody(response: Response, callback: (body?: Blob | ReadableStream
 
 export function cachePut(request: Request, response: Response, requestTime: number) {
     cacheOpen();
+    const url = request.headers.get('CacheUrl') || request.url;
+    request.headers.delete('CacheUrl');
     if (!sharedCache) return;
 
     const cacheControl = parseCacheControl(response.headers.get('Cache-Control') || '');
@@ -81,14 +85,14 @@ export function cachePut(request: Request, response: Response, requestTime: numb
         options.headers.set('Expires', new Date(requestTime + cacheControl['max-age'] * 1000).toUTCString());
     }
 
-    const expires = options.headers.get('Expires');
+    const expires = options.headers.get('Expires') || EXPIRED_TIME;
     if (!expires) return;
 
     const timeUntilExpiry = new Date(expires).getTime() - requestTime;
     if (timeUntilExpiry < MIN_TIME_UNTIL_EXPIRY) return;
 
     // preserve `language` and `worldview` params if any
-    let strippedURL = stripQueryParameters(request.url, {persistentParams: ['language', 'worldview']});
+    let strippedURL = stripQueryParameters(url, {persistentParams: ['language', 'worldview']});
 
     // Handle partial responses by keeping the range header in the query string
     if (response.status === 206) {
@@ -119,12 +123,14 @@ export function cacheGet(
     ) => void,
 ): void {
     cacheOpen();
+    const url = request.headers.get('CacheUrl') || request.url;
+    request.headers.delete('CacheUrl');
     if (!sharedCache) return callback(null);
 
     sharedCache
         .then(cache => {
             // preserve `language` and `worldview` params if any
-            let strippedURL = stripQueryParameters(request.url, {persistentParams: ['language', 'worldview']});
+            let strippedURL = stripQueryParameters(url, {persistentParams: ['language', 'worldview']});
 
             const range = request.headers.get('Range');
             if (range) strippedURL = setQueryParameters(strippedURL, {range});
@@ -151,7 +157,7 @@ export function cacheGet(
 
 function isFresh(response: Response) {
     if (!response) return false;
-    const expires = new Date(response.headers.get('Expires') || 0);
+    const expires = new Date(response.headers.get('Expires') || EXPIRED_TIME);
     const cacheControl = parseCacheControl(response.headers.get('Cache-Control') || '');
     // @ts-expect-error - TS2365 - Operator '>' cannot be applied to types 'Date' and 'number'.
     return expires > Date.now() && !cacheControl['no-cache'];

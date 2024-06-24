@@ -412,7 +412,7 @@ function drawImage(canvas, ctx, src, getImageData = true) {
             resolve(result);
         };
         image.onerror = (e) => {
-            // try loading the image several times on error because it sometimes fails randomly
+            // try _loading the image several times on error because it sometimes fails randomly
             if (++attempts < 3) loadImage(resolve, reject);
             else reject(e);
         };

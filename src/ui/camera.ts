@@ -104,7 +104,7 @@ export type FullCameraOptions = {
  * @property {boolean} animate If `false`, no animation will occur.
  * @property {boolean} essential If `true`, then the animation is considered essential and will not be affected by
  * [`prefers-reduced-motion`](https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-motion).
- * @property {boolean} preloadOnly If `true`, it will trigger tiles loading across the animation path, but no animation will occur.
+ * @property {boolean} preloadOnly If `true`, it will trigger tiles _loading across the animation path, but no animation will occur.
  * @property {number} curve The zooming "curve" that will occur along the
  * flight path. A high value maximizes zooming for an exaggerated animation, while a low
  * value minimizes zooming for an effect closer to {@link Map#easeTo}. 1.42 is the average

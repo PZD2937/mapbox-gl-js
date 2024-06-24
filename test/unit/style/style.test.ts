@@ -235,7 +235,7 @@ describe('Style#loadJSON', () => {
         expect(e.dataType).toEqual('style');
     });
 
-    test('fires "data" when the sprite finishes loading', async () => {
+    test('fires "data" when the sprite finishes _loading', async () => {
         networkWorker.use(
             http.get('http://example.com/sprite.png', async () => {
                 return new HttpResponse(await getPNGResponse());
@@ -2109,7 +2109,7 @@ describe('Style#addSourceType', () => {
 });
 
 describe('Style#hasTransitions', () => {
-    test('returns false when the style is loading', () => {
+    test('returns false when the style is _loading', () => {
         const style = new Style(new StubMap());
         expect(style.hasTransitions()).toEqual(false);
     });

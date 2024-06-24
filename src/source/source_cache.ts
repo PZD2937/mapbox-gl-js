@@ -27,7 +27,7 @@ import type {vec3} from 'gl-matrix';
  *  - creating an instance of `Source`
  *  - forwarding events from `Source`
  *  - caching tiles loaded from an instance of `Source`
- *  - loading the tiles needed to render a given viewport
+ *  - _loading the tiles needed to render a given viewport
  *  - unloading the cached tiles not needed to render a given viewport
  *
  * @private
@@ -245,9 +245,9 @@ class SourceCache extends Evented {
         // - hard to tell without repro steps
         if (!tile) return;
 
-        // The difference between "loading" tiles and "reloading" or "expired"
+        // The difference between "_loading" tiles and "reloading" or "expired"
         // tiles is that "reloading"/"expired" tiles are "renderable".
-        // Therefore, a "loading" tile cannot become a "reloading" tile without
+        // Therefore, a "_loading" tile cannot become a "reloading" tile without
         // first becoming a "loaded" tile.
         if (tile.state !== 'loading') {
             tile.state = state;
@@ -259,10 +259,12 @@ class SourceCache extends Evented {
     _tileLoaded(tile: Tile, id: number, previousState: TileState, err?: Error | null) {
         if (err) {
             tile.state = 'errored';
-            if ((err as any).status !== 404) this._source.fire(new ErrorEvent(err, {tile}));
-            // If the requested tile is missing, try to load the parent tile
-            // to use it as an overscaled tile instead of the missing one.
-            else {
+            if ((err as any).status !== 404) {
+                this._source.fire(new ErrorEvent(err, {tile}));
+                this._source.fire(new Event('tileloadfail', {error: err, tile, reloadTile: () => this._reloadTile(id, 'reloading')}));
+            } else {
+                // If the requested tile is missing, try to load the parent tile
+                // to use it as an overscaled tile instead of the missing one.
                 const hasParent = tile.tileID.key in this._loadedParentTiles;
                 // If there are no parent tiles to load, fire a `data` event to trigger map render
                 if (!hasParent) {

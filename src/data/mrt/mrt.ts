@@ -220,7 +220,7 @@ class RasterLayer {
     }
 
     /**
-     * Assimilate results of data loading task
+     * Assimilate results of data _loading task
      * @param {TDecodingResult} result - result of processing task
      */
     processDecodedData(result) {

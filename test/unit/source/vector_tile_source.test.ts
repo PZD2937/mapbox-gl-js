@@ -295,7 +295,7 @@ describe('VectorTileSource', () => {
         }
     });
 
-    test('reloads a loading tile properly', async () => {
+    test('reloads a _loading tile properly', async () => {
         const source = createSource({
             tiles: ["http://example.com/{z}/{x}/{y}.png"]
         });

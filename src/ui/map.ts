@@ -1621,7 +1621,7 @@ export class Map extends Camera {
      * @returns {Map} Returns itself to allow for method chaining.
      * @example
      * // Set an event listener that will fire
-     * // when the map has finished loading.
+     * // when the map has finished _loading.
      * map.on('load', () => {
      *     // Add a new layer.
      *     map.addLayer({
@@ -3884,7 +3884,7 @@ export class Map extends Camera {
     /**
      * Call when a (re-)render of the map is required:
      * - The style has changed (`setPaintProperty()`, etc.)
-     * - Source data has changed (for example, tiles have finished loading)
+     * - Source data has changed (for example, tiles have finished _loading)
      * - The map has is moving (or just finished moving)
      * - A transition is in progress
      *
@@ -4217,19 +4217,7 @@ export class Map extends Camera {
     /***** END WARNING - REMOVAL OR MODIFICATION OF THE
     PRECEDING CODE VIOLATES THE MAPBOX TERMS OF SERVICE  ******/
 
-    _postStyleLoadEvent() {
-        if (!this.style.globalId) {
-            return;
-        }
-
-        postStyleLoadEvent(this._requestManager._customAccessToken, {
-            map: this,
-            // @ts-expect-error - TS2353 - Object literal may only specify known properties, and 'skuToken' does not exist in type 'StyleLoadEventInput'.
-            skuToken: this._requestManager._skuToken,
-            style: this.style.globalId,
-            importedStyles: this.style.getImportGlobalIds()
-        });
-    }
+    _postStyleLoadEvent() {}
 
     _updateTerrain() {
         // Recalculate if enabled/disabled and calculate elevation cover. As camera is using elevation tiles before

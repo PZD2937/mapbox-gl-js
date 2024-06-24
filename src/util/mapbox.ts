@@ -26,6 +26,7 @@ import type {RequestParameters} from './ajax';
 import type {Cancelable} from '../types/cancelable';
 import type {TileJSON} from '../types/tilejson';
 import type {Map as MapboxMap} from "../ui/map";
+import type {CanonicalTileID} from "../source/tile_id";
 
 type ResourceTypeEnum = keyof typeof ResourceType;
 export type RequestTransformFunction = (url: string, resourceType?: ResourceTypeEnum) => RequestParameters;
@@ -65,12 +66,16 @@ export class RequestManager {
         return Date.now() > this._skuTokenExpiresAt;
     }
 
-    transformRequest(url: string, type: ResourceTypeEnum, tags?: Object, tileID?: CanonicalTileID): RequestParameters {
-        if(typeof tags === 'object'){
-            url = url.replace(/\{ *([\w_]+) *\}/g, function (str, key) {
+    transformRequest(url: string, type: ResourceTypeEnum, tags?: Record<string, any>, tileID?: CanonicalTileID): RequestParameters {
+        if (typeof tags === 'object') {
+            url = url.replace(/\{ *([\w_]+) *}/g, (str, key) => {
                 let value = tags[key];
                 if (value === undefined) {
-                    throw new Error('No value provided for variable ' + str);
+                    throw new Error(`No value provided for variable ${str}`);
+                } else if (Array.isArray(value)) {
+                    const len = value.length;
+                    const index = tileID ? (tileID.x + tileID.y) % len : Math.floor(Math.random() * len);
+                    value = value[index];
                 } else if (typeof value === 'function') {
                     value = value(tileID);
                 }
@@ -358,7 +363,7 @@ class TelemetryEvent {
 
     saveEventData() {
         const isLocalStorageAvailable = storageAvailable('localStorage');
-        const storageKey =  this.getStorageKey();
+        const storageKey = this.getStorageKey();
         const uuidKey = this.getStorageKey('uuid');
         const anonId = this.anonId;
         if (isLocalStorageAvailable && anonId) {
@@ -374,7 +379,8 @@ class TelemetryEvent {
 
     }
 
-    processRequests(_?: string | null) {}
+    processRequests(_?: string | null) {
+    }
 
     /*
     * If any event data should be persisted after the POST request, the callback should modify eventData`
@@ -449,7 +455,8 @@ export class PerformanceEvent extends TelemetryEvent {
             assert(typeof attribute.value === 'string');
         }
 
-        this.postEvent(timestamp, additionalPayload, () => {}, customAccessToken);
+        this.postEvent(timestamp, additionalPayload, () => {
+        }, customAccessToken);
     }
 }
 
@@ -592,7 +599,8 @@ export class StyleLoadEvent extends TelemetryEvent {
 
         const {timestamp, payload} = this.queue.shift();
 
-        this.postEvent(timestamp, payload, () => {}, customAccessToken);
+        this.postEvent(timestamp, payload, () => {
+        }, customAccessToken);
     }
 }
 
@@ -760,6 +768,7 @@ export const getMapSessionAPI: (
 ) => void = mapSessionAPI.getSessionAPI.bind(mapSessionAPI);
 
 const authenticatedMaps = new Set();
+
 export function storeAuthState(gl: WebGL2RenderingContext, state: boolean) {
     if (state) {
         authenticatedMaps.add(gl);
@@ -777,4 +786,4 @@ export function removeAuthState(gl: WebGL2RenderingContext) {
 }
 
 /***** END WARNING - REMOVAL OR MODIFICATION OF THE
-PRECEDING CODE VIOLATES THE MAPBOX TERMS OF SERVICE  ******/
+ PRECEDING CODE VIOLATES THE MAPBOX TERMS OF SERVICE  ******/

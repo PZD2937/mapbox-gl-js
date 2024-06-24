@@ -439,7 +439,7 @@ class Program<Us extends UniformBindings> {
             );
 
             if (instanceCount && instanceCount > 1) {
-                assert(indexBuffer);
+                // assert(indexBuffer);
                 gl.drawElementsInstanced(
                     drawMode,
                     segment.primitiveLength * primitiveSize,

@@ -1,7 +1,8 @@
-// @flow
-import offscreenCanvasSupported from "./offscreen_canvas_supported.js";
-import {TextureImage} from "../render/texture.js";
-import type {Callback} from "../types/callback.js";
+import offscreenCanvasSupported from "./offscreen_canvas_supported";
+import {TextureImage} from "../render/texture";
+
+import type {Callback} from "../types/callback";
+
 const supportImageBitmap = typeof self.createImageBitmap === 'function';
 
 type MergerImageObject = {
@@ -10,7 +11,7 @@ type MergerImageObject = {
     data: TextureImage
 }
 
-export default function mergerTextureImage(mergers: Array<MergerImageObject>, imageSize: number, dx: number, dy: number, callback: Callback): TextureImage {
+export default function mergerTextureImage(mergers: Array<MergerImageObject>, imageSize: number, dx: number, dy: number, callback: Callback<HTMLCanvasElement | ImageBitmap>) {
     const canvas = offscreenCanvasSupported() ? new OffscreenCanvas(imageSize, imageSize) : document.createElement('canvas');
     const ctx = canvas.getContext('2d', {willReadFrequently: true});
     canvas.width = imageSize;
@@ -25,7 +26,7 @@ export default function mergerTextureImage(mergers: Array<MergerImageObject>, im
             callback(null, imageBitmap);
         });
     } else {
-        callback(null, canvas);
+        callback(null, canvas as HTMLCanvasElement);
     }
 }
 

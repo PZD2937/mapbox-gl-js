@@ -7,8 +7,9 @@ import TileBounds from './tile_bounds';
 import {ResourceType} from '../util/ajax';
 import browser from '../util/browser';
 import {cacheEntryPossiblyAdded} from '../util/tile_request_cache';
-import {DedupedRequest, loadVectorTile} from './load_vector_tile';
+import {loadVectorTile} from './load_vector_tile';
 import {makeFQID} from '../util/fqid';
+import {DedupedRequest} from "./deduped_request";
 
 import type {ISource} from './source';
 import type {OverscaledTileID} from './tile_id';
@@ -55,7 +56,7 @@ class VectorTileSource extends Evented implements ISource {
     minzoom: number;
     maxzoom: number;
     url: string;
-    customTags: ?Object;
+    customTags?: Record<string, any>;
     scheme: string;
     tileSize: number;
     minTileCacheSize: number | null | undefined;
@@ -65,7 +66,7 @@ class VectorTileSource extends Evented implements ISource {
     // eslint-disable-next-line camelcase
     mapbox_logo: boolean | undefined;
     promoteId: PromoteIdSpecification | null | undefined;
-    vtOptions: ?Object
+    vtOptions?: any;
 
     _options: VectorSourceSpecification;
     _collectResourceTiming: boolean;

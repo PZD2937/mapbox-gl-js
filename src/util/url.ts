@@ -15,6 +15,23 @@ export function setQueryParameters(
     return `${url.slice(0, paramStart)}?${searchParams.toString()}`;
 }
 
+export function getQueryParameter(url: string, paramName: string): string | null {
+    const paramStart = url.indexOf('?');
+    if (paramStart < 0) return null;
+    const searchParams = new URLSearchParams(url.slice(paramStart));
+    return searchParams.get(paramName);
+}
+
+export function removeQueryParameters(url: string, params: string[]) {
+    const paramStart = url.indexOf('?');
+    if (paramStart < 0) return url;
+    const searchParams = new URLSearchParams(url.slice(paramStart));
+    params.forEach(p => {
+        searchParams.delete(p);
+    });
+    return `${url.slice(0, paramStart)}?${searchParams.toString()}`;
+}
+
 type StripQueryParameters = {
     persistentParams: string[];
 };

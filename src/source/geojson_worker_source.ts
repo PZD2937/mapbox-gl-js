@@ -92,7 +92,7 @@ class GeoJSONWorkerSource extends VectorTileWorkerSource {
     _featureMap: Map<number | string, unknown>;
 
     /**
-     * @param [loadGeoJSON] Optional method for custom loading/parsing of
+     * @param [loadGeoJSON] Optional method for custom _loading/parsing of
      * GeoJSON based on parameters passed from the main-thread Source.
      * See {@link GeoJSONWorkerSource#loadGeoJSON}.
      * @private

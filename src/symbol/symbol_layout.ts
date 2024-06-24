@@ -54,6 +54,7 @@ type Sizes = {
     compositeIconSizes: [PossiblyEvaluatedPropertyValue<number>, PossiblyEvaluatedPropertyValue<number>] // (5);
 };
 
+type ImageTextAnchor = 'image-top' | 'image-bottom' | 'image-right' | 'image-left'
 export type TextAnchor = 'center' | 'left' | 'right' | 'top' | 'bottom' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 
 // The radial offset is to the edge of the text box
@@ -231,6 +232,7 @@ export function performSymbolLayout(bucket: SymbolBucket,
         };
         const text = feature.text;
         let textOffset: [number, number] = [0, 0];
+        let imageTextAnchor;
         if (text) {
             const unformattedText = text.toString();
 
@@ -239,7 +241,9 @@ export function performSymbolLayout(bucket: SymbolBucket,
             const lineHeight = layout.get('text-line-height').evaluate(feature, {}, canonical) * ONE_EM;
             const spacingIfAllowed = allowsLetterSpacing(unformattedText) ? spacing : 0;
 
-            const textAnchor = layout.get('text-anchor').evaluate(feature, {}, canonical);
+            let textAnchor = layout.get('text-anchor').evaluate(feature, {}, canonical);
+            imageTextAnchor = textAnchor.startsWith('image') ? textAnchor : false;
+            textAnchor = textAnchor.replace('image-', '') as TextAnchor;
             const variableTextAnchor = layout.get('text-variable-anchor');
 
             if (!variableTextAnchor) {
@@ -357,6 +361,9 @@ export function performSymbolLayout(bucket: SymbolBucket,
         if (!bucket.iconsInText) {
             bucket.iconsInText = shapedText ? shapedText.iconsInText : false;
         }
+        if (imageTextAnchor) {
+            shapedIconText(shapedText, shapedIcon, imageTextAnchor, layoutTextSize, layoutIconSize);
+        }
         if (shapedText || shapedIcon) {
             // @ts-expect-error - TS2345 - Argument of type 'Record<string, any>' is not assignable to parameter of type 'Sizes'.
             addFeature(bucket, feature, shapedTextOrientations, shapedIcon, imageMap, sizes, layoutTextSize, layoutIconSize, textOffset, isSDFIcon, availableImages, canonical, projection, brightness, hasAnySecondaryIcon);
@@ -366,6 +373,62 @@ export function performSymbolLayout(bucket: SymbolBucket,
     if (showCollisionBoxes) {
         bucket.generateCollisionDebugBuffers(tileZoom, bucket.collisionBoxArray);
     }
+}
+
+function shapedIconText(shapedText: Shaping, shapedIcon: Shaping, imageTextAnchor: ImageTextAnchor, layoutTextSize: number, layoutIconSize: number) {
+    if (!shapedIcon) {
+        return shapedText;
+    }
+    const scale = layoutTextSize / ONE_EM;
+    const textWidth = shapedText.right - shapedText.left;
+    const textHeight = shapedText.bottom - shapedText.top;
+
+    const imagePadding = 2;
+
+    const iconTop = (shapedIcon.top - imagePadding) * layoutIconSize / scale;
+    const iconBottom = (shapedIcon.bottom + imagePadding) * layoutIconSize / scale;
+    const iconLeft = (shapedIcon.left - imagePadding) * layoutIconSize / scale;
+    const iconRight = (shapedIcon.right + imagePadding) * layoutIconSize / scale;
+
+    const iconHeight = iconBottom - iconTop;
+
+    const oldTop = shapedText.top;
+    const oldLeft = shapedText.left;
+
+    switch (imageTextAnchor) {
+    case 'image-top':
+        shapedText.bottom = iconTop;
+        shapedText.top = shapedText.bottom - textHeight;
+        break;
+    case 'image-bottom':
+        shapedText.top = iconBottom;
+        shapedText.bottom = shapedText.top + textHeight;
+        break;
+    case 'image-left':
+        shapedText.bottom = iconBottom - iconHeight / 2 + textHeight / 2;
+        shapedText.top = shapedText.bottom - textHeight;
+        shapedText.right = iconLeft;
+        shapedText.left = shapedText.right - textWidth;
+        break;
+    case 'image-right':
+        shapedText.bottom = iconBottom - iconHeight / 2 + textHeight / 2;
+        shapedText.top = shapedText.bottom - textHeight;
+        shapedText.left = iconRight;
+        shapedText.right = shapedText.left + textWidth;
+        break;
+    }
+
+    const dx = oldLeft - shapedText.left;
+    const dy = oldTop - shapedText.top;
+
+    for (const positionedLine of shapedText.positionedLines) {
+        for (const positionedGlyph of positionedLine.positionedGlyphs) {
+            positionedGlyph.x -= dx;
+            positionedGlyph.y -= dy;
+        }
+    }
+    // console.log(shapedText, shapedIcon);
+    return shapedText;
 }
 
 // Choose the justification that matches the direction of the TextAnchor
@@ -512,6 +575,7 @@ function addFeature(bucket: SymbolBucket,
             addSymbolAtAnchor(line, new Anchor(line[l - 1].x, line[l - 1].y, 0, 0, undefined), canonical);
         } else if (symbolPlacement === 'first-last-vertex') {
             addSymbolAtAnchor(line, new Anchor(line[0].x, line[0].y, 0, 0, undefined), canonical);
+            // eslint-disable-next-line no-unused-expressions
             l > 1 && addSymbolAtAnchor(line, new Anchor(line[l - 1].x, line[l - 1].y, 0, 0, undefined), canonical);
         } else if (symbolPlacement === 'except-first-vertex' && l > 1) {
             for (let i = 1; i < l; i++) {
@@ -528,7 +592,7 @@ function addFeature(bucket: SymbolBucket,
         } else {
             addSymbolAtAnchor(line, new Anchor(line[0].x, line[0].y, 0, 0, undefined), canonical);
         }
-    }
+    };
 
     if (symbolPlacement === 'line') {
         for (const line of clipLine(feature.geometry, 0, 0, EXTENT, EXTENT)) {
@@ -574,7 +638,7 @@ function addFeature(bucket: SymbolBucket,
                 const poi = findPoleOfInaccessibility(polygon, 16);
                 addSymbolAtAnchor(polygon[0], new Anchor(poi.x, poi.y, 0, 0, undefined), canonical);
             } else {
-                addSymbolAtAnchorFromLine(polygon[0])
+                addSymbolAtAnchorFromLine(polygon[0]);
             }
         }
     } else if (feature.type === 'LineString') {

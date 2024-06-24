@@ -101,7 +101,7 @@ describe('Map', () => {
             performanceEvent_.pendingRequest = null;
         });
 
-        describe('Style loading event', () => {
+        describe('Style _loading event', () => {
             function getStyleLoadEventChecker(payload) {
                 return async ({request}, doneRef) => {
                     const reqBody = await getRequestBody(request);

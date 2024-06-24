@@ -41,7 +41,16 @@ export type WorkerTileParameters = RequestedTileParameters & {
     brightness: number;
     extraShadowCaster?: boolean;
     tessellationStep?: number // test purpose only;
+    vtOptions: any
 };
+
+export type CoverTiles = {x: number, y: number, z: number, dx: number, dy: number}
+
+export type WorkerCoverTilesResult = {
+    coverTiles: CoverTiles[],
+    ltPixel: {x: number, y: number},
+    rbPixel: {x: number, y: number}
+}
 
 export type DEMSourceEncoding = 'mapbox' | 'terrarium';
 
@@ -127,7 +136,7 @@ export interface WorkerSource {
      */
     reloadTile(params: WorkerTileParameters, callback: WorkerTileCallback): void;
     /**
-     * Aborts loading a tile that is in progress.
+     * Aborts _loading a tile that is in progress.
      */
     abortTile(params: TileParameters, callback: WorkerTileCallback): void;
     /**

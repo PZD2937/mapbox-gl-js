@@ -75,7 +75,7 @@ export interface ISource {
     maxzoom: number;
     tileSize: number;
     attribution?: string;
-    customTags?: Object,
+    customTags?: Record<string, any>,
     projection?: string,
 
     roundZoom?: boolean;

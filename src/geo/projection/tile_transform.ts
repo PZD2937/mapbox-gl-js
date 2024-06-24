@@ -11,9 +11,7 @@ import type Projection from './projection';
 import type {ProjectedPoint} from './projection';
 import type Transform from '../transform';
 import LngLat from "../lng_lat.js";
-import LngLatBounds from "../lng_lat_bounds.js";
 import {lngLatToTile} from "./tile_projection.js";
-// import {wgs84togcj02} from "./coordinates_transform.js";
 
 export type TileTransform = {
     scale: number;

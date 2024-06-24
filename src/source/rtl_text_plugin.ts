@@ -7,7 +7,7 @@ import type {Callback} from '../types/callback';
 
 const status = {
     unavailable: 'unavailable', // Not loaded
-    deferred: 'deferred', // The plugin URL has been specified, but loading has been deferred
+    deferred: 'deferred', // The plugin URL has been specified, but _loading has been deferred
     loading: 'loading', // request in-flight
     loaded: 'loaded',
     error: 'error'
@@ -114,7 +114,7 @@ export const plugin: {
         return pluginStatus === status.loaded || // Main Thread: loaded if the completion callback returned successfully
             plugin.applyArabicShaping != null; // Web-worker: loaded if the plugin functions have been compiled
     },
-    isLoading() { // Main Thread Only: query the loading status, this function does not return the correct value in the worker context.
+    isLoading() { // Main Thread Only: query the _loading status, this function does not return the correct value in the worker context.
         return pluginStatus === status.loading;
     },
     setState(state: PluginState) { // Worker thread only: this tells the worker threads that the plugin is available on the Main thread

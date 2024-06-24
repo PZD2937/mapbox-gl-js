@@ -32,6 +32,7 @@
         }
     },
     "rules": {
+        "linebreak-style": "off",
         // temporarily disabled for easier migration to TypeScript
         "@typescript-eslint/no-this-alias": "off",
         "@typescript-eslint/ban-ts-comment": "off",
@@ -124,7 +125,7 @@
         }],
         "no-multiple-empty-lines": ["error", {
             "max": 1
-        }],
+        }]
     },
     "overrides": [
         {
@@ -166,7 +167,7 @@
                 "jsdoc/require-property-description": "off",
                 "jsdoc/require-property-name": "off",
                 "jsdoc/require-property-type": "off",
-                "jsdoc/require-returns-type": "off",
+                "jsdoc/require-returns-type": "off"
             }
         },
         {
@@ -181,7 +182,7 @@
                 "src/ui/handler/**",
                 "src/geo/lng_lat.ts",
                 "src/geo/mercator_coordinate.ts",
-                "src/source/**",
+                "src/source/**"
             ],
             "rules": {
                 "jsdoc/check-param-names": "error",
@@ -208,7 +209,7 @@
                 "jsdoc/require-property-description": "error",
                 "jsdoc/require-property-name": "error",
                 "jsdoc/require-property-type": "error",
-                "jsdoc/require-returns-type": "error",
+                "jsdoc/require-returns-type": "error"
             }
         },
         {

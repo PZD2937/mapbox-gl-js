@@ -32,7 +32,7 @@ if (window.document) {
 function testSupport(gl: WebGL2RenderingContext) {
     if (webpCheckComplete || !webpImgTest) return;
 
-    // HTMLImageElement.complete is set when an image is done loading it's source
+    // HTMLImageElement.complete is set when an image is done _loading it's source
     // regardless of whether the load was successful or not.
     // It's possible for an error to set HTMLImageElement.complete to true which would trigger
     // testWebpTextureUpload and mistakenly set exported.supported to true in browsers which don't support webp

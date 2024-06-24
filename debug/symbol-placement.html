@@ -23,31 +23,12 @@
 <script src='../dist/mapbox-gl-dev.js'></script>
 <script src='../debug/access_token_generated.js'></script>
 <script>
-    mapboxgl.accessToken = "pk.eyJ1IjoibW91cm5lciIsImEiOiJWWnRiWG1VIn0.j6eccFHpE3Q04XPLI7JxbA"
+    // mapboxgl.accessToken = "pk.eyJ1IjoibW91cm5lciIsImEiOiJWWnRiWG1VIn0.j6eccFHpE3Q04XPLI7JxbA"
     var map = window.map = new mapboxgl.Map({
         container: 'map',
         zoom: 12.5,
         center: [106, 39],
         style: 'mapbox://styles/mapbox/streets-v11',
-        // style: {
-        //     glyphs: "mapbox://fonts/mapbox/{fontstack}/{range}.pbf",
-        //     sprite: "mapbox://sprites/mapbox/streets-v11",
-        //     version: 8,
-        //     sources: {
-        //         line: {
-        //             type: "geojson",
-        //             data: {
-        //                 type: 'Feature',
-        //                 id: 123,
-        //                 geometry: {
-        //                     type: 'LineString',
-        //                     coordinates: [[106, 39], [106.00012, 39.0015], [106.0014, 39.0014], [106.001589, 39.0014789], [106.001699, 39.0015789]]
-        //                 }
-        //             }
-        //         }
-        //     },
-        //     layers: []
-        // },
         hash: true,
         projection: 'globe',
         language: 'zh_CN'
@@ -56,62 +37,116 @@
         map.addSource('line', {
             type: "geojson",
             data: {
-                type: 'Feature',
-                id: 123,
-                geometry: {
-                    type: 'LineString',
-                    coordinates: [[106, 39], [106.00012, 39.0015], [106.0014, 39.0014], [106.001589, 39.0014789], [106.001699, 39.0015789]]
-                }
+                type: 'FeatureCollection',
+                features: [{
+                    type: 'Feature',
+                    geometry: {
+                        type: 'Point',
+                        // coordinates: [[106, 39], [106.00012, 39.0015], [106.0014, 39.0014], [106.001589, 39.0014789], [106.001699, 39.0015789]]
+                        coordinates: [106, 39]
+                    },
+                    properties: {
+                        isTest: false
+                    }
+                }, {
+                    type: 'Feature',
+                    geometry: {
+                        type: 'Point',
+                        // coordinates: [[106, 39], [106.00012, 39.0015], [106.0014, 39.0014], [106.001589, 39.0014789], [106.001699, 39.0015789]]
+                        coordinates: [106.00012, 39.0015]
+                    },
+                    properties: {
+                        isTest: true
+                    }
+                }]
             }
-        })
-
+        });
         map.addLayer({
-            id: 'line',
+            id: 'anchor',
+            type: 'circle',
             source: 'line',
-            type: 'line',
-            layout: {},
             paint: {
-                'line-color': '#ff0000',
-                'line-width': 5,
+                'circle-color': 'red',
+                'circle-radius': 2
             }
-        })
-
+        });
         map.addLayer({
-            id: 'symbol-placement-line-vertex',
+            id: 'text-anchor',
             source: 'line',
             type: 'symbol',
+            filter: ['!', ['get', 'isTest']],
             layout: {
-                'symbol-placement': 'except-first-vertex',
-                'icon-image': 'dot-10',
-                'icon-size': 5,
-                'text-field': 'vertex',
-                'icon-allow-overlap': true,
-                'text-allow-overlap': true
+                'icon-anchor': 'center',
+                'icon-size': 2,
+                'icon-image': 'ae-d-route-4',
+                'text-field': '测试1',
+                'text-anchor': 'image-right',
+                'text-size': 10
             }
-        })
-
+        });
 
         map.addLayer({
-            id: 'symbol-placement-line-first-vertex',
+            id: 'text-anchor-test',
             source: 'line',
             type: 'symbol',
+            filter: ['get', 'isTest'],
             layout: {
-                'symbol-placement': 'first-vertex',
-                'icon-image': 'airport-11',
-                // 'icon-size': 5,
-                'text-field': 'first',
+                // 'icon-anchor': 'bottom',
+                'icon-size': 2,
+                'icon-image': 'ae-d-route-4',
+                'text-field': '测试2',
+                'text-anchor': 'left',
+                'icon-text-fit': 'width'
             }
-        })
+        });
 
-
-        map.on('click', e => {
-            const buffer = 10;
-            const {x, y} = e.point;
-            const features = map.queryRenderedFeatures([[x - buffer, y - buffer], [x + buffer, y + buffer]]);
-            if (features[0]) {
-                console.log(features[0]);
-            }
-        })
+        // map.addLayer({
+        //     id: 'line',
+        //     source: 'line',
+        //     type: 'line',
+        //     layout: {},
+        //     paint: {
+        //         'line-color': '#ff0000',
+        //         'line-width': 5,
+        //     }
+        // })
+        //
+        // map.addLayer({
+        //     id: 'symbol-placement-line-vertex',
+        //     source: 'line',
+        //     type: 'symbol',
+        //     layout: {
+        //         'symbol-placement': 'except-first-vertex',
+        //         'icon-image': 'dot-10',
+        //         'icon-size': 5,
+        //         'text-field': 'vertex',
+        //         'icon-allow-overlap': true,
+        //         'text-allow-overlap': true
+        //     }
+        // })
+        //
+        //
+        // map.addLayer({
+        //     id: 'symbol-placement-line-first-vertex',
+        //     source: 'line',
+        //     type: 'symbol',
+        //     layout: {
+        //         'symbol-placement': 'first-vertex',
+        //         'icon-image': 'airport-11',
+        //         // 'icon-size': 5,
+        //         'text-field': 'first',
+        //     }
+        // })
+        //
+        //
+        // map.on('click', e => {
+        //     const buffer = 10;
+        //     const {x, y} = e.point;
+        //     const features = map.queryRenderedFeatures([[x - buffer, y - buffer], [x + buffer, y + buffer]]);
+        //     if (features[0]) {
+        //         console.log(features[0]);
+        //     }
+        // })
     })
 
 </script>

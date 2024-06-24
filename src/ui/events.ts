@@ -384,7 +384,7 @@ export type MapBoxZoomEvent = {
 
 /**
  * `MapDataEvent` is a class used to generate
- * events related to loading data, styles, and sources.
+ * events related to _loading data, styles, and sources.
  * For a full list of available events, see [`Map` events](/mapbox-gl-js/api/map/#map-events).
  *
  * @typedef {Object} MapDataEvent
@@ -396,9 +396,9 @@ export type MapBoxZoomEvent = {
  * @property {string} [sourceDataType] Included if the event has a `dataType` of `source` and the event signals
  * that internal data has been received or changed. Possible values are `metadata`, `content` and `visibility`, and `error`.
  * @property {Object} [tile] The tile being loaded or changed, if the event has a `dataType` of `source` and
- * the event is related to loading of a tile.
+ * the event is related to _loading of a tile.
  * @property {Coordinate} [coord] The coordinate of the tile if the event has a `dataType` of `source` and
- * the event is related to loading of a tile.
+ * the event is related to _loading of a tile.
  * @example
  * // Example of a MapDataEvent of type "sourcedata"
  * map.on('sourcedata', (e) => {
@@ -1170,7 +1170,7 @@ export type MapEvent = /** @section {Interaction}
  * // Initialize the map
  * const map = new mapboxgl.Map({});
  * // Set an event listener that fires
- * // when the map has finished loading.
+ * // when the map has finished _loading.
  * map.on('load', () => {
  *     console.log('A load event occurred.');
  * });
@@ -1204,7 +1204,7 @@ export type MapEvent = /** @section {Interaction}
  * - a change to the map's position, zoom, pitch, or bearing
  * - a change to the map's style
  * - a change to a GeoJSON source
- * - the loading of a vector tile, GeoJSON file, glyph, or sprite.
+ * - the _loading of a vector tile, GeoJSON file, glyph, or sprite.
  *
  * @event render
  * @memberof Map
@@ -1308,7 +1308,7 @@ export type MapEvent = /** @section {Interaction}
  * });
  */ | 'webglcontextrestored'
 
-/** @section {Data loading}
+/** @section {Data _loading}
  * @event
  * @instance
  * @memberof Map */
@@ -1369,7 +1369,7 @@ export type MapEvent = /** @section {Interaction}
  */ | 'sourcedata'
 
 /**
- * Fired when any map data (style, source, tile, etc) begins loading or
+ * Fired when any map data (style, source, tile, etc) begins _loading or
  * changing asynchronously. All `dataloading` events are followed by a `data`
  * or `error` event. See {@link MapDataEvent} for more information.
  *
@@ -1381,7 +1381,7 @@ export type MapEvent = /** @section {Interaction}
  * // Initialize the map
  * const map = new mapboxgl.Map({});
  * // Set an event listener that fires
- * // when any map data begins loading
+ * // when any map data begins _loading
  * // or changing asynchronously.
  * map.on('dataloading', () => {
  *     console.log('A dataloading event occurred.');
@@ -1389,7 +1389,7 @@ export type MapEvent = /** @section {Interaction}
  */ | 'dataloading'
 
 /**
- * Fired when the map's style begins loading or changing asynchronously.
+ * Fired when the map's style begins _loading or changing asynchronously.
  * All `styledataloading` events are followed by a `styledata`
  * or `error` event. See {@link MapDataEvent} for more information.
  *
@@ -1401,7 +1401,7 @@ export type MapEvent = /** @section {Interaction}
  * // Initialize the map
  * const map = new mapboxgl.Map({});
  * // Set an event listener that fires
- * // when the map's style begins loading or
+ * // when the map's style begins _loading or
  * // changing asynchronously.
  * map.on('styledataloading', () => {
  *     console.log('A styledataloading event occurred.');
@@ -1409,7 +1409,7 @@ export type MapEvent = /** @section {Interaction}
  */ | 'styledataloading'
 
 /**
- * Fired when one of the map's sources begins loading or changing asynchronously.
+ * Fired when one of the map's sources begins _loading or changing asynchronously.
  * All `sourcedataloading` events are followed by a `sourcedata` or `error` event.
  * See {@link MapDataEvent} for more information.
  *
@@ -1421,7 +1421,7 @@ export type MapEvent = /** @section {Interaction}
  * // Initialize the map
  * const map = new mapboxgl.Map({});
  * // Set an event listener that fires
- * // when the map's sources begin loading or
+ * // when the map's sources begin _loading or
  * // changing asynchronously.
  * map.on('sourcedataloading', () => {
  *     console.log('A sourcedataloading event occurred.');
@@ -1459,7 +1459,7 @@ export type MapEvent = /** @section {Interaction}
  * // Initialize the map
  * const map = new mapboxgl.Map({});
  * // Set an event listener that fires
- * // when the map has finished loading.
+ * // when the map has finished _loading.
  * map.on('style.load', () => {
  *     console.log('A style load event occurred.');
  * });
@@ -1477,7 +1477,7 @@ export type MapEvent = /** @section {Interaction}
  * // Initialize the map
  * const map = new mapboxgl.Map({});
  * // Set an event listener that fires
- * // when the style import has finished loading.
+ * // when the style import has finished _loading.
  * map.on('style.import.load', () => {
  *     console.log('A style import load event occurred.');
  * });

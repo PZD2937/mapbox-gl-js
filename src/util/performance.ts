@@ -62,7 +62,7 @@ export const PerformanceUtils = {
         performance.measure(m.name, m.mark);
     },
     recordPlacementTime(time: number) {
-        // Ignore placementTimes during loading
+        // Ignore placementTimes during _loading
         if (!fullLoadFinished) {
             return;
         }

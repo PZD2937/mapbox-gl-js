@@ -92,7 +92,7 @@ describe('CustomSource', () => {
         const tileID = new OverscaledTileID(0, 0, 0, 0, 0);
 
         const loadTile = vi.fn(async () => {
-            throw new Error('Error loading tile');
+            throw new Error('Error _loading tile');
         });
 
         const {source, sourceCache, eventedParent} = createSource({loadTile});
@@ -100,7 +100,7 @@ describe('CustomSource', () => {
 
         await new Promise(resolve => {
             eventedParent.on('error', (err) => {
-                expect(err.error.message).toEqual('Error loading tile');
+                expect(err.error.message).toEqual('Error _loading tile');
                 expect(loadTile).toHaveBeenCalledTimes(1);
                 expect(source.loadTileData).not.toHaveBeenCalled(); // loadTileData must not be called if loadTile throws
                 expect(sourceCache._tiles[tileID.key].state).toEqual('errored'); //  tile must be in the `errored` state if `loadTile` throws

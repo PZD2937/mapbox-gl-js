@@ -179,7 +179,7 @@ class Tiled3dModelWorkerSource implements WorkerSource {
     }
 
     /**
-     * Aborts loading a tile that is in progress.
+     * Aborts _loading a tile that is in progress.
      */
     // eslint-disable-next-line no-unused-vars
     abortTile(params: TileParameters, callback: WorkerTileCallback) {

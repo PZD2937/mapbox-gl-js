@@ -48,7 +48,7 @@ class RasterArrayTileSource extends RasterTileSource implements ISource {
 
         const url = this.map._requestManager.normalizeTileURL(tile.tileID.canonical.url(this.tiles, this.scheme), false, this.tileSize);
         // @ts-expect-error - TS2345 - Argument of type 'string' is not assignable to parameter of type '"Unknown" | "Style" | "Source" | "Tile" | "Glyphs" | "SpriteImage" | "SpriteJSON" | "Image" | "Model"'.
-        const requestParams = this.map._requestManager.transformRequest(url, ResourceType.Tile);
+        const requestParams = this.map._requestManager.transformRequest(url, ResourceType.Tile, this.customTags, tile.tileID.canonical);
 
         // @ts-expect-error - TS2339 - Property 'requestParams' does not exist on type 'Tile'.
         tile.requestParams = requestParams;

@@ -358,7 +358,7 @@ class GeoJSONSource extends Evented implements ISource {
 
     /*
      * Responsible for invoking WorkerSource's geojson.loadData target, which
-     * handles loading the geojson data and preparing to serve it up as tiles,
+     * handles _loading the geojson data and preparing to serve it up as tiles,
      * using geojson-vt or supercluster as appropriate.
      */
     _updateWorkerData(append: boolean = false) {

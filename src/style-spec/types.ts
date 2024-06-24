@@ -169,7 +169,7 @@ export type VectorSourceSpecification = {
     "url"?: string,
     "tiles"?: Array<string>,
     "bounds"?: [number, number, number, number],
-    "customTags"?: Object,
+    "customTags"?: Record<string, any>,
     "scheme"?: "xyz" | "tms",
     "minzoom"?: number,
     "maxzoom"?: number,
@@ -179,12 +179,15 @@ export type VectorSourceSpecification = {
     [_: string]: unknown
 }
 
+export type RasterProjection = 'GCJ02' | 'BAIDU' | 'WGS84'
+
 export type RasterSourceSpecification = {
     "type": "raster",
     "url"?: string,
     "tiles"?: Array<string>,
     "bounds"?: [number, number, number, number],
-    "customTags"?: Object,
+    "projection"?: RasterProjection,
+    "customTags"?: Record<string, any>
     "minzoom"?: number,
     "maxzoom"?: number,
     "tileSize"?: number,
@@ -199,7 +202,7 @@ export type RasterDEMSourceSpecification = {
     "url"?: string,
     "tiles"?: Array<string>,
     "bounds"?: [number, number, number, number],
-    "customTags"?: Object,
+    "customTags"?: Record<string, any>
     "minzoom"?: number,
     "maxzoom"?: number,
     "tileSize"?: number,
@@ -219,6 +222,7 @@ export type RasterArraySourceSpecification = {
     "bounds"?: [number, number, number, number],
     "minzoom"?: number,
     "maxzoom"?: number,
+    "customTags"?: Record<string, any>;
     "tileSize"?: number,
     "attribution"?: string,
     "rasterLayers"?: unknown,
@@ -231,7 +235,7 @@ export type GeoJSONSourceSpecification = {
     "data"?: GeoJSON.GeoJSON | string,
     "maxzoom"?: number,
     "minzoom"?: number,
-    "customTags"?: Object,
+    "customTags"?: Record<string, any>
     "attribution"?: string,
     "buffer"?: number,
     "filter"?: unknown,
@@ -250,14 +254,14 @@ export type GeoJSONSourceSpecification = {
 export type VideoSourceSpecification = {
     "type": "video",
     "urls": Array<string>,
-    "customTags"?: Object,
+    "customTags"?: Record<string, any>
     "coordinates": [[number, number], [number, number], [number, number], [number, number]]
 }
 
 export type ImageSourceSpecification = {
     "type": "image",
     "url"?: string,
-    "customTags"?: Object,
+    "customTags"?: Record<string, any>
     "coordinates": [[number, number], [number, number], [number, number], [number, number]]
 }
 
@@ -265,6 +269,7 @@ export type ModelSourceSpecification = {
     "type": "model" | "batched-model",
     "maxzoom"?: number,
     "minzoom"?: number,
+    "customTags"?: Record<string, any>;
     "tiles"?: Array<string>
 }
 

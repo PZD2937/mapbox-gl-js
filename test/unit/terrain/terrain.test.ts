@@ -326,11 +326,11 @@ describe('Elevation', () => {
             await waitFor(map, 'render');
         });
 
-        test('Sample before loading DEMs', () => {
+        test('Sample before _loading DEMs', () => {
             expect(map.painter.terrain.isDataAvailableAtPoint({x: 0.5, y: 0.5})).toBeFalsy();
         });
 
-        test('Sample within after loading', async () => {
+        test('Sample within after _loading', async () => {
             const cache = map.style.getOwnSourceCache('mapbox-dem');
             cache.used = cache._sourceLoaded = true;
             cache._loadTile = (tile, callback) => {
@@ -344,7 +344,7 @@ describe('Elevation', () => {
             expect(map.painter.terrain.isDataAvailableAtPoint({x: 0.5, y: 0.5})).toBeTruthy();
         });
 
-        test('Sample outside after loading', () => {
+        test('Sample outside after _loading', () => {
             expect(map.painter.terrain.getAtPoint({x: 0.5, y: 1.1})).toBeFalsy();
             expect(map.painter.terrain.getAtPoint({x: 1.15, y: -0.001})).toBeFalsy();
         });
@@ -511,7 +511,7 @@ describe('Elevation', () => {
                             expect(map.getSource('trace').loaded()).toEqual(false);
                         }
                     } else {
-                        // Previous trace data should be rendered while loading update.
+                        // Previous trace data should be rendered while _loading update.
                         expect(isCenterRendered).toBeTruthy();
                         setTimeout(() => map.remove(), 0); // avoids re-triggering render after t.end. Don't remove while in render().
                     }

@@ -1,46 +1,27 @@
 // @flow
-import LngLat from "../lng_lat.js";
-import {ProjectedPoint} from "./projection.js";
+import LngLat, {LngLatBounds} from "../lng_lat";
 import {CanonicalTileID} from "../../source/tile_id.js";
-// import transformLngLat from "./coordinates_transform.js";
+import {clamp} from "../../util/util.js";
+
+import type {ProjectedPoint} from "./projection.js";
 
 // const delta = 1E-7;
 // web-Mercator 投影切片使用的地球半径为6378137
 // @see https://zh.wikipedia.org/wiki/Web%E5%A2%A8%E5%8D%A1%E6%89%98%E6%8A%95%E5%BD%B1
-/*const earthCircumference = 2 * 6378137 * Math.PI;
-
-function getResolution(zoom: number, projection: string): number {
-    let resolution;
-    switch (projection) {
-        case 'EPSG:4326':
-            resolution = 180 / (Math.pow(2, zoom) * 128)
-            break;
-        case 'BAIDU':
-            resolution = Math.pow(2, 18 - zoom)
-            break;
-        default:
-            resolution = earthCircumference / (256 * Math.pow(2, zoom))
-    }
-    return resolution
-}*/
-
-const Common = {}
+/*const earthCircumference = 2 * 6378137 * Math.PI;*/
 
 const EPSG3857 = {
     direction: {x: 1, y: 1},
     lngLatToTile(lngLat: LngLat, z: number): CanonicalTileID {
-        let sin = Math.sin(lngLat.lat * Math.PI / 180),
-            z2 = 1 << z,
-            x = z2 * (lngLat.lng / 360 + 0.5),
-            y = z2 * (0.5 - 0.25 * Math.log((1 + sin) / (1 - sin)) / Math.PI);
-        // Wrap Tile X
-        x = x % z2;
-        if (x < 0) x = x + z2;
-        y = Math.min(y, z2 - 1);
-        y = Math.max(0, y);
-        return new CanonicalTileID(z, Math.floor(x), Math.floor(y))
+        const wordSize = (1 << z);
+        const x = Math.floor((lngLat.lng + 180) / 360 * wordSize) % wordSize;
+
+        const latRad = lngLat.lat * Math.PI / 180;
+        const temp = (1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2;
+        const y = clamp(Math.floor(temp * wordSize), 0, wordSize - 1);
+        return new CanonicalTileID(z, x, y);
     }
-}
+};
 
 const EPSG4326 = {
     direction: {x: 1, y: 1},
@@ -51,12 +32,12 @@ const EPSG4326 = {
         const s = 256 * resolution;
         const x = Math.floor((lngLat.lng + 180 + delta) / s);
         const y = -Math.ceil((lngLat.lat - 90 - delta) / s);
-        return new CanonicalTileID(z, Math.min(x, worldSize - 1), Math.min(y , worldSize - 1))
+        return new CanonicalTileID(z, Math.min(x, worldSize - 1), Math.min(y, worldSize - 1));
     }
-}
-
+};
 
 const BAIDU = {
+    fullExtent: [0, 0, 180, 90],
     direction: {x: 1, y: -1},
     EARTHRADIUS: 6370996.81,
     MCBAND: [12890594.86, 8362377.87, 5591021, 3481989.83, 1678043.12, 0],
@@ -78,15 +59,15 @@ const BAIDU = {
         [-0.0003218135878613132, 111320.7020701615, 0.00369383431289, 823725.6402795718, 0.46104986909093, 2351.343141331292, 1.58060784298199, 8.77738589078284, 0.37238884252424, 7.45]
     ],
 
-    project: function (lng: number, lat: number): ProjectedPoint {
+    project(lng: number, lat: number): ProjectedPoint {
         return this.convertLL2MC(lng, lat);
     },
 
-    unproject: function (x: number, y: number): LngLat {
+    unproject(x: number, y: number): LngLat {
         return this.convertMC2LL(x, y);
     },
 
-    convertMC2LL: function (x, y) {
+    convertMC2LL(x, y) {
         let matrix;
         for (let i = 0, len = this.MCBAND.length; i < len; i++) {
             if (Math.abs(y) >= this.MCBAND[i]) {
@@ -94,10 +75,10 @@ const BAIDU = {
                 break;
             }
         }
-        const coords = this.convertor(x, y);
-        return new LngLat(coords.x, coords.y, matrix);
+        const coords = this.convertor(x, y, matrix);
+        return new LngLat(coords.x, coords.y);
     },
-    convertLL2MC: function (lng, lat) {
+    convertLL2MC(lng, lat) {
         let matrix;
         lng = this.getLoop(lng, -180, 180);
         lat = this.getRange(lat, -74, 74);
@@ -119,7 +100,7 @@ const BAIDU = {
         }
         return this.convertor(lng, lat, matrix);
     },
-    convertor: function (lng, lat, matrix) {
+    convertor(lng, lat, matrix) {
         if (!matrix) {
             return {x: 0, y: 0, z: 0};
         }
@@ -133,7 +114,7 @@ const BAIDU = {
         y *= (lat < 0 ? -1 : 1);
         return {x, y, z: 0};
     },
-    getRange: function (num: number, min: number, max: number) {
+    getRange(num: number, min: number, max: number) {
         if (min != null) {
             num = Math.max(num, min);
         }
@@ -142,7 +123,7 @@ const BAIDU = {
         }
         return num;
     },
-    getLoop: function (num: number, min: number, max: number) {
+    getLoop(num: number, min: number, max: number) {
         if (num === Infinity) {
             return max;
         } else if (num === -Infinity) {
@@ -159,64 +140,64 @@ const BAIDU = {
 
     // 图层分辨率  m/pixel
     getResolution(zoom): number {
-        return Math.pow(2, 18 - zoom)
+        return Math.pow(2, 18 - zoom);
     },
 
     // 像素密度 pixel/m
-    getPixelDensity(zoom, lat): number{
-        return Math.pow(2, zoom - 18) // * Math.cos(lat)
+    getPixelDensity(zoom): number {
+        return Math.pow(2, zoom - 18); // * Math.cos(lat)
     },
 
     lngLatToTile(lngLat: LngLat, zoom: number): CanonicalTileID {
         const point = this.project(lngLat.lng, lngLat.lat);
-        const resolution = this.getPixelDensity(zoom, lngLat.lat);
+        const resolution = this.getPixelDensity(zoom);
         const x = Math.floor(point.x * resolution / 256);
         const y = Math.floor(point.y * resolution / 256);
-        const worldSize = 1 << zoom;
-        return new CanonicalTileID(zoom, Math.min(x, worldSize - 1), Math.min(y, worldSize - 1))
+        const worldSize = (1 << zoom) - 1;
+        return new CanonicalTileID(zoom, clamp(x, 0, worldSize), clamp(y, 0, worldSize));
     },
 
     tileToLngLat(tileID: CanonicalTileID): LngLat {
         const resolution = this.getResolution(tileID.z);
         const x = tileID.x / resolution;
         const y = tileID.y / resolution;
-        return this.unproject(x, y)
+        return this.unproject(x, y);
     },
 
     lngLatToPixel(lngLat: LngLat, zoom: number): { x: number, y: number } {
-        const s = this.getPixelDensity(zoom, lngLat.lat);
+        const s = this.getPixelDensity(zoom);
         const point = this.project(lngLat.lng, lngLat.lat);
-        const x = Math.ceil((point.x * s) % 256);
+        const x = +Math.ceil((point.x * s) % 256);
         const y = Math.floor(256 - (point.y * s) % 256);
-        return {x, y}
+        return {x, y};
     }
 
-}
+};
 
 export function getSpatialReference(projection: string) {
     projection = typeof projection === 'string' ? projection.toUpperCase() : '';
     let spatialReference;
     switch (projection) {
-        case 'EPSG:4326':
-            spatialReference = EPSG4326;
-            break;
-        case 'BAIDU':
-            spatialReference = BAIDU;
-            break;
-        default:
-            spatialReference = EPSG3857
+    case 'EPSG:4326':
+        spatialReference = EPSG4326;
+        break;
+    case 'BAIDU':
+        spatialReference = BAIDU;
+        break;
+    default:
+        spatialReference = EPSG3857;
     }
-    return spatialReference
+    return spatialReference;
 }
 
 export function getTileSystem(projection) {
     const sr = getSpatialReference(projection);
-    return {direction: sr.direction, fullExtent: sr.fullExtent}
+    return {direction: sr.direction, fullExtent: sr.fullExtent ? new LngLatBounds(sr.fullExtent) : null};
 }
 
 export function lngLatToTile(lngLat: LngLat, z: number, projection: string): CanonicalTileID {
     const sr = getSpatialReference(projection);
-    return sr.lngLatToTile(lngLat, z)
+    return sr.lngLatToTile(lngLat, z);
 }
 
 /**
@@ -229,21 +210,20 @@ export function lngLatToTile(lngLat: LngLat, z: number, projection: string): Can
 export function lngLatToPixel(lngLat: LngLat, zoom: number, projection: string): { x: number, y: number } {
     const spatialReference = getSpatialReference(projection);
     if (spatialReference && spatialReference.lngLatToPixel) {
-        let {x, y} = spatialReference.lngLatToPixel(lngLat, zoom);
-        return {x, y}
+        return spatialReference.lngLatToPixel(lngLat, zoom);
     }
     const wordSize = 1 << zoom;
     let sinLat = Math.sin(lngLat.lat * Math.PI / 180);
 
     // Truncating to 0.9999 effectively limits latitude to 89.189. This is
     // about a third of a tile past the edge of the world tile.
-    sinLat = Math.min(Math.max(sinLat, -0.9999), 0.9999);
+    sinLat = clamp(sinLat, -0.9999, 0.9999);
 
     const x = 256 * ((lngLat.lng + 180) / 360) * wordSize;
     const y = 256 * (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * wordSize;
     return {
-        x: Math.floor(x) % 256,
-        y: Math.floor(y) % 256
-    }
+        x: Math.floor(x % 256),
+        y: Math.floor(y % 256)
+    };
 }
 

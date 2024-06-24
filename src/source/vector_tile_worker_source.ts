@@ -5,7 +5,8 @@ import {extend} from '../util/util';
 import {getPerformanceMeasurement} from '../util/performance';
 import {Evented} from '../util/evented';
 import tileTransform from '../geo/projection/tile_transform';
-import {loadVectorTile, DedupedRequest} from './load_vector_tile';
+import {loadVectorTile} from './load_vector_tile';
+import {DedupedRequest} from "./deduped_request";
 
 import type {
     WorkerSource,
@@ -43,7 +44,7 @@ class VectorTileWorkerSource extends Evented implements WorkerSource {
     brightness: number | null | undefined;
 
     /**
-     * @param [loadVectorData] Optional method for custom loading of a VectorTile
+     * @param [loadVectorData] Optional method for custom _loading of a VectorTile
      * object based on parameters passed from the main-thread Source. See
      * {@link VectorTileWorkerSource#loadTile}. The default implementation simply
      * loads the pbf at `params.url`.

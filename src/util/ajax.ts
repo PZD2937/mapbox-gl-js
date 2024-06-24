@@ -4,6 +4,7 @@ import config from './config';
 import assert from 'assert';
 import {cacheGet, cachePut} from './tile_request_cache';
 import webpSupported from './webp_supported';
+import {getQueryParameter, removeQueryParameters} from "./url";
 
 import type {Callback} from '../types/callback';
 import type {Cancelable} from '../types/cancelable';
@@ -107,9 +108,14 @@ export const getReferrer: () => string = isWorker() ?
 // with file://. Relative URLs are also file:// URLs iff the original document was loaded
 // via a file:// URL.
 const isFileURL = (url: string) => /^file:/.test(url) || (/^file:/.test(getReferrer()) && !/^\w+:/.test(url));
+const CACHE_KEY = 'xzcacheurl';
 
 function makeFetchRequest(requestParameters: RequestParameters, callback: ResponseCallback<any>): Cancelable {
     const controller = new AbortController();
+
+    const cacheUrl = getQueryParameter(requestParameters.url, CACHE_KEY);
+    requestParameters.url = removeQueryParameters(requestParameters.url, [CACHE_KEY]);
+
     const request = new Request(requestParameters.url, {
         method: requestParameters.method || 'GET',
         body: requestParameters.body,
@@ -122,7 +128,7 @@ function makeFetchRequest(requestParameters: RequestParameters, callback: Respon
     let complete = false;
     let aborted = false;
 
-    const cacheIgnoringSearch = hasCacheDefeatingSku(request.url);
+    const cacheIgnoringSearch = cacheUrl || hasCacheDefeatingSku(request.url);
 
     if (requestParameters.type === 'json') {
         request.headers.set('Accept', 'application/json');
@@ -179,6 +185,8 @@ function makeFetchRequest(requestParameters: RequestParameters, callback: Respon
                 // reading the body can cause the cache insertion to error. We could catch this error
                 // in most browsers but in Firefox it seems to sometimes crash the tab. Adding
                 // it to the cache here avoids that error.
+                // eslint-disable-next-line no-unused-expressions
+                cacheUrl && request.headers.set('CacheUrl', cacheUrl);
                 cachePut(request, cacheableResponse, requestTime);
             }
             complete = true;
@@ -189,6 +197,8 @@ function makeFetchRequest(requestParameters: RequestParameters, callback: Respon
     };
 
     if (cacheIgnoringSearch) {
+        // eslint-disable-next-line no-unused-expressions
+        cacheUrl && request.headers.set('CacheUrl', cacheUrl);
         cacheGet(request, validateOrFetch);
     } else {
         validateOrFetch(null, null);
@@ -365,12 +375,12 @@ export const getImage = function(
         if (err) {
             callback(err);
         } else if (data) {
-            if (self.createImageBitmap && !requestParameters.debug) {
+            if (self.createImageBitmap) {
                 arrayBufferToImageBitmap(data, (err, imgBitmap) => callback(err, imgBitmap, cacheControl, expires));
-            } else if(Image && !requestParameters.returnArraybuffer){
+            } else if (Image && !requestParameters.returnArraybuffer) {
                 arrayBufferToImage(data, (err, img) => callback(err, img, cacheControl, expires));
-            }else {
-                callback(err, data, cacheControl, expires)
+            } else {
+                callback(err, data, cacheControl, expires);
             }
         }
     });
