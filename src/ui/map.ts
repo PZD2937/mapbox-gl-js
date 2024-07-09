@@ -3894,8 +3894,6 @@ export class Map extends Camera {
      * @private
      */
     _render(paintStartTimeStamp: number) {
-        this.transform._paintStartTimeStamp = paintStartTimeStamp;
-
         const m = PerformanceUtils.beginMeasure('render');
         this.fire(new Event('renderstart'));
 

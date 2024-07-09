@@ -130,6 +130,7 @@ class Tile {
     needsHillshadePrepare: boolean | null | undefined;
     needsDEMTextureUpload: boolean | null | undefined;
     request: Cancelable | null | undefined;
+    requestTime?: number;
     texture: Texture | null | undefined | UserManagedTexture;
     hillshadeFBO: Framebuffer | null | undefined;
     demTexture: Texture | null | undefined;

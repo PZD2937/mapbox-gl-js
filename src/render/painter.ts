@@ -6,7 +6,6 @@ import EXTENT from '../style-spec/data/extent';
 import pixelsToTileUnits from '../source/pixels_to_tile_units';
 import SegmentVector from '../data/segment';
 import {PosArray, TileBoundsArray, TriangleIndexArray, LineStripIndexArray} from '../data/array_types';
-import {isMapAuthenticated} from '../util/mapbox';
 import posAttributes from '../data/pos_attributes';
 import boundsAttributes from '../data/bounds_attributes';
 import ProgramConfiguration from '../data/program_configuration';

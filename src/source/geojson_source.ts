@@ -75,6 +75,8 @@ class GeoJSONSource extends Evented implements ISource {
     // eslint-disable-next-line camelcase
     mapbox_logo: boolean | undefined;
 
+    customTags?: Record<string, any>;
+
     roundZoom: boolean | undefined;
     isTileClipped: boolean | undefined;
     reparseOverscaled: boolean | undefined;
@@ -424,6 +426,7 @@ class GeoJSONSource extends Evented implements ISource {
         const message = !tile.actor ? 'loadTile' : 'reloadTile';
         tile.actor = this.actor;
         const lutForScope = this.map.style ? this.map.style.getLut(this.scope) : null;
+        const requestTime = Date.now();
         const params = {
             type: this.type,
             uid: tile.uid,
@@ -442,11 +445,11 @@ class GeoJSONSource extends Evented implements ISource {
             promoteId: this.promoteId,
             brightness: this.map.style ? (this.map.style.getBrightness() || 0.0) : 0.0
         };
-
+        tile.requestTime = requestTime;
         tile.request = this.actor.send(message, params, (err, data) => {
             delete tile.request;
+            if (tile.requestTime > requestTime) return;
             tile.destroy();
-
             if (tile.aborted) {
                 return callback(null);
             }
@@ -454,7 +457,6 @@ class GeoJSONSource extends Evented implements ISource {
             if (err) {
                 return callback(err);
             }
-
             tile.loadVectorData(data, this.map.painter, message === 'reloadTile');
 
             return callback(null);
