@@ -32,11 +32,6 @@ export const plugins = ({minified, production, test, bench, keepClassNames}) => 
     }),
     alias({
         entries: [{
-            find: 'tracked_parameters_proxy',
-            replacement: production ?
-                fileURLToPath(new URL('../src/tracked-parameters/internal/tracked_parameters_mock.js', import.meta.url)) :
-                fileURLToPath(new URL('../src/tracked-parameters/internal/tracked_parameters_ui.js', import.meta.url))
-        }, {
             find: '@mapbox/vector-tile',
             replacement: fileURLToPath(new URL('../lib/vector-tile/index.js', import.meta.url))
         }]
