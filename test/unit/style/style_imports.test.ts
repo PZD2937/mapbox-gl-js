@@ -1115,6 +1115,7 @@ describe('Style#addLayer', () => {
         });
     });
 });
+
 describe('Style#removeLayer', () => {
     test('same id in different scope is intact', async () => {
         const style = new Style(new StubMap());
@@ -1162,6 +1163,7 @@ describe('Style#removeLayer', () => {
         });
     });
 });
+
 describe('Style#moveLayer', () => {
     test('reorders layers', async () => {
         const style = new Style(new StubMap());
@@ -1225,6 +1227,7 @@ describe('Style#moveLayer', () => {
         });
     });
 });
+
 describe('Style#_mergeLayers', () => {
     test('supports slots', async () => {
         const style = new Style(new StubMap());
@@ -1556,6 +1559,46 @@ describe('Style#_mergeLayers', () => {
         ]);
     });
 });
+
+test('Style#getSlots', async () => {
+    const style = new Style(new StubMap());
+
+    const initialStyle = createStyleJSON({
+        imports: [
+            {
+                id: 'basemap',
+                url: '',
+                data: {
+                    version: 8,
+                    sources: {},
+                    layers: [
+                        {id: 'layer-0', type: 'background'},
+                        {id: 'bottom', type: 'slot'},
+                        {id: 'layer-1', type: 'background'},
+                        {id: 'middle', type: 'slot'},
+                        {id: 'layer-2', type: 'background'},
+                        {id: 'top', type: 'slot'},
+                        {id: 'layer-3', type: 'background'}
+                    ]
+                }
+            }
+        ],
+        sources: {},
+        layers: [
+            {id: 'user-slot-1', type: 'slot', 'slot': 'middle'},
+            {id: 'user-slot-2', type: 'slot'},
+            {id: 'user-layer-1', type: 'background'}
+        ]
+    });
+
+    style.loadJSON(initialStyle);
+    await waitFor(style, 'style.load');
+    expect(style.getSlots()).toEqual(['bottom', 'user-slot-1', 'middle', 'top', 'user-slot-2']);
+
+    style.addLayer({id: 'runtime-slot-1', type: 'slot', slot: 'top'});
+    expect(style.getSlots()).toEqual(['bottom', 'user-slot-1', 'middle', 'runtime-slot-1', 'top', 'user-slot-2']);
+});
+
 describe('Style#getLights', () => {
     test('root style resolves lights from import', async () => {
         const style = new Style(new StubMap());
@@ -1966,6 +2009,7 @@ describe('Terrain', () => {
         expect(style.getTerrain().exaggeration).toEqual(2);
     });
 });
+
 describe('Style#getFog', () => {
     test('resolves fog from import', async () => {
         const style = new Style(new StubMap());
@@ -2032,6 +2076,7 @@ describe('Style#getFog', () => {
         expect(fog['horizon-blend']).toEqual(0);
     });
 });
+
 describe('Camera', () => {
     test('resolves camera from import', async () => {
         const map = new StubMap();
@@ -2136,6 +2181,7 @@ describe('Camera', () => {
         }
     );
 });
+
 describe('Projection', () => {
     test('resolves projection from import', async () => {
         const map = new StubMap();
@@ -2199,6 +2245,7 @@ describe('Projection', () => {
         }
     );
 });
+
 describe('Transition', () => {
     test('resolves transition from import', async () => {
         const style = new Style(new StubMap());
@@ -2230,6 +2277,7 @@ describe('Transition', () => {
         expect(style.transition).toEqual({duration: 600, delay: 100});
     });
 });
+
 describe('Glyphs', () => {
     test('fallbacks to the default glyphs URL', async () => {
         const style = new Style(new StubMap());
@@ -2445,6 +2493,7 @@ test('Style#setPaintProperty', () => {
         expect(spy).toHaveBeenCalledTimes(2);
     });
 });
+
 test('Style#setLayerZoomRange', () => {
     const style = new Style(new StubMap());
 
@@ -2590,6 +2639,7 @@ describe('Style#setConfigProperty', () => {
         expect(layer.getLayoutProperty('visibility')).toEqual('visible');
     });
 });
+
 describe('Style#setState', () => {
     test('Adds fragment', async () => {
         const map = new StubMap();
@@ -2894,6 +2944,7 @@ describe('Style#setState', () => {
         ]);
     });
 });
+
 test('Style#serialize', async () => {
     const style = new Style(new StubMap());
 

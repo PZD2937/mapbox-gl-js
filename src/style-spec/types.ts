@@ -27,6 +27,21 @@ export type TransitionSpecification = {
 
 // Note: doesn't capture interpolatable vs. non-interpolatable types.
 
+export type PropertyFunctionStop<T> = [number, T];
+export type ZoomAndPropertyFunctionStop<T> = [{zoom: number; value: string | number | boolean}, T];
+
+/**
+ * @deprecated Use [Expressions](https://docs.mapbox.com/style-spec/reference/expressions/) syntax instead.
+*/
+export type FunctionSpecification<T> = {
+    stops: Array<PropertyFunctionStop<T> | ZoomAndPropertyFunctionStop<T>>;
+    base?: number;
+    property?: string;
+    type?: 'identity' | 'exponential' | 'interval' | 'categorical';
+    colorSpace?: 'rgb' | 'lab' | 'hcl';
+    default?: T;
+};
+
 export type CameraFunctionSpecification<T> =
     | { type: 'exponential', stops: Array<[number, T]> }
     | { type: 'interval',    stops: Array<[number, T]> };
@@ -51,6 +66,7 @@ export type PropertyValueSpecification<T> =
 
 export type DataDrivenPropertyValueSpecification<T> =
     | T
+    | FunctionSpecification<T>
     | CameraFunctionSpecification<T>
     | SourceFunctionSpecification<T>
     | CompositeFunctionSpecification<T>
@@ -416,6 +432,12 @@ export type LineLayerSpecification = {
         "line-pattern"?: DataDrivenPropertyValueSpecification<ResolvedImageSpecification>,
         "line-gradient"?: ExpressionSpecification,
         "line-trim-offset"?: [number, number],
+        /**
+         * @experimental This property is experimental and subject to change in future versions.
+         */
+        "line-trim-fade-range"?: PropertyValueSpecification<[number, number]>,
+        "line-trim-color"?: PropertyValueSpecification<ColorSpecification>,
+        "line-trim-color-transition"?: TransitionSpecification,
         "line-emissive-strength"?: PropertyValueSpecification<number>,
         "line-emissive-strength-transition"?: TransitionSpecification,
         "line-border-width"?: DataDrivenPropertyValueSpecification<number>,

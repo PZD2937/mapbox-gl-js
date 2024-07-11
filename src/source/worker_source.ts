@@ -42,6 +42,7 @@ export type WorkerTileParameters = RequestedTileParameters & {
     extraShadowCaster?: boolean;
     tessellationStep?: number // test purpose only;
     vtOptions: any
+    partial?: boolean;
 };
 
 export type CoverTiles = {x: number, y: number, z: number, dx: number, dy: number}

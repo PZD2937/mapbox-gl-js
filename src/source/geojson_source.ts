@@ -90,6 +90,7 @@ class GeoJSONSource extends Evented implements ISource {
     _metadataFired: boolean | null | undefined;
     _collectResourceTiming: boolean;
     _pendingLoad: Cancelable | null | undefined;
+    _partialReload: boolean;
 
     reload: undefined;
     hasTile: undefined;
@@ -407,7 +408,9 @@ class GeoJSONSource extends Evented implements ISource {
                 if (this._collectResourceTiming && result && result.resourceTiming && result.resourceTiming[this.id]) {
                     data.resourceTiming = result.resourceTiming[this.id];
                 }
+                if (append) this._partialReload = true;
                 this.fire(new Event('data', data));
+                this._partialReload = false;
                 this._metadataFired = true;
             }
 
@@ -426,6 +429,7 @@ class GeoJSONSource extends Evented implements ISource {
         const message = !tile.actor ? 'loadTile' : 'reloadTile';
         tile.actor = this.actor;
         const lutForScope = this.map.style ? this.map.style.getLut(this.scope) : null;
+        const partial = this._partialReload;
         const requestTime = Date.now();
         const params = {
             type: this.type,
@@ -443,10 +447,17 @@ class GeoJSONSource extends Evented implements ISource {
             pixelRatio: browser.devicePixelRatio,
             showCollisionBoxes: this.map.showCollisionBoxes,
             promoteId: this.promoteId,
-            brightness: this.map.style ? (this.map.style.getBrightness() || 0.0) : 0.0
+            brightness: this.map.style ? (this.map.style.getBrightness() || 0.0) : 0.0,
+            partial
         };
         tile.requestTime = requestTime;
         tile.request = this.actor.send(message, params, (err, data) => {
+            if (partial && !data) {
+                // if we did a partial reload and the tile didn't change, do nothing and treat the tile as loaded
+                tile.state = 'loaded';
+                return callback(null);
+            }
+
             delete tile.request;
             if (tile.requestTime > requestTime) return;
             tile.destroy();
