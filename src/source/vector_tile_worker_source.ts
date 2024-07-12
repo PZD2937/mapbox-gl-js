@@ -100,11 +100,16 @@ class VectorTileWorkerSource extends Evented implements WorkerSource {
             workerTile.vectorTile = response.vectorTile || new VectorTile(new Protobuf(rawTileData), undefined, params.vtOptions);
             const parseTile = () => {
                 const workerTileCallback = (err?: Error | null, result?: WorkerTileResult | null) => {
+                    // -------------------
                     const reloadCallback = workerTile.reloadCallback;
                     if (reloadCallback) {
                         delete workerTile.reloadCallback;
-                        workerTile.parse(workerTile.vectorTile, this.layerIndex, this.availableImages, this.actor, reloadCallback);
+                        workerTile.parse(workerTile.vectorTile, this.layerIndex, this.availableImages, this.actor, (err, data) => {
+                            if (data) data = extend({rawTileData: rawTileData.slice(0)}, data);
+                            reloadCallback(err, data);
+                        });
                     }
+                    // ------------------
                     if (err || !result) return callback(err);
 
                     const resourceTiming: Record<string, any> = {};
