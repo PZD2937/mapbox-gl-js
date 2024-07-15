@@ -361,7 +361,7 @@ export function performSymbolLayout(bucket: SymbolBucket,
         if (!bucket.iconsInText) {
             bucket.iconsInText = shapedText ? shapedText.iconsInText : false;
         }
-        if (imageTextAnchor) {
+        if (imageTextAnchor && shapedText) {
             shapedIconText(shapedText, shapedIcon, imageTextAnchor, layoutTextSize, layoutIconSize);
         }
         if (shapedText || shapedIcon) {
