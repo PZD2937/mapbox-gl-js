@@ -39,15 +39,15 @@ import {Debug} from '../util/debug';
 import config from '../util/config';
 import {isFQID} from '../util/fqid';
 
-import type {Listener} from '../util/evented';
+import type {MapEventType, MapEventOf} from './events';
 import type {PointLike} from '../types/point-like';
+import type {FeatureState} from '../style-spec/expression/index';
+import type {Evented} from '../util/evented';
 import type {RequestTransformFunction} from '../util/mapbox';
 import type {LngLatLike, LngLatBoundsLike} from '../geo/lng_lat';
-import type {StyleOptions, StyleSetterOptions} from '../style/style';
-import type {MapEvent, MapDataEvent} from './events';
 import type {CustomLayerInterface} from '../style/style_layer/custom_style_layer';
 import type {StyleImageInterface, StyleImageMetadata} from '../style/style_image';
-
+import type {StyleOptions, StyleSetterOptions, AnyLayer, FeatureSelector} from '../style/style';
 import type ScrollZoomHandler from './handler/scroll_zoom';
 import type BoxZoomHandler from './handler/box_zoom';
 import type {TouchPitchHandler} from './handler/touch_zoom_rotate';
@@ -84,7 +84,8 @@ import type StyleLayer from '../style/style_layer';
 import type {Source, SourceClass} from '../source/source';
 import type {EasingOptions} from './camera';
 import type {ContextOptions} from '../gl/context';
-import type {QueryFeature, QueryRenderedFeaturesParams} from '../source/query_features';
+import type {QueryRenderedFeaturesParams} from '../source/query_features';
+import type {GeoJSONFeature} from '../util/vectortile_to_geojson';
 
 import {TrackedParameters} from '../tracked-parameters/tracked_parameters';
 import {TrackedParametersMock} from '../tracked-parameters/tracked_parameters_base';
@@ -97,7 +98,7 @@ export interface IControl {
     readonly onAdd: (map: Map) => HTMLElement;
     readonly onRemove: (map: Map) => void;
     readonly getDefaultPosition?: () => ControlPosition;
-    readonly _setLanguage?: (language: string | null | undefined | string[]) => void;
+    readonly _setLanguage?: (language?: string | string[]) => void;
 }
 /* eslint-enable no-use-before-define */
 
@@ -112,17 +113,13 @@ export type SetStyleOptions = {
     localIdeographFontFamily: StyleOptions['localIdeographFontFamily'];
 };
 
+type Listener<T extends MapEventType> = (event: MapEventOf<T>) => void;
+
 type DelegatedListener = {
     layers: Set<string>;
-    listener: Listener;
-    delegates: {[K in MapEvent]?: Listener};
+    listener: Listener<MapEventType>;
+    delegates: {[T in MapEventType]?: Listener<T>};
 };
-
-export type FeatureSelector = {
-    id: string | number;
-    source: string;
-    sourceLayer?: string;
-}
 
 export const AVERAGE_ELEVATION_SAMPLING_INTERVAL = 500; // ms
 export const AVERAGE_ELEVATION_EASE_TIME = 300; // ms
@@ -756,11 +753,13 @@ export class Map extends Camera {
             }
             this._postStyleLoadEvent();
         });
-        this.on('data', (event: MapDataEvent) => {
+
+        this.on('data', (event) => {
             this._update(event.dataType === 'style');
             this.fire(new Event(`${event.dataType}data`, event));
         });
-        this.on('dataloading', (event: MapDataEvent) => {
+
+        this.on('dataloading', (event) => {
             this.fire(new Event(`${event.dataType}dataloading`, event));
         });
     }
@@ -1504,7 +1503,7 @@ export class Map extends Camera {
         return (this.handlers && this.handlers._isDragging()) || false;
     }
 
-    _createDelegatedListener(type: MapEvent, layers: Array<string>, listener: Listener): DelegatedListener {
+    _createDelegatedListener<T extends MapEventType>(type: T, layers: Array<string>, listener: Listener<T>): DelegatedListener {
         if (type === 'mouseenter' || type === 'mouseover') {
             let mousein = false;
             const mousemove = (e: MapMouseEvent) => {
@@ -1554,7 +1553,7 @@ export class Map extends Camera {
                 }
             };
 
-            return {layers: new Set(layers), listener, delegates: {[(type as string)]: delegate}};
+            return {layers: new Set(layers), listener, delegates: {[type]: delegate}};
         }
     }
 
@@ -1673,12 +1672,12 @@ export class Map extends Camera {
      * @see [Example: Create a hover effect](https://docs.mapbox.com/mapbox-gl-js/example/hover-styles/)
      * @see [Example: Display popup on click](https://docs.mapbox.com/mapbox-gl-js/example/popup-on-click/)
      */
-    on(type: MapEvent, listener: Listener): this;
-    on(type: MapEvent, layerIds: string | string[], listener: Listener): this;
+    on<T extends MapEventType>(type: T, listener: Listener<T>): this;
+    on<T extends MapEventType>(type: T, layerIds: string | string[], listener: Listener<T>): this;
 
-    on(type: MapEvent, layerIds: string | string[] | Listener, listener?: Listener): this {
+    on<T extends MapEventType>(type: T, layerIds: string | string[] | Listener<T>, listener?: Listener<T>): this {
         if (typeof layerIds === 'function' || listener === undefined) {
-            return super.on(type, layerIds as Listener);
+            return super.on(type, layerIds as Listener<MapEventType>);
         }
 
         if (!Array.isArray(layerIds)) {
@@ -1700,7 +1699,7 @@ export class Map extends Camera {
         this._delegatedListeners[type].push(delegatedListener);
 
         for (const event in delegatedListener.delegates) {
-            this.on(event as MapEvent, delegatedListener.delegates[event]);
+            this.on(event as T, delegatedListener.delegates[event]);
         }
 
         return this;
@@ -1745,14 +1744,14 @@ export class Map extends Camera {
      * @see [Example: Animate the camera around a point with 3D terrain](https://docs.mapbox.com/mapbox-gl-js/example/free-camera-point/)
      * @see [Example: Play map locations as a slideshow](https://docs.mapbox.com/mapbox-gl-js/example/playback-locations/)
      */
-    once(type: MapEvent): Promise<Event>;
-    once(type: MapEvent, listener: Listener): this;
-    once(type: MapEvent, layerIds: string | string[]): Promise<Event>;
-    once(type: MapEvent, layerIds: string | string[], listener: Listener): this;
+    once<T extends MapEventType>(type: T): Promise<MapEventOf<T>>;
+    once<T extends MapEventType>(type: T, listener: Listener<T>): this;
+    once<T extends MapEventType>(type: T, layerIds: string | string[]): Promise<MapEventOf<T>>;
+    once<T extends MapEventType>(type: T, layerIds: string | string[], listener: Listener<T>): this;
 
-    once(type: MapEvent, layerIds?: string | string[] | Listener, listener?: Listener): this | Promise<Event> {
+    once<T extends MapEventType>(type: T, layerIds?: string | string[] | Listener<T>, listener?: Listener<T>): this | Promise<MapEventOf<T>> {
         if (typeof layerIds === 'function' || listener === undefined) {
-            return super.once(type, layerIds as Listener);
+            return super.once(type, layerIds as Listener<T>);
         }
 
         if (!Array.isArray(layerIds)) {
@@ -1770,7 +1769,7 @@ export class Map extends Camera {
         const delegatedListener = this._createDelegatedListener(type, layerIds, listener);
 
         for (const event in delegatedListener.delegates) {
-            this.once(event as MapEvent, delegatedListener.delegates[event]);
+            this.once(event as T, delegatedListener.delegates[event]);
         }
 
         return this;
@@ -1801,12 +1800,12 @@ export class Map extends Camera {
      * });
      * @see [Example: Create a draggable point](https://docs.mapbox.com/mapbox-gl-js/example/drag-a-point/)
      */
-    off(type: MapEvent, listener: Listener): this;
-    off(type: MapEvent, layerIds: string | string[], listener: Listener): this;
+    off<T extends MapEventType>(type: T, listener: Listener<T>): this;
+    off<T extends MapEventType>(type: T, layerIds: string | string[], listener: Listener<T>): this;
 
-    off(type: MapEvent, layerIds: string | string[] | Listener, listener?: Listener): this {
+    off<T extends MapEventType>(type: T, layerIds: string | string[] | Listener<T>, listener?: Listener<T>): this {
         if (typeof layerIds === 'function' || listener === undefined) {
-            return super.off(type, layerIds as Listener);
+            return super.off(type, layerIds as Listener<T>);
         }
 
         const uniqLayerIds = new Set(Array.isArray(layerIds) ? layerIds : [layerIds]);
@@ -1834,7 +1833,7 @@ export class Map extends Camera {
                 const delegatedListener = listeners[i];
                 if (delegatedListener.listener === listener && areLayerIdsEqual(delegatedListener.layers, uniqLayerIds)) {
                     for (const event in delegatedListener.delegates) {
-                        this.off(event as MapEvent, delegatedListener.delegates[event]);
+                        this.off(event as T, delegatedListener.delegates[event]);
                     }
                     listeners.splice(i, 1);
                     return this;
@@ -1931,7 +1930,7 @@ export class Map extends Camera {
      * @see [Example: Highlight features within a bounding box](https://www.mapbox.com/mapbox-gl-js/example/using-box-queryrenderedfeatures/)
      * @see [Example: Filter features within map view](https://www.mapbox.com/mapbox-gl-js/example/filter-features-within-map-view/)
      */
-    queryRenderedFeatures(geometry?: PointLike | [PointLike, PointLike], options?: Pick<QueryRenderedFeaturesParams, 'layers' | 'filter' | 'validate'>): Array<QueryFeature> {
+    queryRenderedFeatures(geometry?: PointLike | [PointLike, PointLike], options?: Pick<QueryRenderedFeaturesParams, 'layers' | 'filter' | 'validate'>): Array<GeoJSONFeature> {
         // The first parameter can be omitted entirely, making this effectively an overloaded method
         // with two signatures:
         //
@@ -2007,7 +2006,7 @@ export class Map extends Camera {
             filter?: FilterSpecification | ExpressionSpecification;
             validate?: boolean;
         },
-    ): Array<QueryFeature> {
+    ): Array<GeoJSONFeature> {
         if (!this._isValidId(sourceId)) {
             return [];
         }
@@ -2323,12 +2322,12 @@ export class Map extends Camera {
      * @see [Example: Animate a point](https://docs.mapbox.com/mapbox-gl-js/example/animate-point-along-line/)
      * @see [Example: Add live realtime data](https://docs.mapbox.com/mapbox-gl-js/example/live-geojson/)
      */
-    getSource<T extends Source>(id: string): T | null | undefined {
+    getSource<T extends Source>(id: string): T | undefined {
         if (!this._isValidId(id)) {
             return null;
         }
 
-        return this.style.getOwnSource(id) as T;
+        return this.style.getOwnSource(id);
     }
 
     /** @section {Images} */
@@ -2378,19 +2377,20 @@ export class Map extends Camera {
      * @see Example: Use `HTMLImageElement`: [Add an icon to the map](https://www.mapbox.com/mapbox-gl-js/example/add-image/)
      * @see Example: Use `ImageData`: [Add a generated icon to the map](https://www.mapbox.com/mapbox-gl-js/example/add-image-generated/)
      */
-    addImage(id: string,
-             image: HTMLImageElement | ImageBitmap | ImageData | {
-                 width: number;
-                 height: number;
-                 data: Uint8Array | Uint8ClampedArray;
-             } | StyleImageInterface,
-             {
-                 pixelRatio = 1,
-                 sdf = false,
-                 stretchX,
-                 stretchY,
-                 content,
-             }: Partial<StyleImageMetadata> = {}) {
+    addImage(
+        id: string,
+        image: HTMLImageElement | ImageBitmap | ImageData | StyleImageInterface | {
+            width: number;
+            height: number;
+            data: Uint8Array | Uint8ClampedArray;
+        },
+        {
+            pixelRatio = 1,
+            sdf = false,
+            stretchX,
+            stretchY,
+            content,
+        }: Partial<StyleImageMetadata> = {}) {
         this._lazyInitEmptyStyle();
         const version = 0;
 
@@ -2795,7 +2795,7 @@ export class Map extends Camera {
      * @see [Example: Add a vector tile source](https://docs.mapbox.com/mapbox-gl-js/example/vector-source/) (line layer)
      * @see [Example: Add a WMS layer](https://docs.mapbox.com/mapbox-gl-js/example/wms/) (raster layer)
      */
-    addLayer(layer: LayerSpecification | CustomLayerInterface, beforeId?: string): this {
+    addLayer(layer: AnyLayer, beforeId?: string): this {
         if (!this._isValidId(layer.id)) {
             return this;
         }
@@ -3030,12 +3030,13 @@ export class Map extends Camera {
      * @see [Example: Filter symbols by toggling a list](https://www.mapbox.com/mapbox-gl-js/example/filter-markers/)
      * @see [Example: Filter symbols by text input](https://www.mapbox.com/mapbox-gl-js/example/filter-markers-by-input/)
      */
-    getLayer(id: string): StyleLayer | null | undefined {
+    getLayer<T extends LayerSpecification>(id: string): T | undefined {
         if (!this._isValidId(id)) {
             return null;
         }
 
-        return this.style.getOwnLayer(id);
+        const layer = this.style.getOwnLayer(id);
+        return layer ? layer.serialize() as T : undefined;
     }
 
     /**
@@ -3595,7 +3596,7 @@ export class Map extends Camera {
      * @see [Example: Create a hover effect](https://docs.mapbox.com/mapbox-gl-js/example/hover-styles/)
      * @see [Tutorial: Create interactive hover effects with Mapbox GL JS](https://docs.mapbox.com/help/tutorials/create-interactive-hover-effects-with-mapbox-gl-js/)
      */
-    setFeatureState(feature: FeatureSelector, state: any): this {
+    setFeatureState(feature: FeatureSelector | GeoJSONFeature, state: FeatureState): this {
         if (!this._isValidId(feature.source)) {
             return this;
         }
@@ -3650,7 +3651,7 @@ export class Map extends Camera {
      *     }, 'hover');
      * });
      */
-    removeFeatureState(feature: FeatureSelector, key?: string): this {
+    removeFeatureState(feature: Omit<FeatureSelector, 'id'> & {id?: FeatureSelector['id'] } | GeoJSONFeature, key?: string): this {
         if (!this._isValidId(feature.source)) {
             return this;
         }
@@ -3687,7 +3688,7 @@ export class Map extends Camera {
      *     }
      * });
      */
-    getFeatureState(feature: FeatureSelector): any {
+    getFeatureState(feature: FeatureSelector | GeoJSONFeature): FeatureState | null | undefined {
         if (!this._isValidId(feature.source)) {
             return null;
         }
@@ -3814,7 +3815,7 @@ export class Map extends Camera {
         storeAuthState(gl, true);
 
         this.painter = new Painter(gl, this._contextCreateOptions, this.transform, this._tp);
-        this.on('data', (event: MapDataEvent) => {
+        this.on('data', (event) => {
             if (event.dataType === 'source') {
                 this.painter.setTileLoadedFlag(true);
             }
@@ -4424,7 +4425,7 @@ export class Map extends Camera {
         this._update();
     }
 
-    _onWindowResize(event: Event) {
+    _onWindowResize(event: UIEvent) {
         if (this._trackResize) {
             this.resize({originalEvent: event})._update();
         }

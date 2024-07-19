@@ -11,7 +11,7 @@ import {loadVectorTile} from './load_vector_tile';
 import {makeFQID} from '../util/fqid';
 import {DedupedRequest} from "./deduped_request";
 
-import type {ISource} from './source';
+import type {ISource, SourceEvents} from './source';
 import type {OverscaledTileID} from './tile_id';
 import type {Map} from '../ui/map';
 import type Dispatcher from '../util/dispatcher';
@@ -49,7 +49,7 @@ import type {WorkerTileResult} from './worker_source';
  * @see [Example: Add a vector tile source](https://docs.mapbox.com/mapbox-gl-js/example/vector-source/)
  * @see [Example: Add a third party vector tile source](https://docs.mapbox.com/mapbox-gl-js/example/third-party/)
  */
-class VectorTileSource extends Evented implements ISource {
+class VectorTileSource extends Evented<SourceEvents> implements ISource {
     type: 'vector';
     id: string;
     scope: string;

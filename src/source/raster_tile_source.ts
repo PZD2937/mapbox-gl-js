@@ -13,7 +13,7 @@ import {DedupedRequest} from "./deduped_request";
 import {makeFQID} from "../util/fqid";
 import {loadRasterTile} from "./load_raster_tile";
 
-import type {ISource} from './source';
+import type {ISource, SourceEvents} from './source';
 import type {OverscaledTileID} from './tile_id';
 import type {Map} from '../ui/map';
 import type Dispatcher from '../util/dispatcher';
@@ -49,8 +49,8 @@ import type {WorkerCoverTilesResult} from "./worker_source";
  * @see [Example: Add a raster tile source](https://docs.mapbox.com/mapbox-gl-js/example/map-tiles/)
  * @see [Example: Add a WMS source](https://docs.mapbox.com/mapbox-gl-js/example/wms/)
  */
-class RasterTileSource extends Evented implements ISource {
-    type: 'raster' | 'raster-dem' | 'raster-array';
+class RasterTileSource<T extends 'raster' | 'raster-dem' | 'raster-array' = 'raster'> extends Evented<SourceEvents> implements ISource {
+    type: T;
     id: string;
     scope: string;
     minzoom: number;
@@ -92,7 +92,7 @@ class RasterTileSource extends Evented implements ISource {
         this.dispatcher = dispatcher;
         this.setEventedParent(eventedParent);
 
-        this.type = 'raster';
+        this.type = 'raster' as T;
         this.minzoom = 0;
         this.maxzoom = 22;
         this.roundZoom = true;

@@ -11,13 +11,13 @@ import assert from 'assert';
 import SourceFeatureState from './source_state';
 import {mercatorXfromLng} from '../geo/mercator_coordinate';
 
-import type {Source} from './source';
+import type {ISource, Source} from './source';
 import type {SourceSpecification} from '../style-spec/types';
 import type {Map as MapboxMap} from '../ui/map';
 import type Transform from '../geo/transform';
 import type {TileState} from './tile';
 import type {Callback} from '../types/callback';
-import type {FeatureStates} from './source_state';
+import type {FeatureState} from '../style-spec/expression/index';
 import type {QueryGeometry, TilespaceQueryGeometry} from '../style/query_geometry';
 import type {vec3} from 'gl-matrix';
 
@@ -36,7 +36,7 @@ class SourceCache extends Evented {
     id: string;
     map: MapboxMap;
 
-    _source: Source;
+    _source: ISource;
     _sourceLoaded: boolean;
     _sourceErrored: boolean;
     _tiles: Partial<Record<string | number, Tile>>;
@@ -134,8 +134,8 @@ class SourceCache extends Evented {
         return true;
     }
 
-    getSource(): Source {
-        return this._source;
+    getSource<T extends Source>(): T {
+        return this._source as T;
     }
 
     pause() {
@@ -167,7 +167,7 @@ class SourceCache extends Evented {
             return this._source.abortTile(tile);
     }
 
-    serialize(): SourceSpecification {
+    serialize(): SourceSpecification | {type: 'custom', [key: string]: unknown} {
         return this._source.serialize();
     }
 
@@ -534,10 +534,8 @@ class SourceCache extends Evented {
 
         if (!this.used && !this.usedForTerrain) {
             idealTileIDs = [];
-            // @ts-expect-error - TS2339 - Property 'tileID' does not exist on type 'Source'.
         } else if (this._source.tileID) {
-            // @ts-expect-error - TS2339 - Property 'tileID' does not exist on type 'Source'.
-            idealTileIDs = transform.getVisibleUnwrappedCoordinates((this._source.tileID as CanonicalTileID))
+            idealTileIDs = transform.getVisibleUnwrappedCoordinates((this._source.tileID))
                 .map((unwrapped) => new OverscaledTileID(unwrapped.canonical.z, unwrapped.wrap, unwrapped.canonical.z, unwrapped.canonical.x, unwrapped.canonical.y));
         } else if (this.tileCoverLift !== 0.0) {
             // Extended tile cover to load elevated tiles
@@ -1070,7 +1068,7 @@ class SourceCache extends Evented {
      * Set the value of a particular state for a feature
      * @private
      */
-    setFeatureState(sourceLayer: string | null | undefined, featureId: number | string, state: any) {
+    setFeatureState(sourceLayer: string | null | undefined, featureId: number | string, state: FeatureState) {
         sourceLayer = sourceLayer || '_geojsonTileLayer';
         this._state.updateState(sourceLayer, featureId, state);
     }
@@ -1088,7 +1086,7 @@ class SourceCache extends Evented {
      * Get the entire state object for a feature
      * @private
      */
-    getFeatureState(sourceLayer: string | null | undefined, featureId: number | string): FeatureStates {
+    getFeatureState(sourceLayer: string | null | undefined, featureId: number | string): FeatureState {
         sourceLayer = sourceLayer || '_geojsonTileLayer';
         return this._state.getState(sourceLayer, featureId);
     }
