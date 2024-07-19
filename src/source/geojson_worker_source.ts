@@ -2,7 +2,6 @@ import {getJSON} from '../util/ajax';
 
 import {getPerformanceMeasurement} from '../util/performance';
 import GeoJSONWrapper from './geojson_wrapper';
-import GeoJSONRT from './geojson_rt';
 import vtpbf from 'vt-pbf';
 import Supercluster from 'supercluster';
 import geojsonvt from 'geojson-vt';
@@ -14,7 +13,7 @@ import type {
     RequestedTileParameters,
     WorkerTileParameters,
     WorkerTileCallback,
-} from '../source/worker_source';
+} from './worker_source';
 
 import type Actor from '../util/actor';
 import type StyleLayerIndex from '../style/style_layer_index';
@@ -44,9 +43,9 @@ export type LoadGeoJSON = (params: LoadGeoJSONParameters, callback: ResponseCall
 export interface GeoJSONIndex {
     getTile(z: number, x: number, y: number): any;
     // supercluster methods
-    getClusterExpansionZoom?(clusterId: number): number;
-    getChildren?(clusterId: number): Array<GeoJSON.Feature>;
-    getLeaves?(clusterId: number, limit: number, offset: number): Array<GeoJSON.Feature>;
+    getClusterExpansionZoom(clusterId: number): number;
+    getChildren(clusterId: number): Array<GeoJSON.Feature>;
+    getLeaves(clusterId: number, limit: number, offset: number): Array<GeoJSON.Feature>;
 }
 
 function loadGeoJSONTile(params: RequestedTileParameters, callback: LoadVectorDataCallback) {
@@ -90,10 +89,10 @@ function loadGeoJSONTile(params: RequestedTileParameters, callback: LoadVectorDa
  */
 class GeoJSONWorkerSource extends VectorTileWorkerSource {
     _geoJSONIndex: GeoJSONIndex;
-    _dynamicIndex: GeoJSONRT;
+    _featureMap: Map<number | string, unknown>;
 
     /**
-     * @param [loadGeoJSON] Optional method for custom _loading/parsing of
+     * @param [loadGeoJSON] Optional method for custom loading/parsing of
      * GeoJSON based on parameters passed from the main-thread Source.
      * See {@link GeoJSONWorkerSource#loadGeoJSON}.
      * @private
@@ -104,7 +103,7 @@ class GeoJSONWorkerSource extends VectorTileWorkerSource {
         if (loadGeoJSON) {
             this.loadGeoJSON = loadGeoJSON;
         }
-        this._dynamicIndex = new GeoJSONRT();
+        this._featureMap = new Map();
     }
 
     /**
@@ -156,26 +155,31 @@ class GeoJSONWorkerSource extends VectorTileWorkerSource {
                         if (data.type === 'Feature') data = {type: 'FeatureCollection', features: [data]};
 
                         if (!params.append) {
-                            this._dynamicIndex.clear();
-                            this.loaded = {};
+                            this._featureMap.clear();
                         }
 
-                        this._dynamicIndex.load(data.features, this.loaded);
-
-                        if (params.cluster) data.features = this._dynamicIndex.getFeatures();
-
-                    } else {
-                        this.loaded = {};
+                        for (const feature of (data.features || [])) {
+                            const id = feature.id;
+                            if (id !== undefined) {
+                                if (!feature.geometry) {
+                                    this._featureMap.delete(id);
+                                } else {
+                                    this._featureMap.set(id, feature);
+                                }
+                            }
+                        }
+                        data.features = [...this._featureMap.values()];
                     }
 
-                    this._geoJSONIndex =
-                        params.cluster ? new Supercluster(getSuperclusterOptions(params)).load(data.features) :
-                        params.dynamic ? this._dynamicIndex :
+                    this._geoJSONIndex = params.cluster ?
+                        new Supercluster(getSuperclusterOptions(params)).load(data.features) :
                         geojsonvt(data, params.geojsonVtOptions);
 
                 } catch (err: any) {
                     return callback(err);
                 }
+
+                this.loaded = {};
 
                 const result: Record<string, any> = {};
                 if (perf) {
@@ -193,23 +197,20 @@ class GeoJSONWorkerSource extends VectorTileWorkerSource {
     }
 
     /**
-    * Implements {@link WorkerSource#reloadTile}.
-    *
-    * If the tile is loaded, uses the implementation in VectorTileWorkerSource.
-    * Otherwise, such as after a setData() call, we load the tile fresh.
-    *
-    * @param params
-    * @param params.uid The UID for this tile.
-    * @private
-    */
+     * Implements {@link WorkerSource#reloadTile}.
+     *
+     * If the tile is loaded, uses the implementation in VectorTileWorkerSource.
+     * Otherwise, such as after a setData() call, we load the tile fresh.
+     *
+     * @param params
+     * @param params.uid The UID for this tile.
+     * @private
+     */
     reloadTile(params: WorkerTileParameters, callback: WorkerTileCallback): void {
         const loaded = this.loaded,
             uid = params.uid;
 
         if (loaded && loaded[uid]) {
-            if (params.partial) {
-                return callback(null, undefined);
-            }
             return super.reloadTile(params, callback);
         } else {
             return this.loadTile(params, callback);

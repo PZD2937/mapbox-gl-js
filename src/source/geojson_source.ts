@@ -455,11 +455,11 @@ class GeoJSONSource extends Evented implements ISource {
             delete tile.request;
             if (tile.requestTime > requestTime) return;
 
-            if (partial && !data) {
-                // if we did a partial reload and the tile didn't change, do nothing and treat the tile as loaded
-                tile.state = 'loaded';
-                return callback(null);
-            }
+            // if (partial && !data) {
+            //     // if we did a partial reload and the tile didn't change, do nothing and treat the tile as loaded
+            //     tile.state = 'loaded';
+            //     return callback(null);
+            // }
             tile.destroy();
             if (tile.aborted) {
                 return callback(null);
