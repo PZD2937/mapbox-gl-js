@@ -377,9 +377,11 @@ export const getImage = function(
         } else if (data) {
             if (self.createImageBitmap) {
                 arrayBufferToImageBitmap(data, (err, imgBitmap) => callback(err, imgBitmap, cacheControl, expires));
+                //@ts-ignore
             } else if (Image && !requestParameters.returnArraybuffer) {
                 arrayBufferToImage(data, (err, img) => callback(err, img, cacheControl, expires));
             } else {
+                // @ts-ignore
                 callback(err, data, cacheControl, expires);
             }
         }

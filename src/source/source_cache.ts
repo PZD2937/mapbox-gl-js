@@ -261,6 +261,7 @@ class SourceCache extends Evented {
             tile.state = 'errored';
             if ((err as any).status !== 404) {
                 this._source.fire(new ErrorEvent(err, {tile}));
+                // @ts-ignore
                 this._source.fire(new Event('tileloadfail', {error: err, tile, reloadTile: () => this._reloadTile(id, 'reloading')}));
             } else {
                 // If the requested tile is missing, try to load the parent tile
@@ -559,7 +560,6 @@ class SourceCache extends Evented {
             }
         } else {
             idealTileIDs = transform.coveringTiles({
-                id: this._source.id,
                 tileSize: tileSize || this._source.tileSize,
                 minzoom: this._source.minzoom,
                 maxzoom: this._source.maxzoom,
