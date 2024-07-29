@@ -1,4 +1,3 @@
-// @ts-expect-error - TS2300 - Duplicate identifier 'VectorTile'.
 import {VectorTile} from '@mapbox/vector-tile';
 import Protobuf from 'pbf';
 import {getArrayBuffer} from '../util/ajax';
@@ -43,6 +42,7 @@ export function loadVectorTile(
                 callback(err);
             } else if (data) {
                 callback(null, {
+                    // @ts-ignore
                     vectorTile: skipParse ? undefined : new VectorTile(new Protobuf(data), undefined, params.vtOptions),
                     rawData: data,
                     cacheControl,

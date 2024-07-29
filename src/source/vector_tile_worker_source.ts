@@ -97,6 +97,7 @@ class VectorTileWorkerSource extends Evented implements WorkerSource {
 
             // response.vectorTile will be present in the GeoJSON worker case (which inherits from this class)
             // because we stub the vector tile interface around JSON data instead of parsing it directly
+            // @ts-ignore
             workerTile.vectorTile = response.vectorTile || new VectorTile(new Protobuf(rawTileData), undefined, params.vtOptions);
             const parseTile = () => {
                 const workerTileCallback = (err?: Error | null, result?: WorkerTileResult | null) => {
