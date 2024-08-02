@@ -101,6 +101,7 @@ export default class Worker {
             geojson: GeoJSONWorkerSource,
             // @ts-expect-error - TS2419 - Types of construct signatures are incompatible.
             'batched-model': Tiled3dModelWorkerSource,
+            // @ts-expect-error - TS2419 - Types of construct signatures are incompatible.
             raster: RasterTileWorkerSource
         };
 

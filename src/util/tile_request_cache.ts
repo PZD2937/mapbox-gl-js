@@ -1,9 +1,10 @@
 import {warnOnce, parseCacheControl} from './util';
 import {stripQueryParameters, setQueryParameters} from './url';
+import {cacheGetFromDB, cachePutToDB, clearDB, enforceDBCacheSizeLimit} from "./tile_db_cache";
 
 import type Dispatcher from './dispatcher';
 
-const CACHE_NAME = 'mapbox-tiles';
+const CACHE_NAME = 'map-tiles';
 let cacheLimit = 10000; // 1000MB / (100KB/tile) ~= 10000 tiles
 let cacheCheckThreshold = 1000;
 
@@ -46,6 +47,7 @@ export function cacheClose() {
 }
 
 let responseConstructorSupportsReadableStream;
+
 function prepareBody(response: Response, callback: (body?: Blob | ReadableStream | null | undefined) => void) {
     if (responseConstructorSupportsReadableStream === undefined) {
         try {
@@ -77,7 +79,10 @@ export function cachePut(request: Request, response: Response, requestTime: numb
     cacheOpen();
     const url = request.headers.get('CacheUrl') || request.url;
     request.headers.delete('CacheUrl');
-    if (!sharedCache) return;
+    if (!sharedCache) {
+        cachePutToDB(url, response);
+        return;
+    }
 
     const cacheControl = parseCacheControl(response.headers.get('Cache-Control') || '');
     if (cacheControl['no-store']) return;
@@ -134,7 +139,7 @@ export function cacheGet(
     cacheOpen();
     const url = request.headers.get('CacheUrl') || request.url;
     request.headers.delete('CacheUrl');
-    if (!sharedCache) return callback(null);
+    if (!sharedCache) return cacheGetFromDB(url, callback);
 
     sharedCache
         .then(cache => {
@@ -192,7 +197,10 @@ export function cacheEntryPossiblyAdded(dispatcher: Dispatcher) {
 // runs on worker, see above comment
 export function enforceCacheSizeLimit(limit: number) {
     cacheOpen();
-    if (!sharedCache) return;
+    if (!sharedCache) {
+        enforceDBCacheSizeLimit(limit);
+        return;
+    }
 
     sharedCache
         .then(cache => {
@@ -206,7 +214,10 @@ export function enforceCacheSizeLimit(limit: number) {
 
 export function clearTileCache(callback?: (err?: Error | null | undefined) => void) {
     const caches = getCaches();
-    if (!caches) return;
+    if (!caches) {
+        clearDB(callback);
+        return;
+    }
 
     const promise = caches.delete(CACHE_NAME);
     if (callback) {
