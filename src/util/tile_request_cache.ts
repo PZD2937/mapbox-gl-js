@@ -12,6 +12,10 @@ let cacheCheckThreshold = 1000;
 const EXPIRED_TIME = Date.now() + 1000 * 60 * 60 * 24 * 365 * 100;
 const MIN_TIME_UNTIL_EXPIRY = 1000 * 60 * 7; // 7 minutes. Skip caching tiles with a short enough max age.
 
+// So that caching functions correctly, these params are persisted
+// on URLs with query params otherwise stripped.
+const PERSISTENT_PARAMS = ['language', 'worldview', 'jobid'];
+
 export type ResponseOptions = {
     status: number;
     statusText: string;
@@ -105,8 +109,7 @@ export function cachePut(request: Request, response: Response, requestTime: numb
     const timeUntilExpiry = new Date(expires).getTime() - requestTime;
     if (timeUntilExpiry < MIN_TIME_UNTIL_EXPIRY) return;
 
-    // preserve `language` and `worldview` params if any
-    let strippedURL = stripQueryParameters(url, {persistentParams: ['language', 'worldview']});
+    let strippedURL = stripQueryParameters(url, {persistentParams: PERSISTENT_PARAMS});
 
     // Handle partial responses by keeping the range header in the query string
     if (response.status === 206) {
@@ -143,8 +146,7 @@ export function cacheGet(
 
     sharedCache
         .then(cache => {
-            // preserve `language` and `worldview` params if any
-            let strippedURL = stripQueryParameters(url, {persistentParams: ['language', 'worldview']});
+            let strippedURL = stripQueryParameters(url, {persistentParams: PERSISTENT_PARAMS});
 
             const range = request.headers.get('Range');
             if (range) strippedURL = setQueryParameters(strippedURL, {range});

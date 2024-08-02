@@ -682,7 +682,7 @@ class Style extends Evented<MapEvents> {
             options: this.options
         });
 
-        this._shouldPrecompile = this.isRootStyle();
+        this._shouldPrecompile = this.map._precompilePrograms && this.isRootStyle();
     }
 
     _isInternalStyle(json: StyleSpecification): boolean {
@@ -748,7 +748,7 @@ class Style extends Evented<MapEvents> {
             this._serializedLayers = {};
             for (const layer of layers) {
                 const styleLayer = createStyleLayer(layer, this.scope, this._styleColorTheme.lut, this.options);
-                if (styleLayer.isConfigDependent) this._configDependentLayers.add(styleLayer.fqid);
+                if (styleLayer.configDependencies.size !== 0) this._configDependentLayers.add(styleLayer.fqid);
                 styleLayer.setEventedParent(this, {layer: {id: styleLayer.id}});
                 this._layers[styleLayer.id] = styleLayer;
                 this._serializedLayers[styleLayer.id] = styleLayer.serialize();
@@ -768,7 +768,7 @@ class Style extends Evented<MapEvents> {
             const terrain = this.stylesheet.terrain;
             if (terrain) {
                 this.checkCanvasFingerprintNoise();
-                if (!this.terrainSetForDrapingOnly()) {
+                if (!this.disableElevatedTerrain && !this.terrainSetForDrapingOnly()) {
                     this._createTerrain(terrain, DrapeRenderMode.elevated);
                 }
             }
@@ -1385,6 +1385,40 @@ class Style extends Evented<MapEvents> {
         return source;
     }
 
+    precompilePrograms(layer: StyleLayer, parameters: EvaluationParameters) {
+        const painter = this.map.painter;
+
+        if (!painter) {
+            return;
+        }
+
+        for (let i = (layer.minzoom || DEFAULT_MIN_ZOOM); i < (layer.maxzoom || DEFAULT_MAX_ZOOM); i++) {
+            const programIds = layer.getProgramIds();
+            if (!programIds) continue;
+
+            for (const programId of programIds) {
+                const params = layer.getDefaultProgramParams(programId, parameters.zoom, this._styleColorTheme.lut);
+                if (params) {
+                    painter.style = this;
+                    if (this.fog) {
+                        painter._fogVisible = true;
+                        params.overrideFog = true;
+                        painter.getOrCreateProgram(programId, params);
+                    }
+                    painter._fogVisible = false;
+                    params.overrideFog = false;
+                    painter.getOrCreateProgram(programId, params);
+
+                    if (this.stylesheet.terrain || (this.stylesheet.projection && this.stylesheet.projection.name === 'globe')) {
+                        params.overrideRtt = true;
+                        painter.getOrCreateProgram(programId, params);
+                    }
+                }
+            }
+        }
+
+    }
+
     /**
      * Apply queued style updates in a batch and recalculate zoom-dependent paint properties.
      * @private
@@ -1467,32 +1501,12 @@ class Style extends Evented<MapEvents> {
             }
 
             if (!this._precompileDone && this._shouldPrecompile) {
-                for (let i = (layer.minzoom || DEFAULT_MIN_ZOOM); i < (layer.maxzoom || DEFAULT_MAX_ZOOM); i++) {
-                    const painter = this.map.painter;
-                    if (painter) {
-                        const programIds = layer.getProgramIds();
-                        if (!programIds) continue;
-
-                        for (const programId of programIds) {
-                            const params = layer.getDefaultProgramParams(programId, parameters.zoom, this._styleColorTheme.lut);
-                            if (params) {
-                                painter.style = this;
-                                if (this.fog) {
-                                    painter._fogVisible = true;
-                                    params.overrideFog = true;
-                                    painter.getOrCreateProgram(programId, params);
-                                }
-                                painter._fogVisible = false;
-                                params.overrideFog = false;
-                                painter.getOrCreateProgram(programId, params);
-
-                                if (this.stylesheet.terrain || (this.stylesheet.projection && this.stylesheet.projection.name === 'globe')) {
-                                    params.overrideRtt = true;
-                                    painter.getOrCreateProgram(programId, params);
-                                }
-                            }
-                        }
-                    }
+                if ('requestIdleCallback' in window) {
+                    requestIdleCallback(() => {
+                        this.precompilePrograms(layer, parameters);
+                    });
+                } else {
+                    this.precompilePrograms(layer, parameters);
                 }
             }
         }
@@ -1991,7 +2005,7 @@ class Style extends Evented<MapEvents> {
             minValue, maxValue, stepValue, type, values
         });
 
-        this.updateConfigDependencies();
+        this.updateConfigDependencies(key);
     }
 
     getConfig(fragmentId: string): ConfigSpecification | null | undefined {
@@ -2080,10 +2094,14 @@ class Style extends Evented<MapEvents> {
         }
     }
 
-    updateConfigDependencies() {
+    updateConfigDependencies(configKey?: string) {
         for (const id of this._configDependentLayers) {
             const layer = this.getLayer(id);
             if (layer) {
+                if (configKey && !layer.configDependencies.has(configKey)) {
+                    continue;
+                }
+
                 layer.possiblyEvaluateVisibility();
                 this._updateLayer(layer);
             }
@@ -2104,7 +2122,7 @@ class Style extends Evented<MapEvents> {
         this.forEachFragmentStyle((style: Style) => {
             if (style._styleColorTheme.colorTheme) {
                 const data = style._evaluateColorThemeData(style._styleColorTheme.colorTheme);
-                if (!style._styleColorTheme.lut || (style._styleColorTheme.lut && data !== style._styleColorTheme.lut.data)) {
+                if ((!style._styleColorTheme.lut && data !== '') || (style._styleColorTheme.lut && data !== style._styleColorTheme.lut.data)) {
                     style.setColorTheme(style._styleColorTheme.colorTheme);
                 }
             }
@@ -2153,7 +2171,7 @@ class Style extends Evented<MapEvents> {
             this._serializedLayers[layer.id] = layer.serialize();
         }
 
-        if (layer.isConfigDependent) this._configDependentLayers.add(layer.fqid);
+        if (layer.configDependencies.size !== 0) this._configDependentLayers.add(layer.fqid);
 
         let index = this._order.length;
         if (before) {
@@ -2437,7 +2455,7 @@ class Style extends Evented<MapEvents> {
         }
 
         layer.setLayoutProperty(name, value);
-        if (layer.isConfigDependent) this._configDependentLayers.add(layer.fqid);
+        if (layer.configDependencies.size !== 0) this._configDependentLayers.add(layer.fqid);
         this._updateLayer(layer);
     }
 
@@ -2476,7 +2494,7 @@ class Style extends Evented<MapEvents> {
         }
 
         const requiresRelayout = layer.setPaintProperty(name, value);
-        if (layer.isConfigDependent) this._configDependentLayers.add(layer.fqid);
+        if (layer.configDependencies.size !== 0) this._configDependentLayers.add(layer.fqid);
         if (requiresRelayout) {
             this._updateLayer(layer);
         }
@@ -2780,7 +2798,7 @@ class Style extends Evented<MapEvents> {
         sourceID: string,
         params?: {
             sourceLayer?: string;
-            filter?: FilterSpecification | ExpressionSpecification;
+            filter?: FilterSpecification;
             validate?: boolean;
         },
     ): Array<GeoJSONFeature> {

@@ -484,7 +484,7 @@ class Tile {
 
     querySourceFeatures(result: Array<GeoJSONFeature>, params?: {
         sourceLayer?: string;
-        filter?: FilterSpecification | ExpressionSpecification;
+        filter?: FilterSpecification;
         validate?: boolean;
     }) {
         const featureIndex = this.latestFeatureIndex;
@@ -546,15 +546,6 @@ class Tile {
 
     hasData(): boolean {
         return this.state === 'loaded' || this.state === 'reloading' || this.state === 'expired';
-    }
-
-    bucketsLoaded(): boolean {
-        for (const id in this.buckets) {
-            if (this.buckets[id].uploadPending())
-                return false;
-        }
-
-        return true;
     }
 
     patternsLoaded(): boolean {
