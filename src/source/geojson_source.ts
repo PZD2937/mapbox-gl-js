@@ -423,6 +423,7 @@ class GeoJSONSource extends Evented<SourceEvents> implements ISource {
             if (this._coalesce) {
                 this._updateWorkerData(this._needSet ? false : append);
                 this._coalesce = false;
+                this._needSet = false;
             }
         });
     }
