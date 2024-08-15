@@ -522,6 +522,7 @@ class Tile {
     queryTextureColor(result: Uint8Array, params: any) {
         if (this.state !== 'loaded' || !this.texture) return;
         const {point, padding, gl} = params;
+        // @ts-ignore
         let [width, height] = this.texture.size;
         if (padding) {
             width -= padding[0];

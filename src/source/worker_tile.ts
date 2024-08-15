@@ -63,6 +63,8 @@ class WorkerTile {
     reloadCallback: WorkerTileCallback | null | undefined;
     vectorTile: VectorTile;
 
+    encrypt: string;
+
     constructor(params: WorkerTileParameters) {
         this.tileID = new OverscaledTileID(params.tileID.overscaledZ, params.tileID.wrap, params.tileID.canonical.z, params.tileID.canonical.x, params.tileID.canonical.y);
         this.tileZoom = params.tileZoom;
