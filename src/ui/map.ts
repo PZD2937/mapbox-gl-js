@@ -44,6 +44,7 @@ import type {PointLike} from '../types/point-like';
 import type {FeatureState} from '../style-spec/expression/index';
 import type {RequestTransformFunction} from '../util/mapbox';
 import type {LngLatLike, LngLatBoundsLike} from '../geo/lng_lat';
+import type CustomStyleLayer from '../style/style_layer/custom_style_layer';
 import type {CustomLayerInterface} from '../style/style_layer/custom_style_layer';
 import type {StyleImageInterface, StyleImageMetadata} from '../style/style_image';
 import type {StyleOptions, StyleSetterOptions, AnyLayer, FeatureSelector} from '../style/style';
@@ -437,7 +438,6 @@ export class Map extends Camera {
     _styleDirty?: boolean;
     _sourcesDirty?: boolean;
     _placementDirty?: boolean;
-    _occlusionOpacityChanged?: boolean;
     _loaded: boolean;
     _fullyLoaded: boolean; // accounts for placement finishing as well
     _trackResize: boolean;
@@ -542,9 +542,6 @@ export class Map extends Camera {
     // Current frame id, iterated on each render
     _frameId: number;
 
-    // Last frame id, issued by anything not related to occlusion queries
-    _lastDirtyFrameId: number;
-
     constructor(options: MapOptions) {
         LivePerformanceUtils.mark(LivePerformanceMarkers.create);
 
@@ -620,7 +617,6 @@ export class Map extends Camera {
         this._useExplicitProjection = false; // Fallback to stylesheet by default
 
         this._frameId = 0;
-        this._lastDirtyFrameId = 0;
 
         this._requestManager = new RequestManager(options.transformRequest, options.accessToken, options.testMode);
         this._silenceAuthErrors = !!options.testMode;
@@ -3037,13 +3033,17 @@ export class Map extends Camera {
      * @see [Example: Filter symbols by toggling a list](https://www.mapbox.com/mapbox-gl-js/example/filter-markers/)
      * @see [Example: Filter symbols by text input](https://www.mapbox.com/mapbox-gl-js/example/filter-markers-by-input/)
      */
-    getLayer<T extends LayerSpecification>(id: string): T | undefined {
+    getLayer<T extends LayerSpecification | CustomLayerInterface>(id: string): T | undefined {
         if (!this._isValidId(id)) {
             return null;
         }
 
         const layer = this.style.getOwnLayer(id);
-        return layer ? layer.serialize() as T : undefined;
+        if (!layer) return;
+
+        if (layer.type === 'custom') return (layer as CustomStyleLayer).implementation as T;
+
+        return layer.serialize() as T;
     }
 
     /**
@@ -3859,6 +3859,25 @@ export class Map extends Camera {
     /** @section {Lifecycle} */
 
     /**
+     * Returns a Boolean indicating whether the map is in idle state:
+     * - No camera transitions are in progress.
+     * - All currently requested tiles have loaded.
+     * - All fade/transition animations have completed.
+     *
+     * Returns `false` if there are any camera or animation transitions in progress,
+     * if the style is not yet fully loaded, or if there has been a change to the sources or style that has not yet fully loaded.
+     *
+     * If the map.repaint is set to `true`, the map will never be idle.
+     *
+     * @returns {boolean} A Boolean indicating whether the map is idle.
+     * @example
+     * const isIdle = map.idle();
+     */
+    idle(): boolean {
+        return !this.isMoving() && this.loaded();
+    }
+
+    /**
      * Returns a Boolean indicating whether the map is fully loaded.
      *
      * Returns `false` if the style is not yet fully loaded,
@@ -3881,7 +3900,7 @@ export class Map extends Camera {
      * const frameReady = map.frameReady();
      */
     frameReady(): boolean {
-        return this.loaded() && !this._placementDirty && !this._occlusionOpacityChanged && this._occlusionCriteriaSatisfied();
+        return this.loaded() && !this._placementDirty;
     }
 
     /**
@@ -4021,7 +4040,6 @@ export class Map extends Camera {
         const updatePlacementResult = this.style && this.style._updatePlacement(this.painter, this.painter.transform, this.showCollisionBoxes, fadeDuration, this._crossSourceCollisions, this.painter.replacementSource);
         if (updatePlacementResult) {
             this._placementDirty = updatePlacementResult.needsRerender;
-            this._occlusionOpacityChanged = updatePlacementResult.occlusionQueryBasedOpacityChanged;
         }
 
         // Actually draw
@@ -4117,15 +4135,12 @@ export class Map extends Camera {
         // Even though `_styleDirty` and `_sourcesDirty` are reset in this
         // method, synchronous events fired during Style#update or
         // Style#updateSources could have caused them to be set again.
-        const somethingDirty = this._sourcesDirty || this._styleDirty || this._placementDirty || this._occlusionOpacityChanged || averageElevationChanged;
-        if (this._sourcesDirty || this._styleDirty || averageElevationChanged || this._occlusionOpacityChanged) {
-            this._lastDirtyFrameId = this._frameId;
-        }
+        const somethingDirty = this._sourcesDirty || this._styleDirty || this._placementDirty || averageElevationChanged;
 
-        if (somethingDirty || this._repaint || !this._occlusionCriteriaSatisfied()) {
+        if (somethingDirty || this._repaint) {
             this.triggerRepaint();
         } else {
-            const willIdle = !this.isMoving() && this.loaded();
+            const willIdle = this.idle();
             if (willIdle) {
                 // Before idling, we perform one last sample so that if the average elevation
                 // does not exactly match the terrain, we skip idle and ease it to its final state.
@@ -4149,7 +4164,7 @@ export class Map extends Camera {
             }
         }
 
-        if (this._loaded && !this._fullyLoaded && !somethingDirty && this._occlusionCriteriaSatisfied()) {
+        if (this._loaded && !this._fullyLoaded && !somethingDirty) {
             this._fullyLoaded = true;
             LivePerformanceUtils.mark(LivePerformanceMarkers.fullLoad);
             // Following lines are billing and metrics related code. Do not change. See LICENSE.txt
@@ -4634,6 +4649,7 @@ export class Map extends Camera {
     /**
      * Gets and sets a Boolean indicating whether the map will
      * continuously repaint. This information is useful for analyzing performance.
+     * The map will never be idle when this option is set to `true`.
      *
      * @name repaint
      * @type {boolean}
@@ -4670,17 +4686,6 @@ export class Map extends Camera {
     // for cache browser tests
     _setCacheLimits(limit: number, checkThreshold: number) {
         setCacheLimits(limit, checkThreshold);
-    }
-
-    _occlusionCriteriaSatisfied(): boolean {
-        const occluderLayers = this.style && (this.style.has3DLayers() || (this.style.terrain && !this.style.disableElevatedTerrain));
-        if (this.style && this.style.hasSymbolLayers() && occluderLayers && this.painter) {
-            const factor = 2; // Two times frame window to perform queries and gather result
-            const eps = 5; // Extra frames for result to apply
-            return this._frameId - this._lastDirtyFrameId > eps + factor * this.painter.symbolParams.occlusionQueryFrameWindow;
-        } else {
-            return true;
-        }
     }
 
     /**

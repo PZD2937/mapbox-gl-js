@@ -71,7 +71,8 @@ export type DataDrivenPropertyValueSpecification<T> =
     | CameraFunctionSpecification<T>
     | SourceFunctionSpecification<T>
     | CompositeFunctionSpecification<T>
-    | ExpressionSpecification;
+    | ExpressionSpecification
+    | (T extends Array<infer U> ? Array<U | ExpressionSpecification> : never);
 
 export type StyleSpecification = {
     "version": 8,
@@ -716,7 +717,10 @@ export type FillExtrusionLayerSpecification = {
         "fill-extrusion-rounded-roof"?: PropertyValueSpecification<boolean>,
         "fill-extrusion-cutoff-fade-range"?: ExpressionSpecification,
         "fill-extrusion-emissive-strength"?: PropertyValueSpecification<number>,
-        "fill-extrusion-emissive-strength-transition"?: TransitionSpecification
+        "fill-extrusion-emissive-strength-transition"?: TransitionSpecification,
+        "fill-extrusion-line-width"?: DataDrivenPropertyValueSpecification<number>,
+        "fill-extrusion-line-width-transition"?: TransitionSpecification,
+        "fill-extrusion-line-alignment"?: "inside" | "outside" | "center"
     }
 }
 
@@ -807,7 +811,9 @@ export type RasterParticleLayerSpecification = {
         "raster-particle-speed-factor-transition"?: TransitionSpecification,
         "raster-particle-fade-opacity-factor"?: PropertyValueSpecification<number>,
         "raster-particle-fade-opacity-factor-transition"?: TransitionSpecification,
-        "raster-particle-reset-rate-factor"?: number
+        "raster-particle-reset-rate-factor"?: number,
+        "raster-particle-elevation"?: PropertyValueSpecification<number>,
+        "raster-particle-elevation-transition"?: TransitionSpecification
     }
 }
 
@@ -889,8 +895,8 @@ export type ModelLayerSpecification = {
         "model-color-mix-intensity"?: DataDrivenPropertyValueSpecification<number>,
         "model-color-mix-intensity-transition"?: TransitionSpecification,
         "model-type"?: "common-3d" | "location-indicator",
-        "model-cast-shadows"?: ExpressionSpecification,
-        "model-receive-shadows"?: ExpressionSpecification,
+        "model-cast-shadows"?: boolean,
+        "model-receive-shadows"?: boolean,
         "model-ambient-occlusion-intensity"?: PropertyValueSpecification<number>,
         "model-ambient-occlusion-intensity-transition"?: TransitionSpecification,
         "model-emissive-strength"?: DataDrivenPropertyValueSpecification<number>,
@@ -1013,7 +1019,11 @@ export type ClipLayerSpecification = {
         /**
          * @experimental This property is experimental and subject to change in future versions.
          */
-        "clip-layer-types"?: ExpressionSpecification
+        "clip-layer-types"?: ExpressionSpecification,
+        /**
+         * @experimental This property is experimental and subject to change in future versions.
+         */
+        "clip-layer-scope"?: ExpressionSpecification
     },
     "paint"?: never
 }

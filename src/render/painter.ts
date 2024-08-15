@@ -22,7 +22,6 @@ import Texture from './texture';
 import {clippingMaskUniformValues} from './program/clipping_mask_program';
 import Color from '../style-spec/util/color';
 import symbol from './draw_symbol';
-import {SymbolParams} from './symbol_parameters';
 import circle from './draw_circle';
 import assert from 'assert';
 import heatmap from './draw_heatmap';
@@ -38,12 +37,12 @@ import custom from './draw_custom';
 import sky from './draw_sky';
 import Atmosphere from './draw_atmosphere';
 import {GlobeSharedBuffers, globeToMercatorTransition} from '../geo/projection/globe_util';
-import {Terrain} from '../terrain/terrain';
+import {Terrain, defaultTerrainUniforms, type TerrainUniformsType} from '../terrain/terrain';
 import {Debug} from '../util/debug';
 import Tile from '../source/tile';
 import {RGBAImage} from '../util/image';
 import {LayerTypeMask} from '../../3d-style/util/conflation';
-import {ReplacementSource} from '../../3d-style/source/replacement_source';
+import {ReplacementSource, ReplacementOrderLandmark} from '../../3d-style/source/replacement_source';
 import type {Source} from '../source/source';
 import type {CutoffParams} from '../render/cutoff';
 
@@ -68,8 +67,9 @@ import {FOG_OPACITY_THRESHOLD} from '../style/fog_helpers';
 import type {ContextOptions} from '../gl/context';
 import type {ITrackedParameters} from '../tracked-parameters/tracked_parameters_base';
 import Framebuffer from '../gl/framebuffer';
+import SymbolStyleLayer from '../style/style_layer/symbol_style_layer';
 
-import {OcclusionBuffers} from './occlusion_static_buffers';
+import {OcclusionParams} from './occlusion_params';
 
 export type RenderPass = 'offscreen' | 'opaque' | 'translucent' | 'sky' | 'shadow' | 'light-beam';
 
@@ -245,17 +245,16 @@ class Painter {
 
     _fpsHistory: Array<number>;
 
-    occlusionBuffers: OcclusionBuffers;
+    // Depth for occlusion
+    // FBO+Underlying texture & empty depth texture
+    depthFBO: Framebuffer;
+    depthTexture: Texture;
+    emptyDepthTexture: Texture;
 
-    symbolParams: SymbolParams;
-
-    terrainDepthFBO: Framebuffer;
-    terrainDepthTexture: Texture;
+    occlusionParams: OcclusionParams;
 
     constructor(gl: WebGL2RenderingContext, contextCreateOptions: ContextOptions, transform: Transform, tp: ITrackedParameters) {
         this.context = new Context(gl, contextCreateOptions);
-
-        this.occlusionBuffers = new OcclusionBuffers(this.context);
 
         this.transform = transform;
         this._tileTextures = {};
@@ -307,7 +306,7 @@ class Painter {
             tp.registerParameter(this._debugParams.enabledLayers, ["Debug", "Layers"], layerType);
         }
 
-        this.symbolParams = new SymbolParams(tp);
+        this.occlusionParams = new OcclusionParams(tp);
 
         this.setup();
 
@@ -333,6 +332,9 @@ class Painter {
         this.renderDefaultNorthPole = true;
         this.renderDefaultSouthPole = true;
         this.layersWithOcclusionOpacity = [];
+
+        const emptyDepth = new RGBAImage({width: 1, height: 1}, Uint8Array.of(0, 0, 0, 0));
+        this.emptyDepthTexture = new Texture(this.context, emptyDepth, gl.RGBA);
     }
 
     updateTerrain(style: Style, adaptCameraAltitude: boolean) {
@@ -688,27 +690,27 @@ class Painter {
         const fboPrev = this.context.bindFramebuffer.get();
         const texturePrev = gl.getParameter(gl.TEXTURE_BINDING_2D);
 
-        if (!this.terrainDepthFBO || this.terrainDepthFBO.width !== depthWidth || this.terrainDepthFBO.height !== depthHeight) {
-            if (this.terrainDepthFBO) {
-                this.terrainDepthFBO.destroy();
-                this.terrainDepthFBO = undefined;
-                this.terrainDepthTexture = undefined;
+        if (!this.depthFBO || this.depthFBO.width !== depthWidth || this.depthFBO.height !== depthHeight) {
+            if (this.depthFBO) {
+                this.depthFBO.destroy();
+                this.depthFBO = undefined;
+                this.depthTexture = undefined;
             }
 
             if (depthWidth !== 0 && depthHeight !== 0) {
-                this.terrainDepthFBO = new Framebuffer(this.context, depthWidth, depthHeight, false, 'texture');
+                this.depthFBO = new Framebuffer(this.context, depthWidth, depthHeight, false, 'texture');
 
-                this.terrainDepthTexture = new Texture(this.context, {width: depthWidth, height: depthHeight, data: null}, gl.DEPTH_STENCIL);
-                this.terrainDepthFBO.depthAttachment.set(this.terrainDepthTexture.texture);
+                this.depthTexture = new Texture(this.context, {width: depthWidth, height: depthHeight, data: null}, gl.DEPTH_STENCIL);
+                this.depthFBO.depthAttachment.set(this.depthTexture.texture);
             }
         }
 
         this.context.bindFramebuffer.set(fboPrev);
         gl.bindTexture(gl.TEXTURE_2D, texturePrev);
 
-        if (this.terrainDepthFBO) {
+        if (this.depthFBO) {
             gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
-            gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.terrainDepthFBO.framebuffer);
+            gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.depthFBO.framebuffer);
             gl.blitFramebuffer(0, 0, depthWidth, depthHeight, 0, 0, depthWidth, depthHeight, gl.DEPTH_BUFFER_BIT, gl.NEAREST);
             gl.bindFramebuffer(gl.FRAMEBUFFER, this.context.bindFramebuffer.current);
         }
@@ -751,6 +753,25 @@ class Painter {
 
             return true;
         });
+
+        let layersRequireTerrainDepth = false;
+        let layersRequireFinalDepth = false;
+
+        for (const id of layerIds) {
+            const layer = layers[id];
+
+            if (layer.type === 'circle') {
+                layersRequireTerrainDepth = true;
+            }
+
+            if (layer.type === 'symbol') {
+                if ((layer as SymbolStyleLayer).hasInitialOcclusionOpacityProperties) {
+                    layersRequireFinalDepth = true;
+                } else {
+                    layersRequireTerrainDepth = true;
+                }
+            }
+        }
 
         const orderedLayers = layerIds.map(id => layers[id]);
         const sourceCaches = this.style._mergedSourceCaches;
@@ -848,21 +869,25 @@ class Painter {
                         continue;
                     }
 
-                    let order = Infinity;
+                    let order = ReplacementOrderLandmark;
                     let clipMask = LayerTypeMask.None;
+                    const clipScope = [];
                     if (layer.type === 'clip') {
                         // Landmarks have precedence over fill extrusions regardless of order in the style.
                         // A clip layer however, is taken into account by 3D layers (i.e. fill-extrusion, landmarks, instance trees)
                         // only if those layers appear below the said clip layer.
-                        // Therefore to keep the existing behaviour for landmarks we set the order to infinity.
+                        // Therefore to keep the existing behaviour for landmarks we set the order to ReplacementOrderLandmark.
                         // This order is later used by fill-extrusion and instanced tree's rendering code to know
                         // how to deal with landmarks.
                         order = layerIdx;
                         for (const mask of layer.layout.get('clip-layer-types')) {
                             clipMask |= (mask === 'model' ? LayerTypeMask.Model : (mask === 'symbol' ? LayerTypeMask.Symbol : LayerTypeMask.FillExtrusion));
                         }
+                        for (const scope of layer.layout.get('clip-layer-scope')) {
+                            clipScope.push(scope);
+                        }
                     }
-                    conflationSources.push({layer: layer.fqid, cache: sourceCache, order, clipMask});
+                    conflationSources.push({layer: layer.fqid, cache: sourceCache, order, clipMask, clipScope});
                 }
 
                 this.replacementSource.setSources(conflationSources);
@@ -1103,7 +1128,7 @@ class Painter {
             this.currentLayer = 0;
             while (this.currentLayer < layerIds.length) {
                 const layer = orderedLayers[this.currentLayer];
-                if (layer.type === "raster") {
+                if (layer.type === "raster" || layer.type === "raster-particle") {
                     const sourceCache = style.getLayerSourceCache(layer);
                     // @ts-expect-error - TS2345 - Argument of type 'void | SourceCache' is not assignable to parameter of type 'SourceCache'. | TS2345 - Argument of type 'void | SourceCache' is not assignable to parameter of type 'SourceCache'.
                     this.renderLayer(this, sourceCache, layer, coordsForTranslucentLayer(layer, sourceCache));
@@ -1122,6 +1147,24 @@ class Painter {
         }
 
         let terrainDepthCopied = false;
+
+        let last3DLayerIdx = -1;
+
+        for (let i = 0; i < layerIds.length; ++i) {
+            const layer = orderedLayers[i];
+            if (layer.isHidden(this.transform.zoom)) {
+                continue;
+            }
+
+            if (layer.is3D()) {
+                last3DLayerIdx = i;
+            }
+        }
+
+        // Occlusion opacity present but no 3D layers available
+        if (layersRequireFinalDepth && last3DLayerIdx === -1) {
+            layersRequireTerrainDepth = true;
+        }
 
         while (this.currentLayer < layerIds.length) {
             const layer = orderedLayers[this.currentLayer];
@@ -1149,10 +1192,15 @@ class Painter {
                 continue;
             }
 
-            // First layer after terrain
-            if (!terrainDepthCopied && this.terrain && (this.style.hasSymbolLayers() || this.style.hasCircleLayers()) && !this.transform.isOrthographic) {
+            // Blit depth for symbols and circles which are occluded by terrain only
+            if (layersRequireTerrainDepth && !terrainDepthCopied && this.terrain && !this.transform.isOrthographic) {
                 terrainDepthCopied = true;
 
+                this.blitDepth();
+            }
+
+            // Blit depth after all 3D content done
+            if (layersRequireFinalDepth && last3DLayerIdx !== -1 && this.currentLayer === last3DLayerIdx + 1 && !this.transform.isOrthographic) {
                 this.blitDepth();
             }
 
@@ -1570,10 +1618,14 @@ class Painter {
         }
         this._wireframeDebugCache.destroy();
 
-        if (this.terrainDepthFBO) {
-            this.terrainDepthFBO.destroy();
-            this.terrainDepthFBO = undefined;
-            this.terrainDepthTexture = undefined;
+        if (this.depthFBO) {
+            this.depthFBO.destroy();
+            this.depthFBO = undefined;
+            this.depthTexture = undefined;
+        }
+
+        if (this.emptyDepthTexture) {
+            this.emptyDepthTexture.destroy();
         }
     }
 
@@ -1728,6 +1780,44 @@ class Painter {
 
         return cachedRange[0] >= FOG_OPACITY_THRESHOLD || cachedRange[1] >= FOG_OPACITY_THRESHOLD;
     }
+
+    // For native compatibility depth for occlusion is kept as before
+    setupDepthForOcclusion(useDepthForOcclusion: boolean, program: Program<any>, uniforms?: ReturnType<typeof defaultTerrainUniforms>) {
+        const context = this.context;
+        const gl = context.gl;
+
+        const uniformsPresent = !!uniforms;
+        if (!uniforms) {
+            uniforms = defaultTerrainUniforms();
+        }
+
+        context.activeTexture.set(gl.TEXTURE3);
+        if (useDepthForOcclusion && this.depthFBO && this.depthTexture) {
+            this.depthTexture.bind(gl.NEAREST, gl.CLAMP_TO_EDGE);
+            uniforms['u_depth_size_inv'] = [1 / this.depthFBO.width, 1 / this.depthFBO.height];
+
+            const getUnpackDepthRangeParams = (depthRange: [number, number]): [number, number] => {
+                // -1.0 + 2.0 * (depth - u_depth_range.x) / (u_depth_range.y - u_depth_range.x)
+                const a = 2 / (depthRange[1] - depthRange[0]);
+                const b = -1 - 2 * depthRange[0] / (depthRange[1] - depthRange[0]);
+                return [a, b];
+            };
+
+            uniforms['u_depth_range_unpack'] = getUnpackDepthRangeParams(this.depthRangeFor3D);
+
+            uniforms['u_occluder_half_size'] = this.occlusionParams.occluderSize * 0.5;
+            uniforms['u_occlusion_depth_offset'] = this.occlusionParams.depthOffset;
+        } else {
+            this.emptyDepthTexture.bind(gl.NEAREST, gl.CLAMP_TO_EDGE);
+        }
+
+        context.activeTexture.set(gl.TEXTURE0);
+
+        if (!uniformsPresent) {
+            program.setTerrainUniformValues(context, uniforms);
+        }
+    }
+
 }
 
 export default Painter;

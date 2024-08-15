@@ -18,13 +18,13 @@ import {stripQueryParameters} from '../util/url';
 import browser from '../util/browser';
 import Dispatcher from '../util/dispatcher';
 import Lights from '../../3d-style/style/lights';
-import {properties as ambientProps} from '../../3d-style/style/ambient_light_properties';
-import {properties as directionalProps} from '../../3d-style/style/directional_light_properties';
+import {getProperties as getAmbientProps} from '../../3d-style/style/ambient_light_properties';
+import {getProperties as getDirectionalProps} from '../../3d-style/style/directional_light_properties';
 import {createExpression} from '../style-spec/expression/index';
 import Painter from '../render/painter';
 import ClipStyleLayer from './style_layer/clip_style_layer';
-import type SymbolBucket from '../data/bucket/symbol_bucket';
 import {LayerTypeMask} from '../../3d-style/util/conflation';
+import SymbolStyleLayer from '../style/style_layer/symbol_style_layer';
 
 import {
     validateStyle,
@@ -1051,6 +1051,29 @@ class Style extends Evented<MapEvents> {
         };
 
         sort(mergedOrder);
+
+        // Sort symbols with occlusion opacity to be rendered after all 3D layers
+        this._mergedOrder.sort((layerName1: string, layerName2: string) => {
+            const l1 = mergedLayers[layerName1];
+            const l2 = mergedLayers[layerName2];
+
+            if ((l1 as SymbolStyleLayer).hasInitialOcclusionOpacityProperties) {
+                if (l2.is3D()) {
+                    return 1;
+                }
+                return 0;
+            }
+
+            if (l1.is3D()) {
+                if ((l2 as SymbolStyleLayer).hasInitialOcclusionOpacityProperties) {
+                    return -1;
+                }
+                return 0;
+            }
+
+            return 0;
+        });
+
         this._mergedLayers = mergedLayers;
         this.updateDrapeFirstLayers();
         this._buildingIndex.processLayersChanged();
@@ -1858,7 +1881,7 @@ class Style extends Evented<MapEvents> {
                     ambientLight.set(light);
                     ambientLight.updateTransitions(transitionParameters);
                 } else {
-                    this.ambientLight = new Lights<Ambient>(light, ambientProps, this.scope, this.options);
+                    this.ambientLight = new Lights<Ambient>(light, getAmbientProps(), this.scope, this.options);
                 }
                 break;
             case 'directional':
@@ -1867,7 +1890,7 @@ class Style extends Evented<MapEvents> {
                     directionalLight.set(light);
                     directionalLight.updateTransitions(transitionParameters);
                 } else {
-                    this.directionalLight = new Lights<Directional>(light, directionalProps, this.scope, this.options);
+                    this.directionalLight = new Lights<Directional>(light, getDirectionalProps(), this.scope, this.options);
                 }
                 break;
             default:
@@ -2880,7 +2903,15 @@ class Style extends Evented<MapEvents> {
         // Disabling
         if (!terrainOptions) {
             // This check prevents removing draping terrain not from #applyProjectionUpdate
-            if (!this.terrainSetForDrapingOnly() || drapeRenderMode === DrapeRenderMode.deferred) {
+            if (!this.terrainSetForDrapingOnly()) {
+                delete this.terrain;
+
+                if (this.map.transform.projection.requiresDraping) {
+                    this.setTerrainForDraping();
+                }
+            }
+
+            if (drapeRenderMode === DrapeRenderMode.deferred) {
                 delete this.terrain;
             }
 
@@ -3052,7 +3083,7 @@ class Style extends Evented<MapEvents> {
 
         const draped = [];
         const nonDraped = [];
-        for (const layerId in this._mergedLayers) {
+        for (const layerId of this._mergedOrder) {
             const layer = this._mergedLayers[layerId];
             if (this.isLayerDraped(layer)) {
                 draped.push(layerId);
@@ -3216,7 +3247,6 @@ class Style extends Evented<MapEvents> {
         forceFullPlacement: boolean = false,
     ): {
         needsRerender: boolean;
-        occlusionQueryBasedOpacityChanged: boolean;
     } {
         let symbolBucketsChanged = false;
         let placementCommitted = false;
@@ -3297,23 +3327,9 @@ class Style extends Evented<MapEvents> {
             }
         }
 
-        // Update symbol bucket opacities due to occlusion queries
-        let opacityChanged = false;
-        for (const layerId of this._mergedOrder) {
-            const styleLayer = this._mergedLayers[layerId];
-            if (styleLayer.type !== 'symbol') continue;
-            const tiles = layerTiles[makeFQID(styleLayer.source, styleLayer.scope)];
-            for (const tile of tiles) {
-                const symbolBucket = (tile.getBucket(styleLayer) as SymbolBucket);
-                if (symbolBucket && tile.latestFeatureIndex && styleLayer.fqid === symbolBucket.layerIds[0]) {
-                    opacityChanged = symbolBucket.updateOcclusionOpacities(painter.context, painter.symbolParams, painter._dt) || opacityChanged;
-                }
-            }
-        }
-
         // needsRender is false when we have just finished a placement that didn't change the visibility of any symbols
-        const needsRerender = !this.pauseablePlacement.isDone() || this.placement.hasTransitions(browser.now()) || opacityChanged;
-        return {needsRerender, occlusionQueryBasedOpacityChanged: opacityChanged};
+        const needsRerender = !this.pauseablePlacement.isDone() || this.placement.hasTransitions(browser.now());
+        return {needsRerender};
     }
 
     _releaseSymbolFadeTiles() {
