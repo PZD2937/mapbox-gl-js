@@ -63,7 +63,7 @@ class WorkerTile {
     reloadCallback: WorkerTileCallback | null | undefined;
     vectorTile: VectorTile;
 
-    encrypt: string;
+    vtOptions: any;
 
     constructor(params: WorkerTileParameters) {
         this.tileID = new OverscaledTileID(params.tileID.overscaledZ, params.tileID.wrap, params.tileID.canonical.z, params.tileID.canonical.x, params.tileID.canonical.y);
@@ -86,7 +86,7 @@ class WorkerTile {
         this.brightness = params.brightness;
         this.extraShadowCaster = !!params.extraShadowCaster;
         this.tessellationStep = params.tessellationStep;
-        this.encrypt = params.vtOptions ? params.vtOptions.encrypt : undefined;
+        this.vtOptions = params.vtOptions;
     }
 
     parse(data: VectorTile, layerIndex: StyleLayerIndex, availableImages: Array<string>, actor: Actor, callback: WorkerTileCallback) {
@@ -97,7 +97,7 @@ class WorkerTile {
         this.collisionBoxArray = new CollisionBoxArray();
         const sourceLayerCoder = new DictionaryCoder(Object.keys(data.layers).sort());
 
-        const featureIndex = new FeatureIndex(this.tileID, this.promoteId);
+        const featureIndex = new FeatureIndex(this.tileID, this.promoteId, this.vtOptions);
         featureIndex.bucketLayerIDs = [];
 
         const buckets: {

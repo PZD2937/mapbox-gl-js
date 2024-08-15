@@ -72,7 +72,9 @@ class FeatureIndex {
     sourceLayerCoder: DictionaryCoder;
     is3DTile: boolean; // no vector source layers
 
-    constructor(tileID: OverscaledTileID, promoteId?: PromoteIdSpecification | null) {
+    vtOptions: any;
+
+    constructor(tileID: OverscaledTileID, promoteId?: PromoteIdSpecification | null, vtOptions?: any) {
         this.tileID = tileID;
         this.x = tileID.canonical.x;
         this.y = tileID.canonical.y;
@@ -81,6 +83,7 @@ class FeatureIndex {
         this.featureIndexArray = new FeatureIndexArray();
         this.promoteId = promoteId;
         this.is3DTile = false;
+        this.vtOptions = vtOptions;
     }
 
     insert(feature: VectorTileFeature, geometry: Array<Array<Point>>, featureIndex: number, sourceLayerIndex: number, bucketIndex: number, layoutVertexArrayOffset: number = 0, envelopePadding: number = 0) {
@@ -121,7 +124,8 @@ class FeatureIndex {
         [_: string]: VectorTileLayer;
         } {
         if (!this.vtLayers) {
-            this.vtLayers = new VectorTile(new Protobuf(this.rawTileData)).layers;
+            // @ts-ignore
+            this.vtLayers = new VectorTile(new Protobuf(this.rawTileData), undefined, this.vtOptions).layers;
             this.sourceLayerCoder = new DictionaryCoder(this.vtLayers ? Object.keys(this.vtLayers).sort() : ['_geojsonTileLayer']);
             this.vtFeatures = {};
             for (const layer in this.vtLayers) {
