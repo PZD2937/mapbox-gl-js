@@ -91,6 +91,7 @@ class GeoJSONSource extends Evented<SourceEvents> implements ISource {
     _collectResourceTiming: boolean;
     _pendingLoad: Cancelable | null | undefined;
     _partialReload: boolean;
+    _needSet: boolean;
 
     reload: undefined;
     hasTile: undefined;
@@ -372,6 +373,7 @@ class GeoJSONSource extends Evented<SourceEvents> implements ISource {
         // if there's an earlier loadData to finish, wait until it finishes and then do another update
         if (this._pendingLoad) {
             this._coalesce = true;
+            if (!append) this._needSet = true;
             return;
         }
 
@@ -419,7 +421,7 @@ class GeoJSONSource extends Evented<SourceEvents> implements ISource {
             }
 
             if (this._coalesce) {
-                this._updateWorkerData(append);
+                this._updateWorkerData(this._needSet ? false : append);
                 this._coalesce = false;
             }
         });
