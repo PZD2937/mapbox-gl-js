@@ -14,8 +14,8 @@ const BD_DLON = 0.0065;
 /// @const
 // const EARTH_R = 6371000
 function pointInChina(lngLat: LngLat) {
-    return lngLat.lat >= 0.8293 && lngLat.lat <= 55.8271 &&
-        lngLat.lng >= 72.004 && lngLat.lng <= 137.8347;
+    return lngLat.lat >= 3.86 && lngLat.lat <= 53.55 &&
+        lngLat.lng >= 73.66 && lngLat.lng <= 135.05;
 }
 
 function coordDiff(a: LngLat, b: LngLat): LngLat {

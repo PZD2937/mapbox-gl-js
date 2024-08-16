@@ -210,7 +210,7 @@ class RasterTileSource<T extends 'raster' | 'raster-dem' | 'raster-array' = 'ras
     }
 
     needRevise() {
-        return this.projection && this.projection !== 'WGS84';
+        return this.projection && this.projection !== 'MERCATOR';
     }
 
     loadTile(tile: Tile, callback: Callback<undefined>) {
@@ -242,7 +242,9 @@ class RasterTileSource<T extends 'raster' | 'raster-dem' | 'raster-array' = 'ras
             this.loadOtherProjectionTile(tile, imageLoaded);
         } else {
             const url = this.map._requestManager.normalizeTileURL(tile.tileID.canonical.url(this.tiles, this.scheme), use2x, this.tileSize);
+            // @ts-ignore
             const request = this.map._requestManager.transformRequest(url, ResourceType.Tile, this.customTags, tile.tileID.canonical);
+            // @ts-ignore
             tile._url = request.url;
             tile.request = getImage(request, imageLoaded);
         }
@@ -268,6 +270,7 @@ class RasterTileSource<T extends 'raster' | 'raster-dem' | 'raster-array' = 'ras
                 const ti = new CanonicalTileID(item.z, item.x, item.y);
                 const url = this.map._requestManager.normalizeTileURL(ti.url(this.tiles, this.scheme), use2x, this.tileSize);
                 return {
+                    // @ts-ignore
                     request: this.map._requestManager.transformRequest(url, ResourceType.Tile, this.customTags, ti),
                     tile: ti,
                     x: item.dx,
@@ -287,10 +290,7 @@ class RasterTileSource<T extends 'raster' | 'raster-dem' | 'raster-array' = 'ras
             if (offscreenCanvasSupported()) {
                 tile.actor.send('loadTile', params, callback);
             } else {
-                tile.request = loadRasterTile.call(this, params, (err, result) => {
-                    if (tile.state === 'unloaded') return callback(null);
-                    callback(err, result);
-                });
+                tile.request = loadRasterTile.call(this, params, callback);
                 this.limitedStorage();
             }
         });

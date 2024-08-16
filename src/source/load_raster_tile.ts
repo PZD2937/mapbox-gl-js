@@ -6,11 +6,11 @@ import {asyncAll, isWorker} from "../util/util";
 import type {Callback} from "../types/callback";
 import type {Cancelable} from "../types/cancelable";
 import type {RequestParameters} from "../util/ajax";
-import type {WorkerCoverTilesResult} from "./worker_source";
+import type {WorkerCoverTilesResult, WorkerRasterTileParameters} from "./worker_source";
 
 const supportImageBitmap = typeof createImageBitmap === 'function';
 
-function dataToTextureImage(data, cb: Callback<ImageBitmap | HTMLImageElement>) {
+function dataToTextureImage(data: ArrayBuffer | HTMLImageElement, cb: Callback<ImageBitmap | HTMLImageElement>) {
     if (data instanceof ArrayBuffer) {
         arrayBufferToImage(data, cb);
     } else {
@@ -31,10 +31,11 @@ function canvasToImage(canvas: HTMLCanvasElement | OffscreenCanvas, callback: Ca
 
 export type LoadRasterTile = (params: WorkerCoverTilesResult, callback: Callback<ImageBitmap | HTMLCanvasElement>) => Cancelable;
 
-export function loadRasterTile(params: WorkerCoverTilesResult, callback: Callback<ImageBitmap | HTMLCanvasElement>): Cancelable {
+export function loadRasterTile(params: WorkerRasterTileParameters, callback: Callback<ImageBitmap | HTMLCanvasElement>): Cancelable {
     const {requests, ltPixel, rbPixel} = params;
 
     const makeRequest = (requestParam: RequestParameters, cb: Callback<undefined>) => {
+        // @ts-ignore
         requestParam.returnArraybuffer = true;
         const request = getImage(requestParam, cb);
         return () => {
@@ -43,7 +44,11 @@ export function loadRasterTile(params: WorkerCoverTilesResult, callback: Callbac
         };
     };
 
-    let canvas, ctx, tileSize, dx, dy;
+    let canvas: OffscreenCanvas | HTMLCanvasElement,
+        ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D,
+        tileSize: number,
+        dx: number,
+        dy: number;
 
     const initConfig = (imageSize: number) => {
         if (!canvas) {
@@ -58,10 +63,11 @@ export function loadRasterTile(params: WorkerCoverTilesResult, callback: Callbac
             const size = Math.max(rbPixel.x - ltPixel.x, rbPixel.y - ltPixel.y) * scale;
             canvas.width = size;
             canvas.height = size;
+            // @ts-ignore
             ctx = canvas.getContext('2d', {willReadFrequently: true});
         }
     };
-    const draw = (data, x: number, y: number) => {
+    const draw = (data: ImageBitmap | HTMLImageElement, x: number, y: number) => {
         ctx.drawImage(data, x * tileSize + dx, y * tileSize + dy, data.width, data.height);
     };
 
@@ -70,7 +76,7 @@ export function loadRasterTile(params: WorkerCoverTilesResult, callback: Callbac
     asyncAll(requests, (item, cb) => {
         const key = item.tile.key;
         if (this._subLoading[key]) {
-            dataToTextureImage(this._subLoading[key], (error, textureImage) => {
+            dataToTextureImage(this._subLoading[key], (_error, textureImage) => {
                 if (textureImage) {
                     initConfig(textureImage.width);
                     draw(textureImage, item.x, item.y);
@@ -78,14 +84,14 @@ export function loadRasterTile(params: WorkerCoverTilesResult, callback: Callbac
                 cb(null);
             });
         } else {
-            const cancel = this.deduped.request(item.tile.key, null, makeRequest.bind(this, item.request), (error, data) => {
+            const cancel = this.deduped.request(item.tile.key, null, makeRequest.bind(this, item.request), (error: any, data: any) => {
                 if (error) {
                     delete this._subLoading[key];
                     return cb(null);
                 }
                 if (data) {
                     this._subLoading[key] = data;
-                    dataToTextureImage(data, (error, textureImage) => {
+                    dataToTextureImage(data, (_error, textureImage) => {
                         if (textureImage) {
                             initConfig(textureImage.width);
                             draw(textureImage, item.x, item.y);

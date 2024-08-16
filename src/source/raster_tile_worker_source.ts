@@ -9,16 +9,14 @@ import type {TileState} from "./tile";
 import type {Callback} from "../types/callback";
 import type {RequestParameters} from "../util/ajax";
 import type {
-    CoverTiles,
     TileParameters,
     WorkerCoverTilesResult,
-    WorkerSource,
-    WorkerTileCallback,
-    WorkerTileParameters
+    WorkerSource
 } from "./worker_source";
 import type {Cancelable} from "../types/cancelable";
 import type {LoadRasterTile} from "./load_raster_tile";
 import type {CanonicalTileID} from "./tile_id";
+import type {RasterProjection} from "../style-spec/types";
 
 type Request = {
     request: RequestParameters,
@@ -56,35 +54,49 @@ export default class RasterTileWorkerSource extends Evented implements WorkerSou
     }
 
     getCoverTiles(params: {
-        projection: string,
+        projection: RasterProjection,
         tile: CanonicalTileID,
         zoom: number
     }, callback: Callback<WorkerCoverTilesResult>) {
-        const coverTiles = [];
-        return callback(null, this.reprojectedTile(params, coverTiles));
+        return callback(null, this.reprojectedTile(params));
     }
 
-    reprojectedTile(params: { projection: string, tile: CanonicalTileID, zoom: number }, coverTiles: CoverTiles[]) {
+    reprojectedTile(params: {
+        projection: RasterProjection,
+        tile: CanonicalTileID,
+        zoom: number
+    }): WorkerCoverTilesResult {
         const {tile, projection, zoom} = params;
 
         const actualZ = zoom || tile.z;
         const worldSize = 1 << actualZ;
 
-        const {direction, fullExtent} = getTileSystem(projection);
+        const {direction, fullExtent, transformExtent} = getTileSystem(projection);
 
         const bound = tile.toLngLatBounds();
+
+        if (fullExtent) {
+            if (!fullExtent.contains(bound.getNorthWest()) && !fullExtent.contains(bound.getSouthEast())) {
+                return null;
+            }
+        }
+
+        if (transformExtent) {
+            if (!transformExtent.contains(bound.getNorthWest()) && !transformExtent.contains(bound.getSouthEast())) {
+                return {
+                    coverTiles: [{x: tile.x, y: tile.y, z: tile.z, dx: 0, dy: 0}],
+                    ltPixel: {x: 0, y: 0},
+                    rbPixel: {x: 256, y: 256}
+                };
+            }
+        }
+        const coverTiles = [];
 
         // 转换成对应投影的坐标
         // 左上
         const northWest = transformLngLat(bound.getNorthWest(), 'WGS84', projection);
         // 右下
         const southEast = transformLngLat(bound.getSouthEast(), 'WGS84', projection);
-
-        if (fullExtent) {
-            if (!fullExtent.contains(northWest) && !fullExtent.contains(southEast)) {
-                return null;
-            }
-        }
 
         const northwestTile = lngLatToTileFromZ(northWest, actualZ, projection);
         const southeastTile = lngLatToTileFromZ(southEast, actualZ, projection);
@@ -124,6 +136,7 @@ export default class RasterTileWorkerSource extends Evented implements WorkerSou
         };
     }
 
+    // @ts-ignore
     loadTile(params: WorkerTileParameters & WorkerCoverTilesResult, callback) {
         const loading = this._loading[params.tileID.key] = this._loading[params.tileID.key] || {status: 'loading'};
         loading.request = this.loadRasterTile(params, (error, result) => {
@@ -164,7 +177,5 @@ export default class RasterTileWorkerSource extends Evented implements WorkerSou
             loading.subTiles && loading.subTiles.forEach(tile => delete this._subLoading[tile]);
         }
     }
-
-    reloadTile(params: WorkerTileParameters, callback: WorkerTileCallback): void {}
 
 }

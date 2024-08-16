@@ -4,13 +4,28 @@ import {CanonicalTileID} from "../../source/tile_id.js";
 import {clamp} from "../../util/util.js";
 
 import type {ProjectedPoint} from "./projection.js";
+import type {RasterProjection} from "../../style-spec/types";
 
 // const delta = 1E-7;
 // web-Mercator 投影切片使用的地球半径为6378137
 // @see https://zh.wikipedia.org/wiki/Web%E5%A2%A8%E5%8D%A1%E6%89%98%E6%8A%95%E5%BD%B1
 /*const earthCircumference = 2 * 6378137 * Math.PI;*/
 
-const EPSG3857 = {
+interface ProjectionSystem {
+    // 方向
+    direction: { x: number, y: number },
+    // 需要变化的范围
+    transformExtent?: [number, number, number, number],
+    // 边界范围
+    fullExtent?: [number, number, number, number],
+    lngLatToPixel?: (lngLat: LngLat, z: number) => { x: number, y: number },
+    lngLatToTile: (lngLat: LngLat, z: number) => CanonicalTileID,
+}
+
+// see https://cntchen.github.io/2016/05/09/%E5%9B%BD%E5%86%85%E4%B8%BB%E8%A6%81%E5%9C%B0%E5%9B%BE%E7%93%A6%E7%89%87%E5%9D%90%E6%A0%87%E7%B3%BB%E5%AE%9A%E4%B9%89%E5%8F%8A%E8%AE%A1%E7%AE%97%E5%8E%9F%E7%90%86/
+
+const GCJ02 = {
+    transformExtent: [73.66, 3.86, 135.05, 53.55],
     direction: {x: 1, y: 1},
     lngLatToTile(lngLat: LngLat, z: number): CanonicalTileID {
         const wordSize = (1 << z);
@@ -21,7 +36,7 @@ const EPSG3857 = {
         const y = clamp(Math.floor(temp * wordSize), 0, wordSize - 1);
         return new CanonicalTileID(z, x, y);
     }
-};
+} as ProjectionSystem;
 
 const EPSG4326 = {
     direction: {x: 1, y: 1},
@@ -91,7 +106,7 @@ const BAIDU = {
             }
         }
         if (!matrix) {
-            for (let i = this.LLBAND.length - 1; i >= 0; i--) {
+            for (let i = 0; i < this.LLBAND.length; i++) {
                 if (point.y <= -this.LLBAND[i]) {
                     matrix = this.LL2MC[i];
                     break;
@@ -139,63 +154,63 @@ const BAIDU = {
     },
 
     // 图层分辨率  m/pixel
-    getResolution(zoom): number {
-        return Math.pow(2, 18 - zoom);
+    getResolution(zoom: number, lat: number): number {
+        return Math.pow(2, 18 - zoom) * Math.cos(lat);
     },
 
     // 像素密度 pixel/m
-    getPixelDensity(zoom): number {
+    getPixelDensity(zoom: number): number {
         return Math.pow(2, zoom - 18); // * Math.cos(lat)
     },
 
     lngLatToTile(lngLat: LngLat, zoom: number): CanonicalTileID {
         const point = this.project(lngLat.lng, lngLat.lat);
-        const resolution = this.getPixelDensity(zoom);
-        const x = Math.floor(point.x * resolution / 256);
-        const y = Math.floor(point.y * resolution / 256);
+        const s = this.getPixelDensity(zoom);
+        const x = Math.floor(point.x * s / 256);
+        const y = Math.floor(point.y * s / 256);
         const worldSize = (1 << zoom) - 1;
         return new CanonicalTileID(zoom, clamp(x, 0, worldSize), clamp(y, 0, worldSize));
     },
 
     tileToLngLat(tileID: CanonicalTileID): LngLat {
-        const resolution = this.getResolution(tileID.z);
-        const x = tileID.x / resolution;
-        const y = tileID.y / resolution;
+        const s = this.getPixelDensity(tileID.z);
+        const x = (tileID.x * 256) / s;
+        const y = (tileID.y * 256) / s;
         return this.unproject(x, y);
     },
 
     lngLatToPixel(lngLat: LngLat, zoom: number): { x: number, y: number } {
         const s = this.getPixelDensity(zoom);
+        const tile = this.lngLatToTile(lngLat, zoom);
         const point = this.project(lngLat.lng, lngLat.lat);
-        const x = +Math.ceil((point.x * s) % 256);
-        const y = Math.floor(256 - (point.y * s) % 256);
+        const x = Math.floor(point.x * s - tile.x * 256);
+        const y = Math.floor(point.y * s - tile.y * 256);
         return {x, y};
     }
 
-};
+} as ProjectionSystem;
 
-export function getSpatialReference(projection: string) {
-    projection = typeof projection === 'string' ? projection.toUpperCase() : '';
-    let spatialReference;
+export function getSpatialReference(projection: RasterProjection) {
     switch (projection) {
-    case 'EPSG:4326':
-        spatialReference = EPSG4326;
-        break;
     case 'BAIDU':
-        spatialReference = BAIDU;
-        break;
+        return BAIDU;
+    case "GCJ02":
+        return GCJ02;
     default:
-        spatialReference = EPSG3857;
+        throw Error(`不支持的投影类型 ${projection}`);
     }
-    return spatialReference;
 }
 
-export function getTileSystem(projection) {
+export function getTileSystem(projection: RasterProjection) {
     const sr = getSpatialReference(projection);
-    return {direction: sr.direction, fullExtent: sr.fullExtent ? new LngLatBounds(sr.fullExtent) : null};
+    return {
+        direction: sr.direction,
+        fullExtent: sr.fullExtent ? new LngLatBounds(sr.fullExtent) : null,
+        transformExtent: sr.transformExtent ? new LngLatBounds(sr.transformExtent) : null
+    };
 }
 
-export function lngLatToTile(lngLat: LngLat, z: number, projection: string): CanonicalTileID {
+export function lngLatToTile(lngLat: LngLat, z: number, projection: RasterProjection): CanonicalTileID {
     const sr = getSpatialReference(projection);
     return sr.lngLatToTile(lngLat, z);
 }
@@ -207,7 +222,7 @@ export function lngLatToTile(lngLat: LngLat, z: number, projection: string): Can
  * @param {string} projection
  * @return {{x: number, y: number}}
  */
-export function lngLatToPixel(lngLat: LngLat, zoom: number, projection: string): { x: number, y: number } {
+export function lngLatToPixel(lngLat: LngLat, zoom: number, projection: RasterProjection): { x: number, y: number } {
     const spatialReference = getSpatialReference(projection);
     if (spatialReference && spatialReference.lngLatToPixel) {
         return spatialReference.lngLatToPixel(lngLat, zoom);

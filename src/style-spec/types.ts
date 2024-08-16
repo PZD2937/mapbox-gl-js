@@ -197,7 +197,7 @@ export type VectorSourceSpecification = {
     [_: string]: unknown
 }
 
-export type RasterProjection = 'GCJ02' | 'BAIDU' | 'WGS84'
+export type RasterProjection = 'GCJ02' | 'BAIDU' | 'MERCATOR'
 
 export type RasterSourceSpecification = {
     "type": "raster",

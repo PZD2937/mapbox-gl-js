@@ -3,7 +3,7 @@ import type {AlphaImage} from '../util/image';
 import type {GlyphPositions} from '../render/glyph_atlas';
 import type ImageAtlas from '../render/image_atlas';
 import type LineAtlas from '../render/line_atlas';
-import type {OverscaledTileID} from './tile_id';
+import type {CanonicalTileID, OverscaledTileID} from './tile_id';
 import type {Bucket} from '../data/bucket';
 import type FeatureIndex from '../data/feature_index';
 import type {CollisionBoxArray} from '../data/array_types';
@@ -51,6 +51,16 @@ export type WorkerCoverTilesResult = {
     coverTiles: CoverTiles[],
     ltPixel: {x: number, y: number},
     rbPixel: {x: number, y: number}
+}
+
+export type WorkerRasterTileParameters = {
+    requests: {request: RequestParameters, tile: CanonicalTileID, x: number, y: number}[],
+    ltPixel: {x: number, y: number},
+    rbPixel: {x: number, y: number},
+    tileID: CanonicalTileID,
+    source: string,
+    type: string,
+    scope: string
 }
 
 export type DEMSourceEncoding = 'mapbox' | 'terrarium';
