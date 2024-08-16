@@ -6,12 +6,13 @@ import {Aabb} from '../../util/primitives';
 import {aabbForTileOnGlobe} from './globe_util';
 import assert from 'assert';
 import {CanonicalTileID} from '../../source/tile_id';
+import {lngLatToTile} from "./tile_projection.js";
 
 import type Projection from './projection';
 import type {ProjectedPoint} from './projection';
 import type Transform from '../transform';
-import LngLat from "../lng_lat.js";
-import {lngLatToTile} from "./tile_projection.js";
+import type LngLat from "../lng_lat.js";
+import type {RasterProjection} from "../../style-spec/types";
 
 export type TileTransform = {
     scale: number;
@@ -147,6 +148,6 @@ export function getTileVec3(tileTransform: TileTransform, coord: MercatorCoordin
     return vec3.fromValues(x, y, altitudeFromMercatorZ(coord.z, coord.y));
 }
 
-export function lngLatToTileFromZ(lngLat: LngLat, z: number, projection: string): CanonicalTileID {
+export function lngLatToTileFromZ(lngLat: LngLat, z: number, projection: RasterProjection): CanonicalTileID {
     return lngLatToTile(lngLat, z, projection);
 }
