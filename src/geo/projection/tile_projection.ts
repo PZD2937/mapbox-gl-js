@@ -180,11 +180,10 @@ const BAIDU = {
     },
 
     lngLatToPixel(lngLat: LngLat, zoom: number): { x: number, y: number } {
-        const s = this.getPixelDensity(zoom);
-        const tile = this.lngLatToTile(lngLat, zoom);
+        const s = this.getPixelDensity(zoom, lngLat.lat);
         const point = this.project(lngLat.lng, lngLat.lat);
-        const x = Math.floor(point.x * s - tile.x * 256);
-        const y = Math.floor(point.y * s - tile.y * 256);
+        const x = Math.floor(Math.ceil((point.x * s) % 256));
+        const y = Math.floor(256 - (point.y * s) % 256);
         return {x, y};
     }
 
