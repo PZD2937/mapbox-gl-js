@@ -20,7 +20,7 @@ import type ResolvedImage from '../../style-spec/expression/types/resolved_image
 import type {StylePropertySpecification} from '../../style-spec/style-spec';
 
 export type LayoutProps = {
-    "symbol-placement": DataConstantProperty<"point" | "line" | "line-center" | "vertex" | "first-vertex" | "last-vertex" | "first-last-vertex" | "middle-vertex">;
+    "symbol-placement": DataConstantProperty<"point" | "line" | "line-center" | "vertex" | "first-vertex" | "last-vertex" | "first-last-vertex" | "middle-vertex" | "except-first-vertex" | "except-last-vertex">;
     "symbol-spacing": DataConstantProperty<number>;
     "symbol-avoid-edges": DataConstantProperty<boolean>;
     "symbol-sort-key": DataDrivenProperty<number>;

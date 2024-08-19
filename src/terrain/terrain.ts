@@ -180,7 +180,7 @@ class ProxiedTileID extends OverscaledTileID {
     proxyTileKey: number;
 
     constructor(tileID: OverscaledTileID, proxyTileKey: number, projMatrix: Float32Array) {
-        super(tileID.overscaledZ, tileID.wrap, tileID.canonical.z, tileID.canonical.x, tileID.canonical.y, tileID.projection);
+        super(tileID.overscaledZ, tileID.wrap, tileID.canonical.z, tileID.canonical.x, tileID.canonical.y);
         this.proxyTileKey = proxyTileKey;
         this.projMatrix = projMatrix;
     }
@@ -1602,11 +1602,11 @@ export class Terrain extends Elevation {
                 if (sourceCache.getSource().reparseOverscaled) {
                     z = Math.max(tileID.canonical.z + 2, sourceCache.transform.tileZoom);
                     sourceTileID = new OverscaledTileID(z, tileID.wrap, maxzoom,
-                        tileID.canonical.x >> downscale, tileID.canonical.y >> downscale, sourceCache._source.projection);
+                        tileID.canonical.x >> downscale, tileID.canonical.y >> downscale);
                 } else if (downscale !== 0) {
                     z = maxzoom;
                     sourceTileID = new OverscaledTileID(z, tileID.wrap, maxzoom,
-                        tileID.canonical.x >> downscale, tileID.canonical.y >> downscale, sourceCache._source.projection);
+                        tileID.canonical.x >> downscale, tileID.canonical.y >> downscale);
                 }
             }
             if (sourceTileID.key !== tileID.key) {

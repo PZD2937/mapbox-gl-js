@@ -94,7 +94,6 @@ class StyleLayer extends Evented {
         this.metadata = layer.metadata;
         this.minzoom = layer.minzoom;
         this.maxzoom = layer.maxzoom;
-        this.zIndex = layer.zIndex;
 
         if (layer.type !== 'background' && layer.type !== 'sky' && layer.type !== 'slot') {
             this.source = layer.source;
@@ -262,8 +261,7 @@ class StyleLayer extends Evented {
             'maxzoom': this.maxzoom,
             'filter': this.filter,
             'layout': this._unevaluatedLayout && this._unevaluatedLayout.serialize(),
-            'paint': this._transitionablePaint && this._transitionablePaint.serialize(),
-            'zIndex': this.zIndex
+            'paint': this._transitionablePaint && this._transitionablePaint.serialize()
         };
 
         return filterObject(output, (value, key) => {
