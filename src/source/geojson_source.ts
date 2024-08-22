@@ -395,6 +395,8 @@ class GeoJSONSource extends Evented<SourceEvents> implements ISource {
             options.request.collectResourceTiming = this._collectResourceTiming;
         } else {
             options.data = JSON.stringify(data);
+            // free memory
+            this._data = null;
         }
 
         // target {this.type}.loadData rather than literally geojson.loadData,
