@@ -1,5 +1,4 @@
 import Point from '@mapbox/point-geometry';
-
 import StyleLayer from '../style_layer';
 import LineBucket from '../../data/bucket/line_bucket';
 import {polygonIntersectsBufferedMultiLine} from '../../util/intersection_tests';
@@ -7,11 +6,12 @@ import {getMaximumPaintValue, translateDistance, translate} from '../query_utils
 import {getLayoutProperties, getPaintProperties} from './line_style_layer_properties';
 import {extend} from '../../util/util';
 import EvaluationParameters from '../evaluation_parameters';
-import {Transitionable, Transitioning, Layout, PossiblyEvaluated, DataDrivenProperty} from '../properties';
+import {PossiblyEvaluated, DataDrivenProperty} from '../properties';
 import ProgramConfiguration from '../../data/program_configuration';
-
 import Step from '../../style-spec/expression/definitions/step';
-import type {PossiblyEvaluatedValue, PropertyValue, PossiblyEvaluatedPropertyValue, ConfigOptions, Properties} from '../properties';
+import {lineDefinesValues} from '../../render/program/line_program';
+
+import type {PossiblyEvaluatedValue, PropertyValue, PossiblyEvaluatedPropertyValue, ConfigOptions, Properties, Transitionable, Transitioning, Layout} from '../properties';
 import type {Feature, FeatureState, ZoomConstantExpression, StylePropertyExpression} from '../../style-spec/expression/index';
 import type {Bucket, BucketParameters} from '../../data/bucket';
 import type {LayoutProps, PaintProps} from './line_style_layer_properties';
@@ -19,10 +19,9 @@ import type Transform from '../../geo/transform';
 import type {LayerSpecification} from '../../style-spec/types';
 import type {TilespaceQueryGeometry} from '../query_geometry';
 import type {VectorTileFeature} from '@mapbox/vector-tile';
-import {lineDefinesValues} from '../../render/program/line_program';
 import type {CreateProgramParams} from '../../render/painter';
 import type {DynamicDefinesType} from '../../render/program/program_uniforms';
-import SourceCache from '../../source/source_cache';
+import type SourceCache from '../../source/source_cache';
 import type {LUT} from "../../util/lut";
 
 let properties: {
@@ -171,11 +170,8 @@ class LineStyleLayer extends StyleLayer {
             this.paint.get('line-translate-anchor'),
             transform.angle, queryGeometry.pixelToTileUnitsFactor);
         const halfWidth = queryGeometry.pixelToTileUnitsFactor / 2 * getLineWidth(
-            // @ts-expect-error - TS2339 - Property 'evaluate' does not exist on type 'unknown'.
             this.paint.get('line-width').evaluate(feature, featureState),
-            // @ts-expect-error - TS2339 - Property 'evaluate' does not exist on type 'unknown'.
             this.paint.get('line-gap-width').evaluate(feature, featureState));
-        // @ts-expect-error - TS2339 - Property 'evaluate' does not exist on type 'unknown'.
         const lineOffset = this.paint.get('line-offset').evaluate(feature, featureState);
         if (lineOffset) {
             geometry = offsetLine(geometry, lineOffset * queryGeometry.pixelToTileUnitsFactor);

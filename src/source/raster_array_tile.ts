@@ -59,7 +59,7 @@ export type MRTDataRange = {
 export type MRTDecodingBatch = {
     tasks: Array<MRTDecodingTask>;
     cancel: () => void;
-    complete: (arg1?: Error | null | undefined, arg2?: ArrayBuffer | null | undefined) => void;
+    complete: (arg1?: Error | null, arg2?: ArrayBuffer | null) => void;
 };
 
 export type MRTDecodingTask = {
@@ -82,10 +82,10 @@ export type MRT = {
     layers: {
         [_: string]: MRTLayer;
     };
-    getLayer(arg1: string): MRTLayer | null | undefined;
-    parseHeader(arg1: ArrayBuffer): MRT;
-    getHeaderLength(arg1: ArrayBuffer): number;
-    createDecodingTask(arg1: MRTDataRange): MRTDecodingBatch;
+    getLayer: (arg1: string) => MRTLayer | null | undefined;
+    parseHeader: (arg1: ArrayBuffer) => MRT;
+    getHeaderLength: (arg1: ArrayBuffer) => number;
+    createDecodingTask: (arg1: MRTDataRange) => MRTDecodingBatch;
 };
 
 const FIRST_TRY_HEADER_LENGTH = 16384;
@@ -119,9 +119,9 @@ class RasterArrayTile extends Tile {
         this.texture = this.texture || painter.getTileTexture(img.width);
 
         if (this.texture && this.texture instanceof Texture) {
-            this.texture.update(img, {useMipmap: false, premultiply: false});
+            this.texture.update(img, {premultiply: false});
         } else {
-            this.texture = new Texture(context, img, gl.RGBA, {useMipmap: false, premultiply: false});
+            this.texture = new Texture(context, img, gl.RGBA8, {premultiply: false});
         }
     }
 
@@ -289,7 +289,7 @@ class RasterArrayTile extends Tile {
 
         const texture = this.texture;
         if (texture && texture instanceof Texture) {
-            texture.update(img, {useMipmap: false, premultiply: false});
+            texture.update(img, {premultiply: false});
         }
 
         this.textureDescriptor = {

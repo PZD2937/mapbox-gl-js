@@ -1,5 +1,4 @@
 import {Event} from '../util/evented';
-
 import * as DOM from '../util/dom';
 import Point from '@mapbox/point-geometry';
 import {extend} from '../util/util';
@@ -11,7 +10,7 @@ import type {GeoJSONFeature} from '../util/vectortile_to_geojson';
 import type {EventData, EventOf} from '../util/evented';
 import type {SourceSpecification} from '../style-spec/types';
 
-type MapMouseEventType =
+export type MapMouseEventType =
     | 'mousedown'
     | 'mouseup'
     | 'preclick'
@@ -1618,6 +1617,7 @@ export type MapEvents = {
 /**
  * Utility type that represents all possible Map event types.
  */
+// eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
 export type MapEventType = keyof MapEvents & string;
 
 /**

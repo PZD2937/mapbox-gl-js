@@ -1,12 +1,11 @@
 import StyleLayer from '../style_layer';
-
 import FillBucket from '../../data/bucket/fill_bucket';
 import {polygonIntersectsMultiPolygon} from '../../util/intersection_tests';
 import {translateDistance, translate} from '../query_utils';
 import {getLayoutProperties, getPaintProperties} from './fill_style_layer_properties';
-import {Transitionable, Transitioning, Layout, PossiblyEvaluated} from '../properties';
 import ProgramConfiguration from '../../data/program_configuration';
 
+import type {Transitionable, Transitioning, Layout, PossiblyEvaluated, ConfigOptions} from '../properties';
 import type {FeatureState} from '../../style-spec/expression/index';
 import type {BucketParameters} from '../../data/bucket';
 import type Point from '@mapbox/point-geometry';
@@ -17,7 +16,6 @@ import type {LayerSpecification} from '../../style-spec/types';
 import type {TilespaceQueryGeometry} from '../query_geometry';
 import type {VectorTileFeature} from '@mapbox/vector-tile';
 import type {CreateProgramParams} from '../../render/painter';
-import type {ConfigOptions} from '../properties';
 import type {LUT} from "../../util/lut";
 
 class FillStyleLayer extends StyleLayer {
@@ -96,6 +94,10 @@ class FillStyleLayer extends StyleLayer {
 
     isTileClipped(): boolean {
         return true;
+    }
+
+    is3D(): boolean {
+        return this.paint.get('fill-z-offset').constantOr(1.0) !== 0.0;
     }
 }
 

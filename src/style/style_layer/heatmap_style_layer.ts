@@ -1,20 +1,19 @@
 import StyleLayer from '../style_layer';
-
 import HeatmapBucket from '../../data/bucket/heatmap_bucket';
-import {RGBAImage} from '../../util/image';
 import {getLayoutProperties, getPaintProperties} from './heatmap_style_layer_properties';
 import {renderColorRamp} from '../../util/color_ramp';
-import {Transitionable, Transitioning, PossiblyEvaluated} from '../properties';
 import {queryIntersectsCircle} from './circle_style_layer';
 import {getMaximumPaintValue} from '../query_utils';
 import Point from '@mapbox/point-geometry';
+import ProgramConfiguration from '../../data/program_configuration';
 
+import type {RGBAImage} from '../../util/image';
+import type {Transitionable, Transitioning, PossiblyEvaluated, ConfigOptions} from '../properties';
 import type {Bucket, BucketParameters} from '../../data/bucket';
 import type Texture from '../../render/texture';
 import type Framebuffer from '../../gl/framebuffer';
 import type {PaintProps} from './heatmap_style_layer_properties';
 import type {LayerSpecification} from '../../style-spec/types';
-import ProgramConfiguration from '../../data/program_configuration';
 import type {TilespaceQueryGeometry} from '../query_geometry';
 import type {DEMSampler} from '../../terrain/elevation';
 import type {FeatureState} from '../../style-spec/expression/index';
@@ -22,7 +21,6 @@ import type Transform from '../../geo/transform';
 import type CircleBucket from '../../data/bucket/circle_bucket';
 import type {VectorTileFeature} from '@mapbox/vector-tile';
 import type {CreateProgramParams} from '../../render/painter';
-import type {ConfigOptions} from '../properties';
 import type {LUT} from "../../util/lut";
 
 class HeatmapStyleLayer extends StyleLayer {
@@ -87,8 +85,6 @@ class HeatmapStyleLayer extends StyleLayer {
         pixelPosMatrix: Float32Array,
         elevationHelper?: DEMSampler | null,
     ): boolean {
-
-        // @ts-expect-error - TS2339 - Property 'evaluate' does not exist on type 'unknown'.
         const size = this.paint.get('heatmap-radius').evaluate(feature, featureState);
         return queryIntersectsCircle(
             queryGeometry, geometry, transform, pixelPosMatrix, elevationHelper,

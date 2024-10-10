@@ -2,14 +2,14 @@ import Texture from '../render/texture';
 import RasterTileSource from './raster_tile_source';
 import {extend} from '../util/util';
 import {ResourceType} from '../util/ajax';
-import {Evented, ErrorEvent} from '../util/evented';
+import {ErrorEvent} from '../util/evented';
 import RasterStyleLayer from '../style/style_layer/raster_style_layer';
 import RasterParticleStyleLayer from '../style/style_layer/raster_particle_style_layer';
-
 // Import MRTData as a module with side effects to ensure
 // it's registered as a serializable class on the main thread
 import '../data/mrt_data';
 
+import type {Evented} from '../util/evented';
 import type Tile from './tile';
 import type {Map} from '../ui/map';
 import type Dispatcher from '../util/dispatcher';
@@ -62,7 +62,6 @@ class RasterArrayTileSource extends RasterTileSource<'raster-array'> implements 
         tile = (tile as RasterArrayTile);
 
         const url = this.map._requestManager.normalizeTileURL(tile.tileID.canonical.url(this.tiles, this.scheme), false, this.tileSize);
-        // @ts-expect-error - TS2345 - Argument of type 'string' is not assignable to parameter of type '"Unknown" | "Style" | "Source" | "Tile" | "Glyphs" | "SpriteImage" | "SpriteJSON" | "Image" | "Model"'.
         const requestParams = this.map._requestManager.transformRequest(url, ResourceType.Tile, this.customTags, tile.tileID.canonical);
 
         // @ts-expect-error - TS2339 - Property 'requestParams' does not exist on type 'Tile'.

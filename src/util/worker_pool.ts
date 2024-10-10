@@ -1,4 +1,5 @@
-import WebWorker from './web_worker';
+import {createWorker} from './web_worker';
+
 import type {WorkerInterface} from './web_worker';
 
 export const PRELOAD_POOL_ID = 'mapboxgl_preloaded_worker_pool';
@@ -23,8 +24,7 @@ export default class WorkerPool {
             // client code has had a chance to set it.
             this.workers = [];
             while (this.workers.length < WorkerPool.workerCount) {
-                // @ts-expect-error - TS2350 - Only a void function can be called with the 'new' keyword.
-                this.workers.push(new WebWorker());
+                this.workers.push(createWorker());
             }
         }
 

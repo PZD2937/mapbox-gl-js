@@ -1,6 +1,5 @@
 import {uniqueId, parseCacheControl} from '../util/util';
 import {deserialize as deserializeBucket} from '../data/bucket';
-import FeatureIndex from '../data/feature_index';
 import Feature from '../util/vectortile_to_geojson';
 import featureFilter from '../style-spec/feature_filter/index';
 import SymbolBucket from '../data/bucket/symbol_bucket';
@@ -12,7 +11,6 @@ import browser from '../util/browser';
 import {Debug} from '../util/debug';
 import toEvaluationFeature from '../data/evaluation_feature';
 import EvaluationParameters from '../style/evaluation_parameters';
-import SourceFeatureState from '../source/source_state';
 import {lazyLoadRTLTextPlugin} from './rtl_text_plugin';
 import {TileSpaceDebugBuffer} from '../data/debug_viz';
 import Color from '../style-spec/util/color';
@@ -25,11 +23,13 @@ import boundsAttributes from '../data/bounds_attributes';
 import posAttributes, {posAttributesGlobeExt} from '../data/pos_attributes';
 import EXTENT from '../style-spec/data/extent';
 import Point from '@mapbox/point-geometry';
-import RasterParticleState from '../render/raster_particle_state';
 import SegmentVector from '../data/segment';
 import {transitionTileAABBinECEF, globeNormalizeECEF, tileCoordToECEF, globeToMercatorTransition, interpolateVec3} from '../geo/projection/globe_util';
 import {vec3, mat4} from 'gl-matrix';
 
+import type RasterParticleState from '../render/raster_particle_state';
+import type SourceFeatureState from '../source/source_state';
+import type FeatureIndex from '../data/feature_index';
 import type {Bucket} from '../data/bucket';
 import type StyleLayer from '../style/style_layer';
 import type {WorkerTileResult} from './worker_source';
@@ -46,7 +46,7 @@ import type Transform from '../geo/transform';
 import type {GeoJSONFeature} from '../util/vectortile_to_geojson';
 import type {LayerFeatureStates} from './source_state';
 import type {Cancelable} from '../types/cancelable';
-import type {FilterSpecification, ExpressionSpecification} from '../style-spec/types';
+import type {FilterSpecification} from '../style-spec/types';
 import type {TilespaceQueryGeometry} from '../style/query_geometry';
 import type VertexBuffer from '../gl/vertex_buffer';
 import type IndexBuffer from '../gl/index_buffer';
@@ -125,7 +125,9 @@ class Tile {
     isRaster: boolean | null | undefined;
     _tileTransform: TileTransform;
 
-    neighboringTiles: any | null | undefined;
+    neighboringTiles?: {
+        [key: number]: {backfilled: boolean}
+    };
     dem: DEMData | null | undefined;
     aborted: boolean | null | undefined;
     needsHillshadePrepare: boolean | null | undefined;
@@ -400,7 +402,7 @@ class Tile {
         const atlas = this.imageAtlas;
         if (atlas && !atlas.uploaded) {
             const hasPattern = !!Object.keys(atlas.patternPositions).length;
-            this.imageAtlasTexture = new Texture(context, atlas.image, gl.RGBA, {useMipmap: hasPattern});
+            this.imageAtlasTexture = new Texture(context, atlas.image, gl.RGBA8, {useMipmap: hasPattern});
             (this.imageAtlas).uploaded = true;
         }
 
@@ -431,7 +433,7 @@ class Tile {
             return;
         }
         this._lastUpdatedBrightness = brightness;
-        this.updateBuckets(undefined, painter);
+        this.updateBuckets(painter);
     }
 
     // Queries non-symbol features rendered for this tile.
@@ -507,7 +509,6 @@ class Tile {
                 const evaluationFeature = toEvaluationFeature(feature, true);
                 if (!filter.filter(new EvaluationParameters(this.tileID.overscaledZ), evaluationFeature, this.tileID.canonical))
                     continue;
-                // @ts-expect-error - TS2345 - Argument of type 'VectorTileFeature' is not assignable to parameter of type 'Feature'.
             } else if (!filter.filter(new EvaluationParameters(this.tileID.overscaledZ), feature)) {
                 continue;
             }
@@ -621,10 +622,10 @@ class Tile {
             return;
         }
 
-        this.updateBuckets(states, painter);
+        this.updateBuckets(painter);
     }
 
-    updateBuckets(states: LayerFeatureStates | null | undefined, painter: Painter) {
+    updateBuckets(painter: Painter) {
         if (!this.latestFeatureIndex) return;
         const vtLayers = this.latestFeatureIndex.loadVTLayers();
         const availableImages = painter.style.listImages();
@@ -637,16 +638,15 @@ class Tile {
             // Buckets are grouped by common source-layer
             const sourceLayerId = bucket.layers[0]['sourceLayer'] || '_geojsonTileLayer';
             const sourceLayer = vtLayers[sourceLayerId];
+            const sourceCache = painter.style.getOwnSourceCache(bucket.layers[0].source);
             let sourceLayerStates: Record<string, any> = {};
-            if (states) {
-                sourceLayerStates = states[sourceLayerId];
-                if (!sourceLayer || !sourceLayerStates || Object.keys(sourceLayerStates).length === 0) continue;
+            if (sourceCache) {
+                sourceLayerStates = sourceCache._state.getState(sourceLayerId, undefined);
             }
 
             const imagePositions: SpritePositions = (this.imageAtlas && this.imageAtlas.patternPositions) || {};
             bucket.update(sourceLayerStates, sourceLayer, availableImages, imagePositions, brightness);
             if (bucket instanceof LineBucket || bucket instanceof FillBucket) {
-                const sourceCache = painter.style.getOwnSourceCache(bucket.layers[0].source);
                 if (painter._terrain && painter._terrain.enabled && sourceCache && bucket.programConfigurations.needsUpload) {
                     painter._terrain._clearRenderCacheForTile(sourceCache.id, this.tileID);
                 }
@@ -679,9 +679,9 @@ class Tile {
         const gl = context.gl;
         this.texture = this.texture || painter.getTileTexture(img.width);
         if (this.texture && this.texture instanceof Texture) {
-            this.texture.update(img, {useMipmap: true});
+            this.texture.update(img);
         } else {
-            this.texture = new Texture(context, img, gl.RGBA, {useMipmap: true});
+            this.texture = new Texture(context, img, gl.RGBA8, {useMipmap: true});
             this.texture.bind(gl.LINEAR, gl.CLAMP_TO_EDGE);
         }
     }

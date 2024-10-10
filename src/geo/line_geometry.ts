@@ -1,9 +1,11 @@
 import Point from '@mapbox/point-geometry';
+import EXTENT from '../style-spec/data/extent';
+import {edgeIntersectsBox} from '../../src/util/intersection_tests';
 
 export type WallGeometry = {
-    isPolygon: boolean;
     geometry: Array<Point>;
     joinNormals: Array<Point>;
+    indices: Array<number>;
 };
 
 function isClockWise(vertices: Array<Point>) {
@@ -30,9 +32,9 @@ export function createLineWallGeometry(vertices: Array<Point>): WallGeometry {
         vertices = vertices.reverse();
     }
     const wallGeometry: WallGeometry = {
-        isPolygon,
         geometry: [],
-        joinNormals: []
+        joinNormals: [],
+        indices: []
     };
     const innerWall = [];
     const outerWall = [];
@@ -89,7 +91,7 @@ export function createLineWallGeometry(vertices: Array<Point>): WallGeometry {
         // prevNormal + nextNormal = (0, 0), its magnitude is 0, so the unit vector would be
         // undefined. In that case, we're keeping the joinNormal at (0, 0), so that the cosHalfAngle
         // below will also become 0 and miterLength will become Infinity.
-        const joinNormal = prevNormal.add(nextNormal);
+        let joinNormal = prevNormal.add(nextNormal);
         if (joinNormal.x !== 0 || joinNormal.y !== 0) {
             joinNormal._unit();
         }
@@ -100,8 +102,6 @@ export function createLineWallGeometry(vertices: Array<Point>): WallGeometry {
         // as the inverse of cosine of the angle between next and join normals
         const miterLength = cosHalfAngle !== 0 ? 1 / cosHalfAngle : Infinity;
 
-        // approximate angle from cosine
-        const approxAngle = 2 * Math.sqrt(2 - 2 * cosHalfAngle);
         const lineTurnsLeft = prevNormal.x * nextNormal.y - prevNormal.y * nextNormal.x > 0;
 
         // Note: Currently only mitter join is supported for walls,
@@ -113,11 +113,20 @@ export function createLineWallGeometry(vertices: Array<Point>): WallGeometry {
             currentJoin = 'bevel';
         }
 
+        if (currentJoin === 'bevel') {
+            // Note: In contrast to line_bucket, only >100 miter length is handled
+            if (miterLength > 100) currentJoin = 'flipbevel';
+
+            // If the miterLength is really small and the line bevel wouldn't be visible,
+            // just draw a miter join to save a triangle.
+            if (miterLength < miterLimit) currentJoin = 'miter';
+        }
+
         const addWallJoin = (vert, normal, outerOffset, innerOffset) => {
             const innerPoint = new Point(vert.x, vert.y);
             const outerPoint = new Point(vert.x, vert.y);
-            innerPoint.x -= normal.x * innerOffset;
-            innerPoint.y -= normal.y * innerOffset;
+            innerPoint.x += normal.x * innerOffset;
+            innerPoint.y += normal.y * innerOffset;
             outerPoint.x -= normal.x * Math.max(outerOffset, 1.0);
             outerPoint.y -= normal.y * Math.max(outerOffset, 1.0);
 
@@ -128,7 +137,13 @@ export function createLineWallGeometry(vertices: Array<Point>): WallGeometry {
 
         if (currentJoin === 'miter') {
             joinNormal._mult(miterLength);
-            addWallJoin(currentVertex, joinNormal, 1, 0);
+            addWallJoin(currentVertex, joinNormal, 0, 0);
+        } else if (currentJoin === 'flipbevel') {
+            // miter is too big, flip the direction to make a beveled join
+            // Almost parallel lines
+            joinNormal = nextNormal.mult(-1);
+            addWallJoin(currentVertex, joinNormal, 0, 0);
+            addWallJoin(currentVertex, joinNormal.mult(-1), 0, 0);
         } else { // bevel join
             const offset = -Math.sqrt(miterLength * miterLength - 1);
             const offsetA = lineTurnsLeft ? offset : 0;
@@ -148,6 +163,78 @@ export function createLineWallGeometry(vertices: Array<Point>): WallGeometry {
 
     wallGeometry.geometry = [...innerWall, ...outerWall.reverse(), innerWall[0]];
     wallGeometry.joinNormals = [...joinNormals, ...joinNormals.reverse(), joinNormals[joinNormals.length - 1]];
+
+    // Build index buffer
+    const numPoints = wallGeometry.geometry.length - 1;
+    // Line points are in pairs on the inner and outer side, so we can build quads from them
+    for (let i = 0; i < numPoints / 2; i++) {
+        if (i + 1 < numPoints / 2) {
+            let indexA = i;
+            let indexB = i + 1;
+            let indexC = numPoints - 1 - i;
+            let indexD = numPoints - 2 - i;
+
+            // Shift it by the first element to match order in bucket
+            indexA = indexA === 0 ? numPoints - 1 : indexA - 1;
+            indexB = indexB === 0 ? numPoints - 1 : indexB - 1;
+            indexC = indexC === 0 ? numPoints - 1 : indexC - 1;
+            indexD = indexD === 0 ? numPoints - 1 : indexD - 1;
+
+            wallGeometry.indices.push(indexC);
+            wallGeometry.indices.push(indexB);
+            wallGeometry.indices.push(indexA);
+
+            wallGeometry.indices.push(indexC);
+            wallGeometry.indices.push(indexD);
+            wallGeometry.indices.push(indexB);
+        }
+    }
+
     return wallGeometry;
 }
 
+const tileCorners = [
+    new Point(0, 0),
+    new Point(EXTENT, 0),
+    new Point(EXTENT, EXTENT),
+    new Point(0, EXTENT)];
+
+// Removes connection lines outside of the tile bounds if they don't intersect with the original tile
+export function dropBufferConnectionLines(polygon: Array<Point>, isPolygon: boolean) {
+    const lineSegments = [];
+    let lineSegment = [];
+    if (!isPolygon || polygon.length < 2) {
+        return [polygon];
+    } else if (polygon.length === 2) {
+        if (edgeIntersectsBox(polygon[0], polygon[1], tileCorners)) {
+            return [polygon];
+        }
+        return [];
+    } else {
+        for (let i = 0; i < polygon.length + 2; i++) {
+            const p0 = i === 0 ? polygon[polygon.length - 1] : polygon[(i - 1) % polygon.length];
+            const p1 = polygon[i % polygon.length];
+            const p2 = polygon[(i + 1) % polygon.length];
+            const intersectsPrev = edgeIntersectsBox(p0, p1, tileCorners);
+            const intersectsNext = edgeIntersectsBox(p1, p2, tileCorners);
+            const addPoint = intersectsPrev || intersectsNext;
+
+            if (addPoint) {
+                lineSegment.push(p1);
+            }
+            if (!addPoint || !intersectsNext) {
+                // Close segment and start new
+                if (lineSegment.length > 0) {
+                    if (lineSegment.length > 1) {
+                        lineSegments.push(lineSegment);
+                    }
+                    lineSegment = [];
+                }
+            }
+        }
+    }
+    if (lineSegment.length > 1) {
+        lineSegments.push(lineSegment);
+    }
+    return lineSegments;
+}

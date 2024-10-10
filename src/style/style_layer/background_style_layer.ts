@@ -1,12 +1,10 @@
 import StyleLayer from '../style_layer';
-
 import {getLayoutProperties, getPaintProperties} from './background_style_layer_properties';
-import {Transitionable, Transitioning, PossiblyEvaluated} from '../properties';
 
+import type {Transitionable, Transitioning, PossiblyEvaluated, ConfigOptions} from '../properties';
 import type {PaintProps} from './background_style_layer_properties';
 import type {LayerSpecification} from '../../style-spec/types';
 import type {CreateProgramParams} from '../../render/painter';
-import type {ConfigOptions} from '../properties';
 import type {LUT} from "../../util/lut";
 
 class BackgroundStyleLayer extends StyleLayer {
@@ -32,6 +30,10 @@ class BackgroundStyleLayer extends StyleLayer {
         return {
             overrideFog: false
         };
+    }
+
+    is3D(): boolean {
+        return this.paint.get('background-pitch-alignment') === 'viewport';
     }
 }
 

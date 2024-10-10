@@ -6,12 +6,12 @@ import {postTurnstileEvent} from '../util/mapbox';
 import TileBounds from './tile_bounds';
 import browser from '../util/browser';
 import {cacheEntryPossiblyAdded} from '../util/tile_request_cache';
-import Texture from '../render/texture';
 import {CanonicalTileID} from "./tile_id";
 import offscreenCanvasSupported from "../util/offscreen_canvas_supported";
 import {DedupedRequest} from "./deduped_request";
 import {makeFQID} from "../util/fqid";
 import {loadRasterTile} from "./load_raster_tile";
+import Texture from '../render/texture';
 
 import type {ISource, SourceEvents} from './source';
 import type {OverscaledTileID} from './tile_id';

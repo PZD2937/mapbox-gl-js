@@ -12,8 +12,9 @@ import browser from '../util/browser';
 import tileTransform, {getTilePoint} from '../geo/projection/tile_transform';
 import {GLOBE_VERTEX_GRID_SIZE} from '../geo/projection/globe_constants';
 import {mat3, vec3} from 'gl-matrix';
-import LngLat from '../geo/lng_lat';
+import assert from "assert";
 
+import type LngLat from '../geo/lng_lat';
 import type {ISource, SourceEvents} from './source';
 import type {CanvasSourceSpecification} from './canvas_source';
 import type {Map} from '../ui/map';
@@ -29,7 +30,6 @@ import type {
     VideoSourceSpecification
 } from '../style-spec/types';
 import type Context from '../gl/context';
-import assert from "assert";
 
 type Coordinates = [[number, number], [number, number], [number, number], [number, number]];
 type ImageSourceTexture = {
@@ -305,7 +305,6 @@ class ImageSource<T extends 'image' | 'canvas' | 'video'= 'image'> extends Event
             return;
         }
 
-        // @ts-expect-error - TS2345 - Argument of type 'string' is not assignable to parameter of type '"Unknown" | "Style" | "Source" | "Tile" | "Glyphs" | "SpriteImage" | "SpriteJSON" | "Image" | "Model"'.
         this._imageRequest = getImage(this.map._requestManager.transformRequest(this.url, ResourceType.Image, this.customTags), (err, image) => {
             this._imageRequest = null;
             this._loaded = true;
@@ -702,7 +701,7 @@ class ImageSource<T extends 'image' | 'canvas' | 'video'= 'image'> extends Event
 
         if (this._dirty && !(this.texture instanceof UserManagedTexture)) {
             if (!this.texture) {
-                this.texture = new Texture(context, this.image, gl.RGBA);
+                this.texture = new Texture(context, this.image, gl.RGBA8);
                 this.texture.bind(gl.LINEAR, gl.CLAMP_TO_EDGE);
             } else {
                 this.texture.update(this.image);

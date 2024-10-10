@@ -1,4 +1,5 @@
 import Color from '../style-spec/util/color';
+
 import type Context from '../gl/context';
 import type {RenderColor} from "../style-spec/util/color";
 
@@ -11,8 +12,8 @@ export interface IUniform<T> {
     location: WebGLUniformLocation | null | undefined;
     current: T;
     initialized: boolean;
-    fetchUniformLocation(program: WebGLProgram, name: string): boolean;
-    set(program: WebGLProgram, name: string, v: T): void;
+    fetchUniformLocation: (program: WebGLProgram, name: string) => boolean;
+    set: (program: WebGLProgram, name: string, v: T) => void;
 }
 
 class Uniform<T> implements IUniform<T> {

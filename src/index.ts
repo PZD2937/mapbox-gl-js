@@ -1,8 +1,6 @@
 import {PerformanceUtils} from './util/performance';
-
 import assert from 'assert';
 import {supported, notSupportedReason} from '@mapbox/mapbox-gl-supported';
-
 import {version} from '../package.json';
 import {Map} from './ui/map';
 import NavigationControl from './ui/control/navigation_control';
@@ -30,6 +28,8 @@ import {FreeCameraOptions} from './ui/free_camera';
 import {getDracoUrl, setDracoUrl, setMeshoptUrl, getMeshoptUrl} from '../3d-style/util/loaders';
 import browser from './util/browser';
 
+import type {Class} from './types/class';
+
 // Explicit type re-exports
 export type * from './ui/events';
 export type * from './style-spec/types';
@@ -42,6 +42,8 @@ export type {PluginStatus} from './source/rtl_text_plugin';
 export type {Event, ErrorEvent} from './util/evented';
 export type {GeoJSONFeature} from './util/vectortile_to_geojson';
 export type {PaddingOptions} from './geo/edge_insets';
+export type {RequestParameters} from './util/ajax';
+export type {RequestTransformFunction, ResourceType} from './util/mapbox';
 export type {LngLatLike, LngLatBoundsLike} from './geo/lng_lat';
 
 export type {FeatureSelector} from './style/style';
@@ -218,7 +220,7 @@ const exported = {
      * @example
      * mapboxgl.clearStorage();
      */
-    clearStorage(callback?: (err?: Error | null | undefined) => void) {
+    clearStorage(callback?: (err?: Error | null) => void) {
         clearTileCache(callback);
     },
     /**
@@ -260,19 +262,19 @@ const exported = {
      *
      * mapboxgl.workerClass = MapboxGLWorker;
      */
-    get workerClass(): any {
+    get workerClass(): Class<Worker> {
         return WorkerClass.workerClass;
     },
 
-    set workerClass(klass: any) {
+    set workerClass(klass: Class<Worker>) {
         WorkerClass.workerClass = klass;
     },
 
-    get workerParams(): any {
+    get workerParams(): WorkerOptions {
         return WorkerClass.workerParams;
     },
 
-    set workerParams(params: any) {
+    set workerParams(params: WorkerOptions) {
         WorkerClass.workerParams = params;
     },
 

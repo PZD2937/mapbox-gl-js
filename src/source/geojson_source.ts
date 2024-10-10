@@ -1,5 +1,4 @@
 import {Event, ErrorEvent, Evented} from '../util/evented';
-
 import {extend} from '../util/util';
 import EXTENT from '../style-spec/data/extent';
 import {ResourceType} from '../util/ajax';
@@ -390,7 +389,6 @@ class GeoJSONSource extends Evented<SourceEvents> implements ISource {
         options.scope = this.scope;
         const data = this._data;
         if (typeof data === 'string') {
-            // @ts-expect-error - TS2345 - Argument of type 'string' is not assignable to parameter of type '"Unknown" | "Style" | "Source" | "Tile" | "Glyphs" | "SpriteImage" | "SpriteJSON" | "Image" | "Model"'.
             options.request = this.map._requestManager.transformRequest(browser.resolveURL(data), ResourceType.Source, this.customTags);
             options.request.collectResourceTiming = this._collectResourceTiming;
         } else {

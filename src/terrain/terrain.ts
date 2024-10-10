@@ -14,21 +14,14 @@ import assert from 'assert';
 import {vec3, mat4, vec4} from 'gl-matrix';
 import getWorkerPool from '../util/global_worker_pool';
 import Dispatcher from '../util/dispatcher';
-import GeoJSONSource from '../source/geojson_source';
 import ImageSource from '../source/image_source';
 import RasterTileSource from '../source/raster_tile_source';
 import VectorTileSource from '../source/vector_tile_source';
 import Color from '../style-spec/util/color';
-import type {Callback} from '../types/callback';
 import StencilMode from '../gl/stencil_mode';
 import {DepthStencilAttachment} from '../gl/value';
 import {drawTerrainRaster} from './draw_terrain_raster';
-import type RasterStyleLayer from '../style/style_layer/raster_style_layer';
-import type CustomStyleLayer from '../style/style_layer/custom_style_layer';
-import type LineStyleLayer from '../style/style_layer/line_style_layer';
-import type Program from '../render/program';
 import {Elevation} from './elevation';
-import Framebuffer from '../gl/framebuffer';
 import ColorMode from '../gl/color_mode';
 import DepthMode from '../gl/depth_mode';
 import CullFaceMode from '../gl/cull_face_mode';
@@ -38,11 +31,17 @@ import browser from '../util/browser';
 import {DrapeRenderMode} from '../style/terrain';
 import rasterFade from '../render/raster_fade';
 import {create as createSource} from '../source/source';
-import {RGBAImage, Float32Image} from '../util/image';
+import {Float32Image} from '../util/image';
 import {globeMetersToEcef} from '../geo/projection/globe_util';
 import {ZoomDependentExpression} from '../style-spec/expression/index';
 import {number as interpolate} from '../style-spec/util/interpolate';
 
+import type Framebuffer from '../gl/framebuffer';
+import type Program from '../render/program';
+import type LineStyleLayer from '../style/style_layer/line_style_layer';
+import type CustomStyleLayer from '../style/style_layer/custom_style_layer';
+import type RasterStyleLayer from '../style/style_layer/raster_style_layer';
+import type {Callback} from '../types/callback';
 import type {Map} from '../ui/map';
 import type Painter from '../render/painter';
 import type Style from '../style/style';
@@ -53,6 +52,7 @@ import type Context from '../gl/context';
 import type {UniformValues} from '../render/uniform_binding';
 import type Transform from '../geo/transform';
 import type {CanonicalTileID} from '../source/tile_id';
+import type HillshadeStyleLayer from 'src/style/style_layer/hillshade_style_layer';
 
 const GRID_DIM = 128;
 
@@ -686,23 +686,13 @@ export class Terrain extends Elevation {
         context.activeTexture.set(gl.TEXTURE2);
 
         const min = this._getLoadedAreaMinimum();
-
-        const getTextureParameters = () => {
-            const image = new Float32Image(
-                {width: 1, height: 1},
-                new Float32Array([min]));
-            return [gl.R32F, image];
-        };
-
-        const [internalFormat, image] = getTextureParameters();
+        const image = new Float32Image({width: 1, height: 1}, new Float32Array([min]));
 
         this._emptyDEMTextureDirty = false;
         let texture = this._emptyDEMTexture;
         if (!texture) {
-            // @ts-expect-error - TS2345 - Argument of type '33326 | Float32Image' is not assignable to parameter of type 'TextureImage'.
-            texture = this._emptyDEMTexture = new Texture(context, image, internalFormat, {premultiply: false});
+            texture = this._emptyDEMTexture = new Texture(context, image, gl.R32F, {premultiply: false});
         } else {
-            // @ts-expect-error - TS2345 - Argument of type '33326 | Float32Image' is not assignable to parameter of type 'TextureImage'.
             texture.update(image, {premultiply: false});
         }
         return texture;
@@ -896,11 +886,9 @@ export class Terrain extends Elevation {
                 const coords = (proxiedCoords as Array<OverscaledTileID>);
                 context.viewport.set([0, 0, fbo.fb.width, fbo.fb.height]);
                 if (currentStencilSource !== (sourceCache ? sourceCache.id : null)) {
-                    // @ts-expect-error - TS2345 - Argument of type 'void | SourceCache' is not assignable to parameter of type 'SourceCache'.
                     this._setupStencil(fbo, proxiedCoords, layer, sourceCache);
                     currentStencilSource = sourceCache ? sourceCache.id : null;
                 }
-                // @ts-expect-error - TS2345 - Argument of type 'void | SourceCache' is not assignable to parameter of type 'SourceCache'.
                 painter.renderLayer(painter, sourceCache, layer, coords);
             }
 
@@ -917,11 +905,9 @@ export class Terrain extends Elevation {
                     const coords = (proxiedCoords as Array<OverscaledTileID>);
                     context.viewport.set([0, 0, fbo.fb.width, fbo.fb.height]);
                     if (currentStencilSource !== (sourceCache ? sourceCache.id : null)) {
-                        // @ts-expect-error - TS2345 - Argument of type 'void | SourceCache' is not assignable to parameter of type 'SourceCache'.
                         this._setupStencil(fbo, proxiedCoords, layer, sourceCache);
                         currentStencilSource = sourceCache ? sourceCache.id : null;
                     }
-                    // @ts-expect-error - TS2345 - Argument of type 'void | SourceCache' is not assignable to parameter of type 'SourceCache'.
                     painter.renderLayer(painter, sourceCache, layer, coords);
                 }
             }
@@ -1037,7 +1023,7 @@ export class Terrain extends Elevation {
         const gl = context.gl;
         const bufferSize = this.drapeBufferSize;
         context.activeTexture.set(gl.TEXTURE0);
-        const tex = new Texture(context, {width: bufferSize[0], height: bufferSize[1], data: null}, gl.RGBA);
+        const tex = new Texture(context, {width: bufferSize[0], height: bufferSize[1], data: null}, gl.RGBA8);
         tex.bind(gl.LINEAR, gl.CLAMP_TO_EDGE);
         const fb = context.createFramebuffer(bufferSize[0], bufferSize[1], true, null);
         fb.colorAttachment.set(tex.texture);
@@ -1086,6 +1072,9 @@ export class Terrain extends Elevation {
         const isTransitioning = (id: string) => {
             const layer = this._style._mergedLayers[id];
             const isHidden = layer.isHidden(this.painter.transform.zoom);
+            if (layer.type === 'hillshade') {
+                return !isHidden && (layer as HillshadeStyleLayer).shouldRedrape();
+            }
             if (layer.type === 'custom') {
                 return !isHidden && (layer as CustomStyleLayer).shouldRedrape();
             }
@@ -1459,7 +1448,7 @@ export class Terrain extends Elevation {
             }
         }
         let hasOverlap = false;
-        const proxiesToSort = new Set();
+        const proxiesToSort = new Set<ProxiedTileID[]>();
         for (let i = 0; i < sourceCoords.length; i++) {
             const tile = sourceCache.getTile(sourceCoords[i]);
             if (!tile || !tile.hasData()) continue;
@@ -1484,7 +1473,6 @@ export class Terrain extends Elevation {
         this._sourceTilesOverlap[sourceCache.id] = hasOverlap;
         if (hasOverlap && this._debugParams.sortTilesHiZFirst) {
             for (const arr of proxiesToSort) {
-                // @ts-expect-error - TS2339 - Property 'sort' does not exist on type 'unknown'.
                 arr.sort((a, b) => {
                     return b.overscaledZ - a.overscaledZ;
                 });

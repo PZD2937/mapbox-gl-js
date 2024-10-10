@@ -1,5 +1,4 @@
 import ImageSource from './image_source';
-
 import Texture, {UserManagedTexture} from '../render/texture';
 import {ErrorEvent} from '../util/evented';
 import ValidationError from '../style-spec/error/validation_error';
@@ -205,7 +204,7 @@ class CanvasSource extends ImageSource<'canvas'> {
         const context = this.map.painter.context;
 
         if (!this.texture) {
-            this.texture = new Texture(context, this.canvas, context.gl.RGBA, {premultiply: true});
+            this.texture = new Texture(context, this.canvas, context.gl.RGBA8, {premultiply: true});
         } else if ((resize || this._playing) && !(this.texture instanceof UserManagedTexture)) {
             this.texture.update(this.canvas, {premultiply: true});
         }

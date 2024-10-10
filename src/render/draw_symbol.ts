@@ -1,12 +1,9 @@
 import Point from '@mapbox/point-geometry';
 import drawCollisionDebug from './draw_collision_debug';
-
 import SegmentVector from '../data/segment';
 import * as symbolProjection from '../symbol/projection';
 import * as symbolSize from '../symbol/symbol_size';
 import {mat4, vec3, vec4} from 'gl-matrix';
-import {OcclusionQuery} from '../gl/query';
-import {warnOnce} from '../util/util';
 const identityMat4 = mat4.create();
 import StencilMode from '../gl/stencil_mode';
 import DepthMode from '../gl/depth_mode';
@@ -15,34 +12,32 @@ import {addDynamicAttributes} from '../data/bucket/symbol_bucket';
 import {getAnchorAlignment, WritingMode} from '../symbol/shaping';
 import ONE_EM from '../symbol/one_em';
 import {evaluateVariableOffset} from '../symbol/symbol_layout';
-import Tile from '../source/tile';
-import type Transform from '../geo/transform';
 import {
     mercatorXfromLng,
     mercatorYfromLat
 } from '../geo/mercator_coordinate';
 import {globeToMercatorTransition} from '../geo/projection/globe_util';
-
 import {
-    symbolIconUniformValues,
-    symbolSDFUniformValues,
-    symbolTextAndIconUniformValues
+    symbolUniformValues
 } from './program/symbol_program';
 import {getSymbolTileProjectionMatrix} from '../geo/projection/projection_util';
+
+import type Tile from '../source/tile';
+import type Transform from '../geo/transform';
 import type Painter from './painter';
 import type SourceCache from '../source/source_cache';
 import type SymbolStyleLayer from '../style/style_layer/symbol_style_layer';
 import type SymbolBucket from '../data/bucket/symbol_bucket';
 import type {SymbolBuffers} from '../data/bucket/symbol_bucket';
-import Texture from '../render/texture';
-import ColorMode from '../gl/color_mode';
-import {OverscaledTileID} from '../source/tile_id';
+import type Texture from '../render/texture';
+import type ColorMode from '../gl/color_mode';
+import type {OverscaledTileID} from '../source/tile_id';
 import type {UniformValues} from './uniform_binding';
-import type {SymbolSDFUniformsType} from '../render/program/symbol_program';
+import type {SymbolUniformsType} from '../render/program/symbol_program';
 import type {CrossTileID, VariableOffset} from '../symbol/placement';
 import type {InterpolatedSize} from '../symbol/symbol_size';
+
 export default drawSymbols;
-import {occlusionUniformValues} from './program/occlusion_program';
 
 type SymbolTileRenderState = {
     segments: SegmentVector;
@@ -300,8 +295,8 @@ function drawLayerSymbols(
     const iconContrast = layer.paint.get('icon-color-contrast');
     const iconBrightnessMin = layer.paint.get('icon-color-brightness-min');
     const iconBrightnessMax = layer.paint.get('icon-color-brightness-max');
+    const elevationFromSea = layer.paint.get('symbol-elevation-reference') === 'sea';
 
-    const iconOccludedOpacityMultiplier = layer.paint.get('icon-occlusion-opacity').constantOr(0);
     const textOccludedOpacityMultiplier = layer.paint.get('text-occlusion-opacity').constantOr(0);
 
     const context = painter.context;
@@ -312,9 +307,6 @@ function drawLayerSymbols(
     const textRotateWithMap = textRotationAlignment === 'map';
     const iconPitchWithMap = iconPitchAlignment === 'map';
     const textPitchWithMap = textPitchAlignment === 'map';
-
-    const iconHasOcclusionOpacity = iconOccludedOpacityMultiplier !== 1;
-    const textHasOcclusionOpacity = textOccludedOpacityMultiplier !== 1;
 
     const hasSortKey = layer.layout.get('symbol-sort-key').constantOr(1) !== undefined;
     let sortFeaturesByKey = false;
@@ -406,10 +398,13 @@ function drawLayerSymbols(
                 baseDefines.push('COLOR_ADJUSTMENT');
             }
 
-            const programConfiguration = bucket.icon.programConfigurations.get(layer.id);
-            const program = painter.getOrCreateProgram(bucket.sdfIcons ? 'symbolSDF' : 'symbolIcon', {config: programConfiguration, defines: baseDefines});
+            if (bucket.sdfIcons) {
+                baseDefines.push('RENDER_SDF');
+            }
 
-            let uniformValues;
+            const programConfiguration = bucket.icon.programConfigurations.get(layer.id);
+            const program = painter.getOrCreateProgram('symbol', {config: programConfiguration, defines: baseDefines});
+
             const texSize = tile.imageAtlasTexture ? tile.imageAtlasTexture.size : [0, 0];
             const sizeData = bucket.iconSizeData;
             const size = symbolSize.evaluateSizeForZoom(sizeData, tr.zoom);
@@ -437,17 +432,10 @@ function drawLayerSymbols(
 
             const cameraUpVector = bucketIsGlobeProjection ? globeCameraUp : mercatorCameraUp;
 
-            if (bucket.sdfIcons && !bucket.iconsInText) {
-                uniformValues = symbolSDFUniformValues(sizeData.kind, size, rotateInShader, iconPitchWithMap, painter,
-                    // @ts-expect-error - TS2345 - Argument of type 'mat4' is not assignable to parameter of type 'Float32Array'.
-                    matrix, uLabelPlaneMatrix, uglCoordMatrix, false, texSize, true, coord, globeToMercator, mercatorCenter, invMatrix, cameraUpVector, bucket.getProjection());
-            } else {
-
-                const colorAdjustmentMatrix = layer.getColorAdjustmentMatrix(iconSaturation, iconContrast, iconBrightnessMin, iconBrightnessMax);
-                uniformValues = symbolIconUniformValues(sizeData.kind, size, rotateInShader, iconPitchWithMap, painter, matrix,
-                    // @ts-expect-error - TS2345 - Argument of type 'mat4' is not assignable to parameter of type 'Float32Array'.
-                    uLabelPlaneMatrix, uglCoordMatrix, false, texSize, coord, globeToMercator, mercatorCenter, invMatrix, cameraUpVector, bucket.getProjection(), colorAdjustmentMatrix, transitionProgress);
-            }
+            const colorAdjustmentMatrix = layer.getColorAdjustmentMatrix(iconSaturation, iconContrast, iconBrightnessMin, iconBrightnessMax);
+            const uniformValues = symbolUniformValues(sizeData.kind, size, rotateInShader, iconPitchWithMap, painter,
+                // @ts-expect-error - TS2345 - Argument of type 'mat4' is not assignable to parameter of type 'Float32Array'.
+                matrix, uLabelPlaneMatrix, uglCoordMatrix, elevationFromSea, false, texSize, [0, 0], true, coord, globeToMercator, mercatorCenter, invMatrix, cameraUpVector, bucket.getProjection(), colorAdjustmentMatrix, transitionProgress);
 
             const atlasTexture = tile.imageAtlasTexture ? tile.imageAtlasTexture : null;
 
@@ -502,10 +490,16 @@ function drawLayerSymbols(
                 baseDefines.push('Z_OFFSET');
             }
 
+            if (bucket.iconsInText) {
+                baseDefines.push('RENDER_TEXT_AND_SYMBOL');
+            }
+
+            baseDefines.push('RENDER_SDF');
+
             setOcclusionDefines(baseDefines);
 
             const programConfiguration = bucket.text.programConfigurations.get(layer.id);
-            const program = painter.getOrCreateProgram(bucket.iconsInText ? 'symbolTextAndIcon' : 'symbolSDF', {config: programConfiguration, defines: baseDefines});
+            const program = painter.getOrCreateProgram('symbol', {config: programConfiguration, defines: baseDefines});
 
             let texSizeIcon: [number, number] = [0, 0];
             let atlasTextureIcon: Texture | null = null;
@@ -549,17 +543,9 @@ function drawLayerSymbols(
 
             const cameraUpVector = bucketIsGlobeProjection ? globeCameraUp : mercatorCameraUp;
 
-            let uniformValues;
-
-            if (!bucket.iconsInText) {
-                uniformValues = symbolSDFUniformValues(sizeData.kind, size, rotateInShader, textPitchWithMap, painter,
-                    // @ts-expect-error - TS2345 - Argument of type 'mat4' is not assignable to parameter of type 'Float32Array'.
-                    matrix, uLabelPlaneMatrix, uglCoordMatrix, true, texSize, true, coord, globeToMercator, mercatorCenter, invMatrix, cameraUpVector, bucket.getProjection(), textOccludedOpacityMultiplier);
-            } else {
-                uniformValues = symbolTextAndIconUniformValues(sizeData.kind, size, rotateInShader, textPitchWithMap, painter,
-                    // @ts-expect-error - TS2345 - Argument of type 'mat4' is not assignable to parameter of type 'Float32Array'.
-                    matrix, uLabelPlaneMatrix, uglCoordMatrix, texSize, texSizeIcon, coord, globeToMercator, mercatorCenter, invMatrix, cameraUpVector, bucket.getProjection(), textOccludedOpacityMultiplier);
-            }
+            const uniformValues = symbolUniformValues(sizeData.kind, size, rotateInShader, textPitchWithMap, painter,
+                // @ts-expect-error - TS2345 - Argument of type 'mat4' is not assignable to parameter of type 'Float32Array'.
+                matrix, uLabelPlaneMatrix, uglCoordMatrix, elevationFromSea, true, texSize, texSizeIcon, true, coord, globeToMercator, mercatorCenter, invMatrix, cameraUpVector, bucket.getProjection(), textOccludedOpacityMultiplier);
 
             const atlasTexture = tile.glyphAtlasTexture ? tile.glyphAtlasTexture : null;
             const atlasInterpolation = gl.LINEAR;
@@ -678,13 +664,13 @@ function drawLayerSymbols(
         painter.uploadCommonLightUniforms(painter.context, state.program);
 
         if (state.hasHalo) {
-            const uniformValues = (state.uniformValues as UniformValues<SymbolSDFUniformsType>);
+            const uniformValues = (state.uniformValues as UniformValues<SymbolUniformsType>);
             uniformValues['u_is_halo'] = 1;
             drawSymbolElements(state.buffers, segmentState.segments, layer, painter, state.program, depthMode, stencilMode, colorMode, uniformValues, 2);
             uniformValues['u_is_halo'] = 0;
         } else {
             if (state.isSDF) {
-                const uniformValues = (state.uniformValues as UniformValues<SymbolSDFUniformsType>);
+                const uniformValues = (state.uniformValues as UniformValues<SymbolUniformsType>);
                 if (state.hasHalo) {
                     uniformValues['u_is_halo'] = 1;
                     drawSymbolElements(state.buffers, segmentState.segments, layer, painter, state.program, depthMode, stencilMode, colorMode, uniformValues, 1);
@@ -696,7 +682,7 @@ function drawLayerSymbols(
     }
 }
 
-function drawSymbolElements(buffers: SymbolBuffers, segments: SegmentVector, layer: SymbolStyleLayer, painter: Painter, program: any, depthMode: DepthMode, stencilMode: StencilMode, colorMode: ColorMode, uniformValues: UniformValues<SymbolSDFUniformsType>, instanceCount: number) {
+function drawSymbolElements(buffers: SymbolBuffers, segments: SegmentVector, layer: SymbolStyleLayer, painter: Painter, program: any, depthMode: DepthMode, stencilMode: StencilMode, colorMode: ColorMode, uniformValues: UniformValues<SymbolUniformsType>, instanceCount: number) {
     const context = painter.context;
     const gl = context.gl;
     const dynamicBuffers = [buffers.dynamicLayoutVertexBuffer, buffers.opacityVertexBuffer, buffers.iconTransitioningVertexBuffer, buffers.globeExtVertexBuffer, buffers.zOffsetVertexBuffer];

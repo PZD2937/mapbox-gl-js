@@ -1,15 +1,16 @@
 import {Uniform1i, Uniform1f, Uniform2f, Uniform3f, UniformMatrix4f} from '../uniform_binding';
 import pixelsToTileUnits from '../../source/pixels_to_tile_units';
+import {CanonicalTileID} from '../../source/tile_id';
+import {mat4} from 'gl-matrix';
+import {globeToMercatorTransition, globePixelsToTileUnits} from '../../geo/projection/globe_util';
+import EXTENT from '../../style-spec/data/extent';
 
 import type Context from '../../gl/context';
 import type Tile from '../../source/tile';
 import type {UniformValues} from '../uniform_binding';
 import type Painter from '../painter';
 import type HeatmapStyleLayer from '../../style/style_layer/heatmap_style_layer';
-import {CanonicalTileID, OverscaledTileID} from '../../source/tile_id';
-import {mat4} from 'gl-matrix';
-import {globeToMercatorTransition, globePixelsToTileUnits} from '../../geo/projection/globe_util';
-import EXTENT from '../../style-spec/data/extent';
+import type {OverscaledTileID} from '../../source/tile_id';
 
 export type HeatmapUniformsType = {
     ['u_extrude_scale']: Uniform1f;

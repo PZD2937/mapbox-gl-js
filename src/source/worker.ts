@@ -1,5 +1,4 @@
 import Actor from '../util/actor';
-
 import StyleLayerIndex from '../style/style_layer_index';
 import VectorTileWorkerSource from './vector_tile_worker_source';
 import RasterDEMTileWorkerSource from './raster_dem_tile_worker_source';
@@ -15,7 +14,6 @@ import {Event} from '../util/evented';
 import {getProjection} from '../geo/projection/index';
 
 import type {Class} from '../types/class';
-
 import type {
     WorkerSource,
     WorkerTileParameters,
@@ -26,7 +24,6 @@ import type {
     WorkerRasterArrayTileParameters,
     WorkerRasterArrayTileCallback
 } from '../source/worker_source';
-
 import type {WorkerGlobalScopeInterface} from '../util/web_worker';
 import type {Callback} from '../types/callback';
 import type {LayerSpecification, ProjectionSpecification} from '../style-spec/types';
@@ -309,7 +306,7 @@ export default class Worker {
         try {
             this.self.importScripts(params.url);
             callback();
-        } catch (e: any) {
+        } catch (e) {
             callback(e.toString());
         }
     }
@@ -423,7 +420,7 @@ export default class Worker {
         enforceCacheSizeLimit(limit);
     }
 
-    getWorkerPerformanceMetrics(mapId: string, params: any, callback: (error?: Error | null | undefined, result?: any | null | undefined) => void) {
+    getWorkerPerformanceMetrics(mapId: string, params: any, callback: (error?: Error, result?: any) => void) {
         callback(undefined, PerformanceUtils.getWorkerPerformanceMetrics());
     }
 }

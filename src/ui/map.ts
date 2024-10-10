@@ -29,16 +29,20 @@ import TaskQueue from '../util/task_queue';
 import webpSupported from '../util/webp_supported';
 import {PerformanceUtils, PerformanceMarkers} from '../util/performance';
 import {LivePerformanceMarkers, LivePerformanceUtils} from '../util/live_performance';
-import Marker from '../ui/marker';
-import Popup from '../ui/popup';
 import EasedVariable from '../util/eased_variable';
-import SourceCache from '../source/source_cache';
 import {GLOBE_ZOOM_THRESHOLD_MAX} from '../geo/projection/globe_constants';
 import {setCacheLimits} from '../util/tile_request_cache';
 import {Debug} from '../util/debug';
 import config from '../util/config';
 import {isFQID} from '../util/fqid';
+import defaultLocale from './default_locale';
+import {TrackedParameters} from '../tracked-parameters/tracked_parameters';
+import {TrackedParametersMock} from '../tracked-parameters/tracked_parameters_base';
+import {InteractionSet} from './interactions';
 
+import type Marker from '../ui/marker';
+import type Popup from '../ui/popup';
+import type SourceCache from '../source/source_cache';
 import type {MapEventType, MapEventOf} from './events';
 import type {PointLike} from '../types/point-like';
 import type {FeatureState} from '../style-spec/expression/index';
@@ -59,11 +63,12 @@ import type KeyboardHandler from './handler/keyboard';
 import type DoubleClickZoomHandler from './handler/shim/dblclick_zoom';
 import type TouchZoomRotateHandler from './handler/shim/touch_zoom_rotate';
 import type {TouchZoomRotateHandlerOptions} from './handler/shim/touch_zoom_rotate';
-import defaultLocale from './default_locale';
 import type {TaskID} from '../util/task_queue';
 import type {Cancelable} from '../types/cancelable';
 import type {
     LayerSpecification,
+    LayoutSpecification,
+    PaintSpecification,
     FilterSpecification,
     StyleSpecification,
     LightSpecification,
@@ -73,8 +78,6 @@ import type {
     FogSpecification,
     SourceSpecification,
     ProjectionSpecification,
-    PropertyValueSpecification,
-    TransitionSpecification,
     CameraSpecification,
     ImportSpecification,
     ConfigSpecification,
@@ -86,13 +89,11 @@ import type {EasingOptions} from './camera';
 import type {ContextOptions} from '../gl/context';
 import type {QueryRenderedFeaturesParams} from '../source/query_features';
 import type {GeoJSONFeature} from '../util/vectortile_to_geojson';
-
-import {TrackedParameters} from '../tracked-parameters/tracked_parameters';
-import {TrackedParametersMock} from '../tracked-parameters/tracked_parameters_base';
 import type {ITrackedParameters} from '../tracked-parameters/tracked_parameters_base';
 import type {Callback} from 'src/types/callback';
+import type {Interaction} from './interactions';
 
-export type ControlPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+export type ControlPosition = 'top-left' | 'top' | 'top-right' | 'right' | 'bottom-right' | 'bottom' | 'bottom-left' | 'left';
 /* eslint-disable no-use-before-define */
 export interface IControl {
     readonly onAdd: (map: Map) => HTMLElement;
@@ -413,7 +414,7 @@ export class Map extends Camera {
     _canvasContainer: HTMLElement;
     _controlContainer: HTMLElement;
     _controlPositions: {
-        [_: string]: HTMLElement;
+        [p in ControlPosition]?: HTMLElement;
     };
     _interactive?: boolean;
     _showTileBoundaries?: boolean;
@@ -481,6 +482,7 @@ export class Map extends Camera {
     _performanceMetricsCollection: boolean;
     _tessellationStep?: number;
     _precompilePrograms: boolean;
+    _interactions: InteractionSet;
 
     // `_useExplicitProjection` indicates that a projection is set by a call to map.setProjection()
     _useExplicitProjection: boolean;
@@ -763,6 +765,8 @@ export class Map extends Camera {
         this.on('dataloading', (event) => {
             this.fire(new Event(`${event.dataType}dataloading`, event));
         });
+
+        this._interactions = new InteractionSet(this);
     }
 
     /*
@@ -782,7 +786,8 @@ export class Map extends Camera {
      *
      * @param {IControl} control The {@link IControl} to add.
      * @param {string} [position] Position on the map to which the control will be added.
-     * Valid values are `'top-left'`, `'top-right'`, `'bottom-left'`, and `'bottom-right'`. Defaults to `'top-right'`.
+     * Valid values are `'top-left'`, `'top'`, `'top-right'`, `'right'`, `'bottom-right'`,
+     * `'bottom'`, `'bottom-left'`, and `'left'`. Defaults to `'top-right'`.
      * @returns {Map} Returns itself to allow for method chaining.
      * @example
      * // Add zoom and rotation controls to the map.
@@ -1220,13 +1225,11 @@ export class Map extends Camera {
      * @example
      * const language = map.getLanguage();
      */
-    getLanguage(): string | null | undefined | string[]     {
+    getLanguage(): string | null | undefined | string[] {
         return this._language;
     }
 
-    _parseLanguage(
-        language?: 'auto' | string | null | undefined | string[],
-    ): string | null | undefined | string[]     {
+    _parseLanguage(language?: 'auto' | (string & NonNullable<unknown>) | string[]): string | null | undefined | string[] {
         if (language === 'auto') return navigator.language;
         if (Array.isArray(language)) return language.length === 0 ?
             undefined :
@@ -1258,9 +1261,7 @@ export class Map extends Camera {
      * @example
      * map.setLanguage();
      */
-    setLanguage(
-        language?: 'auto' | string | null | undefined | string[],
-    ): this {
+    setLanguage(language?: 'auto' | (string & NonNullable<unknown>) | string[]): this {
         const newLanguage = this._parseLanguage(language);
         if (!this.style || newLanguage === this._language) return this;
         this._language = newLanguage;
@@ -1299,10 +1300,10 @@ export class Map extends Camera {
      *  If param is set to `undefined` or `null`, it will cause the map to fall back to the TileJSON's default worldview.
      * @returns {Map} Returns itself to allow for method chaining.
      * @example
-     * map.setWorldView('JP');
+     * map.setWorldview('JP');
      *
      * @example
-     * map.setWorldView();
+     * map.setWorldview();
      */
     setWorldview(worldview?: string | null): this {
         if (!this.style || worldview === this._worldview) return this;
@@ -1356,7 +1357,7 @@ export class Map extends Camera {
      * @see [Example: Display a web map using an alternate projection](https://docs.mapbox.com/mapbox-gl-js/example/map-projection/)
      * @see [Example: Use different map projections for web maps](https://docs.mapbox.com/mapbox-gl-js/example/projections/)
      */
-    setProjection(projection?: ProjectionSpecification | null | undefined | string): this {
+    setProjection(projection?: ProjectionSpecification | null | string): this {
         this._lazyInitEmptyStyle();
 
         if (!projection) {
@@ -1673,12 +1674,11 @@ export class Map extends Camera {
      * @see [Example: Create a hover effect](https://docs.mapbox.com/mapbox-gl-js/example/hover-styles/)
      * @see [Example: Display popup on click](https://docs.mapbox.com/mapbox-gl-js/example/popup-on-click/)
      */
-    on<T extends MapEventType>(type: T, listener: Listener<T>): this;
-    on<T extends MapEventType>(type: T, layerIds: string | string[], listener: Listener<T>): this;
-
-    on<T extends MapEventType>(type: T, layerIds: string | string[] | Listener<T>, listener?: Listener<T>): this {
+    on<T extends MapEventType | (string & {})>(type: T, listener: Listener<Extract<T, MapEventType>>): this;
+    on<T extends MapEventType | (string & {})>(type: T, layerIds: string | string[], listener: Listener<Extract<T, MapEventType>>): this;
+    on<T extends MapEventType | (string & {})>(type: T, layerIds: string | string[] | Listener<Extract<T, MapEventType>>, listener?: Listener<Extract<T, MapEventType>>): this {
         if (typeof layerIds === 'function' || listener === undefined) {
-            return super.on(type, layerIds as Listener<MapEventType>);
+            return super.on(type as MapEventType, layerIds as Listener<MapEventType>);
         }
 
         if (!Array.isArray(layerIds)) {
@@ -1693,7 +1693,7 @@ export class Map extends Camera {
             }
         }
 
-        const delegatedListener = this._createDelegatedListener(type, layerIds, listener);
+        const delegatedListener = this._createDelegatedListener(type as MapEventType, layerIds, listener);
 
         this._delegatedListeners = this._delegatedListeners || {};
         this._delegatedListeners[type] = this._delegatedListeners[type] || [];
@@ -1745,14 +1745,13 @@ export class Map extends Camera {
      * @see [Example: Animate the camera around a point with 3D terrain](https://docs.mapbox.com/mapbox-gl-js/example/free-camera-point/)
      * @see [Example: Play map locations as a slideshow](https://docs.mapbox.com/mapbox-gl-js/example/playback-locations/)
      */
-    once<T extends MapEventType>(type: T): Promise<MapEventOf<T>>;
-    once<T extends MapEventType>(type: T, listener: Listener<T>): this;
-    once<T extends MapEventType>(type: T, layerIds: string | string[]): Promise<MapEventOf<T>>;
-    once<T extends MapEventType>(type: T, layerIds: string | string[], listener: Listener<T>): this;
-
-    once<T extends MapEventType>(type: T, layerIds?: string | string[] | Listener<T>, listener?: Listener<T>): this | Promise<MapEventOf<T>> {
+    once<T extends MapEventType | (string & {})>(type: T): Promise<MapEventOf<Extract<T, MapEventType>>>;
+    once<T extends MapEventType | (string & {})>(type: T, listener: Listener<Extract<T, MapEventType>>): this;
+    once<T extends MapEventType | (string & {})>(type: T, layerIds: string | string[]): Promise<MapEventOf<Extract<T, MapEventType>>>;
+    once<T extends MapEventType | (string & {})>(type: T, layerIds: string | string[], listener: Listener<Extract<T, MapEventType>>): this;
+    once<T extends MapEventType | (string & {})>(type: T, layerIds?: string | string[] | Listener<Extract<T, MapEventType>>, listener?: Listener<Extract<T, MapEventType>>): this | Promise<MapEventOf<Extract<T, MapEventType>>> {
         if (typeof layerIds === 'function' || listener === undefined) {
-            return super.once(type, layerIds as Listener<T>);
+            return super.once(type as MapEventType, layerIds as Listener<MapEventType>);
         }
 
         if (!Array.isArray(layerIds)) {
@@ -1767,7 +1766,7 @@ export class Map extends Camera {
             }
         }
 
-        const delegatedListener = this._createDelegatedListener(type, layerIds, listener);
+        const delegatedListener = this._createDelegatedListener(type as MapEventType, layerIds, listener);
 
         for (const event in delegatedListener.delegates) {
             this.once(event as T, delegatedListener.delegates[event]);
@@ -1801,12 +1800,11 @@ export class Map extends Camera {
      * });
      * @see [Example: Create a draggable point](https://docs.mapbox.com/mapbox-gl-js/example/drag-a-point/)
      */
-    off<T extends MapEventType>(type: T, listener: Listener<T>): this;
-    off<T extends MapEventType>(type: T, layerIds: string | string[], listener: Listener<T>): this;
-
-    off<T extends MapEventType>(type: T, layerIds: string | string[] | Listener<T>, listener?: Listener<T>): this {
+    off<T extends MapEventType | (string & {})>(type: T, listener: Listener<Extract<T, MapEventType>>): this;
+    off<T extends MapEventType | (string & {})>(type: T, layerIds: string | string[], listener: Listener<Extract<T, MapEventType>>): this;
+    off<T extends MapEventType | (string & {})>(type: T, layerIds: string | string[] | Listener<Extract<T, MapEventType>>, listener?: Listener<Extract<T, MapEventType>>): this {
         if (typeof layerIds === 'function' || listener === undefined) {
-            return super.off(type, layerIds as Listener<T>);
+            return super.off(type as MapEventType, layerIds as Listener<MapEventType>);
         }
 
         const uniqLayerIds = new Set(Array.isArray(layerIds) ? layerIds : [layerIds]);
@@ -2032,6 +2030,44 @@ export class Map extends Camera {
         }
 
         return this.transform.isPointOnSurface(Point.convert(point));
+    }
+
+    /**
+     * Add an interaction — a named gesture handler of a given type.
+     *
+     * @param {string} id The ID of the interaction.
+     * @param {Object} interaction The interaction object with the following properties.
+     * @param {string} interaction.type The type of gesture to handle (e.g. 'click').
+     * @param {Object} [interaction.filter] Filter expression to narrow down the interaction to a subset of features under the pointer.
+     * @param {string[]} [interaction.layers] A list of layer IDs to narrow down features to.
+     * @param {Function} interaction.handler A handler function that will be invoked on the gesture and receive a `{feature, interaction}` object as a parameter.
+     * @returns {Map} Returns itself to allow for method chaining.
+     *
+     * @example
+     * map.addInteraction('poi-click', {
+     *   type: 'click',
+     *   handler(e) {
+     *     console.log(e.feature);
+     *   }
+     * });
+     */
+    addInteraction(id: string, interaction: Interaction) {
+        this._interactions.add(id, interaction);
+        return this;
+    }
+
+    /**
+     * Remove an interaction previously added with `addInteraction`.
+     *
+     * @param {string} id The id of the interaction to remove.
+     * @returns {Map} Returns itself to allow for method chaining.
+     *
+     * @example
+     * map.removeInteraction('poi-click');
+     */
+    removeInteraction(id: string) {
+        this._interactions.remove(id);
+        return this;
     }
 
     /** @section {Working with styles} */
@@ -2544,7 +2580,6 @@ export class Map extends Camera {
      * @see [Example: Add an icon to the map](https://www.mapbox.com/mapbox-gl-js/example/add-image/)
      */
     loadImage(url: string, callback: Callback<ImageBitmap | HTMLImageElement | ImageData>) {
-        // @ts-expect-error - TS2345 - Argument of type 'string' is not assignable to parameter of type '"Unknown" | "Style" | "Source" | "Tile" | "Glyphs" | "SpriteImage" | "SpriteJSON" | "Image" | "Model"'.
         getImage(this._requestManager.transformRequest(url, ResourceType.Image), (err, img) => {
             callback(err, img instanceof HTMLImageElement ? browser.getImageData(img) : img);
         });
@@ -3164,10 +3199,10 @@ export class Map extends Camera {
      * @see [Example: Adjust a layer's opacity](https://www.mapbox.com/mapbox-gl-js/example/adjust-layer-opacity/)
      * @see [Example: Create a draggable point](https://www.mapbox.com/mapbox-gl-js/example/drag-a-point/)
      */
-    setPaintProperty(
+    setPaintProperty<T extends keyof PaintSpecification>(
         layerId: string,
-        name: string,
-        value: any,
+        name: T,
+        value: PaintSpecification[T],
         options: StyleSetterOptions = {},
     ): this {
         if (!this._isValidId(layerId)) {
@@ -3187,7 +3222,7 @@ export class Map extends Camera {
      * @example
      * const paintProperty = map.getPaintProperty('mySymbolLayer', 'icon-color');
      */
-    getPaintProperty(layerId: string, name: string): void | TransitionSpecification | PropertyValueSpecification<unknown> {
+    getPaintProperty<T extends keyof PaintSpecification>(layerId: string, name: T): PaintSpecification[T] | undefined {
         if (!this._isValidId(layerId)) {
             return null;
         }
@@ -3208,10 +3243,10 @@ export class Map extends Camera {
      * map.setLayoutProperty('my-layer', 'visibility', 'none');
      * @see [Example: Show and hide layers](https://docs.mapbox.com/mapbox-gl-js/example/toggle-layers/)
      */
-    setLayoutProperty(
+    setLayoutProperty<T extends keyof LayoutSpecification>(
         layerId: string,
-        name: string,
-        value: any,
+        name: T,
+        value: LayoutSpecification[T],
         options: StyleSetterOptions = {},
     ): this {
         if (!this._isValidId(layerId)) {
@@ -3231,7 +3266,7 @@ export class Map extends Camera {
      * @example
      * const layoutProperty = map.getLayoutProperty('mySymbolLayer', 'icon-anchor');
      */
-    getLayoutProperty(layerId: string, name: string): PropertyValueSpecification<unknown> | null | undefined {
+    getLayoutProperty<T extends keyof LayoutSpecification>(layerId: string, name: T): LayoutSpecification[T] | undefined {
         if (!this._isValidId(layerId)) {
             return null;
         }
@@ -3306,7 +3341,7 @@ export class Map extends Camera {
      * @example
      * map.getConfigProperty('basemap', 'showLabels');
      */
-    getConfigProperty(importId: string, configName: string): any | null | undefined {
+    getConfigProperty(importId: string, configName: string): any {
         return this.style.getConfigProperty(importId, configName);
     }
 
@@ -3442,7 +3477,7 @@ export class Map extends Camera {
      * // update the exaggeration for the existing terrain
      * map.setTerrain({'exaggeration': 2});
      */
-    setTerrain(terrain?: TerrainSpecification): this {
+    setTerrain(terrain?: TerrainSpecification | null): this {
         this._lazyInitEmptyStyle();
         if (!terrain && this.transform.projection.requiresDraping) {
             this.style.setTerrainForDraping();
@@ -3481,7 +3516,7 @@ export class Map extends Camera {
      * });
      * @see [Example: Add fog to a map](https://docs.mapbox.com/mapbox-gl-js/example/add-fog/)
      */
-    setFog(fog?: FogSpecification): this {
+    setFog(fog?: FogSpecification | null): this {
         this._lazyInitEmptyStyle();
         this.style.setFog(fog);
         return this._update(true);
@@ -3764,7 +3799,7 @@ export class Map extends Camera {
 
         const controlContainer = this._controlContainer = DOM.create('div', 'mapboxgl-control-container', container);
         const positions = this._controlPositions = {};
-        ['top-left', 'top-right', 'bottom-left', 'bottom-right'].forEach((positionName) => {
+        ['top-left', 'top', 'top-right', 'right', 'bottom-right', 'bottom', 'bottom-left', 'left'].forEach((positionName) => {
             positions[positionName] = DOM.create('div', `mapboxgl-ctrl-${positionName}`, controlContainer);
         });
 

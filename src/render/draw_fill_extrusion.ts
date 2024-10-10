@@ -4,9 +4,7 @@ import ColorMode from '../gl/color_mode';
 import CullFaceMode from '../gl/cull_face_mode';
 import EXTENT from '../style-spec/data/extent';
 import FillExtrusionBucket, {
-    GroundEffect,
     fillExtrusionHeightLift,
-    PartData,
     ELEVATION_SCALE,
     ELEVATION_OFFSET,
     HIDDEN_BY_REPLACEMENT,
@@ -18,27 +16,29 @@ import {
     fillExtrusionGroundEffectUniformValues
 } from './program/fill_extrusion_program';
 import Point from '@mapbox/point-geometry';
-import {OverscaledTileID, neighborCoord} from '../source/tile_id';
+import {neighborCoord} from '../source/tile_id';
 import assert from 'assert';
 import {mercatorXfromLng, mercatorYfromLat} from '../geo/mercator_coordinate';
 import {globeToMercatorTransition} from '../geo/projection/globe_util';
 import Color from '../style-spec/util/color';
-import Context from '../gl/context';
-import {Terrain} from '../terrain/terrain';
-import Tile from '../source/tile';
 import {calculateGroundShadowFactor} from '../../3d-style/render/shadow_renderer';
 import {RGBAImage} from '../util/image';
 import Texture from './texture';
-import pixelsToTileUnits from '../source/pixels_to_tile_units';
-
-import type Painter from './painter';
-import type SourceCache from '../source/source_cache';
-import type FillExtrusionStyleLayer from '../style/style_layer/fill_extrusion_style_layer';
 import {Frustum} from '../util/primitives';
 import {mat4} from "gl-matrix";
 import {getCutoffParams} from './cutoff';
 import {ZoomDependentExpression} from '../style-spec/expression/index';
-import {warnOnce} from '../util/util';
+
+import type FillExtrusionStyleLayer from '../style/style_layer/fill_extrusion_style_layer';
+import type SourceCache from '../source/source_cache';
+import type Painter from './painter';
+import type Tile from '../source/tile';
+import type {Terrain} from '../terrain/terrain';
+import type Context from '../gl/context';
+import type {OverscaledTileID} from '../source/tile_id';
+import type {
+    GroundEffect,
+    PartData} from '../data/bucket/fill_extrusion_bucket';
 
 export default draw;
 
@@ -153,7 +153,6 @@ function draw(painter: Painter, source: SourceCache, layer: FillExtrusionStyleLa
 
                 if (!showOverdraw) {
                     // Mark the alpha channel with the DF values (that determine the intensity of the effects). No color is written.
-                    // @ts-expect-error - TS2345 - Argument of type '{ func: 519; mask: 255; }' is not assignable to parameter of type 'StencilTest'.
                     const stencilSdfPass = new StencilMode({func: gl.ALWAYS, mask: 0xFF}, 0xFF, 0xFF, gl.KEEP, gl.KEEP, gl.REPLACE);
                     const colorSdfPass = new ColorMode([gl.ONE, gl.ONE, gl.ONE, gl.ONE], Color.transparent, [false, false, false, true], gl.MIN);
 
@@ -187,7 +186,6 @@ function draw(painter: Painter, source: SourceCache, layer: FillExtrusionStyleLa
 
                     {
                         // Mark the alpha channel with the DF values (that determine the intensity of the effects). No color is written.
-                        // @ts-expect-error - TS2345 - Argument of type '{ func: 519; mask: 255; }' is not assignable to parameter of type 'StencilTest'.
                         const stencilSdfPass = new StencilMode({func: gl.ALWAYS, mask: 0xFF}, 0xFF, 0xFF, gl.KEEP, gl.KEEP, gl.REPLACE);
                         const colorSdfPass = new ColorMode([gl.ONE, gl.ONE, gl.ONE, gl.ONE], Color.transparent, [false, false, false, true], gl.MIN);
 
@@ -227,7 +225,7 @@ function draw(painter: Painter, source: SourceCache, layer: FillExtrusionStyleLa
                         if (!framebufferCopyTexture || (framebufferCopyTexture && (framebufferCopyTexture.size[0] !== width || framebufferCopyTexture.size[1] !== height))) {
                             if (framebufferCopyTexture) framebufferCopyTexture.destroy();
                             framebufferCopyTexture = terrain.framebufferCopyTexture = new Texture(context,
-                                new RGBAImage({width, height}), gl.RGBA);
+                                new RGBAImage({width, height}), gl.RGBA8);
                         }
                         framebufferCopyTexture.bind(gl.LINEAR, gl.CLAMP_TO_EDGE);
                         gl.copyTexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 0, 0, width, height, 0);
@@ -287,7 +285,6 @@ function drawExtrusionTiles(painter: Painter, source: SourceCache, layer: FillEx
     const wallMode = layer.paint.get('fill-extrusion-line-width').constantOr(1.0) !== 0.0;
 
     const cutoffParams = getCutoffParams(painter, layer.paint.get('fill-extrusion-cutoff-fade-range'));
-    const emissiveStrength = layer.paint.get('fill-extrusion-emissive-strength');
     const baseDefines = ([] as any);
     if (isGlobeProjection) {
         baseDefines.push('PROJECTION_GLOBE_VIEW');
@@ -312,21 +309,6 @@ function drawExtrusionTiles(painter: Painter, source: SourceCache, layer: FillEx
     if (wallMode) {
         baseDefines.push('RENDER_WALL_MODE');
     }
-
-    const lineAlignmentValue = (() => {
-        const alignmentEnumValue = layer.paint.get('fill-extrusion-line-alignment');
-        switch (alignmentEnumValue) {
-        case 'inside':
-            return 1.0;
-        case 'outside':
-            return -1.0;
-        case 'center':
-            return 0.0;
-        default:
-            warnOnce(`Unsupported value for fill-extrusion-line-alignment: ${alignmentEnumValue}`);
-            return 0.0;
-        }
-    })();
 
     let singleCascadeDefines;
 
@@ -401,7 +383,7 @@ function drawExtrusionTiles(painter: Painter, source: SourceCache, layer: FillEx
             }
             const tileMatrix = shadowRenderer.calculateShadowPassMatrixFromTile(tile.tileID.toUnwrapped());
 
-            uniformValues = fillExtrusionDepthUniformValues(tileMatrix, roofEdgeRadius, lineAlignmentValue, lineWidthScale, verticalScale);
+            uniformValues = fillExtrusionDepthUniformValues(tileMatrix, roofEdgeRadius, lineWidthScale, verticalScale);
         } else {
             const matrix = painter.translatePosMatrix(
                 coord.expandedProjMatrix,
@@ -413,12 +395,12 @@ function drawExtrusionTiles(painter: Painter, source: SourceCache, layer: FillEx
             const invMatrix = tr.projection.createInversionMatrix(tr, coord.canonical);
             if (image) {
                 // @ts-expect-error - TS2345 - Argument of type 'unknown' is not assignable to parameter of type 'boolean'.
-                uniformValues = fillExtrusionPatternUniformValues(matrix, painter, shouldUseVerticalGradient, opacity, ao, roofEdgeRadius, lineAlignmentValue, lineWidthScale, coord,
+                uniformValues = fillExtrusionPatternUniformValues(matrix, painter, shouldUseVerticalGradient, opacity, ao, roofEdgeRadius, lineWidthScale, coord,
                     tile, heightLift, globeToMercator, mercatorCenter, invMatrix, floodLightColor, verticalScale);
             } else {
                 // @ts-expect-error - TS2345 - Argument of type 'unknown' is not assignable to parameter of type 'boolean'.
-                uniformValues = fillExtrusionUniformValues(matrix, painter, shouldUseVerticalGradient, opacity, ao, roofEdgeRadius, lineAlignmentValue, lineWidthScale, coord,
-                    heightLift, globeToMercator, mercatorCenter, invMatrix, floodLightColor, verticalScale, floodLightIntensity, groundShadowFactor, emissiveStrength);
+                uniformValues = fillExtrusionUniformValues(matrix, painter, shouldUseVerticalGradient, opacity, ao, roofEdgeRadius, lineWidthScale, coord,
+                    heightLift, globeToMercator, mercatorCenter, invMatrix, floodLightColor, verticalScale, floodLightIntensity, groundShadowFactor);
             }
         }
 
@@ -748,7 +730,7 @@ function updateBorders(context: Context, source: SourceCache, coord: OverscaledT
                 const saveIb = ib;
                 let count = 0;
                 while (true) {
-                    // Collect all parts overlapping parta on the edge, to make sure it is only one.
+                    // Collect all parts overlapping parts on the edge, to make sure it is only one.
                     assert(partB.borders);
                     const partBBorderRange = (partB.borders)[j];
                     if (partBBorderRange[0] > partABorderRange[1] - error) {
@@ -761,7 +743,8 @@ function updateBorders(context: Context, source: SourceCache, coord: OverscaledT
                     partB = nBucket.featuresOnBorder[b[ib]];
                 }
                 partB = nBucket.featuresOnBorder[b[saveIb]];
-                if (count > 1) {
+                let doReconcile = false;
+                if (count >= 1) {
                     // if it can be concluded that it is the piece of the same feature,
                     // use it, even following features (inner details) overlap on border edge.
                     assert(partB.borders);
@@ -769,6 +752,9 @@ function updateBorders(context: Context, source: SourceCache, coord: OverscaledT
                     if (Math.abs(partABorderRange[0] - partBBorderRange[0]) < error &&
                         Math.abs(partABorderRange[1] - partBBorderRange[1]) < error) {
                         count = 1;
+                        // In some cases count could be 1 but a different feature, here we make sure
+                        // we are reconciling the same feature
+                        doReconcile = true;
                         ib = saveIb + 1;
                     }
                 } else if (count === 0) {
@@ -778,7 +764,7 @@ function updateBorders(context: Context, source: SourceCache, coord: OverscaledT
                 }
 
                 const centroidB = nBucket.centroidData[partB.centroidDataIndex];
-                if (reconcileReplacementState && count === 1) {
+                if (reconcileReplacementState && doReconcile) {
                     reconcileReplacement(centroidA, centroidB);
                 }
 

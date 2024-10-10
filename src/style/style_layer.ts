@@ -1,7 +1,6 @@
 import {endsWith, filterObject} from '../util/util';
-
 import {Evented} from '../util/evented';
-import {Layout, Transitionable, Transitioning, Properties, PossiblyEvaluated, PossiblyEvaluatedPropertyValue} from './properties';
+import {Layout, Transitionable, PossiblyEvaluated, PossiblyEvaluatedPropertyValue} from './properties';
 import {supportsPropertyExpression} from '../style-spec/util/properties';
 import featureFilter from '../style-spec/feature_filter/index';
 import {makeFQID} from '../util/fqid';
@@ -10,13 +9,14 @@ import type {FeatureState} from '../style-spec/expression/index';
 import type {Bucket} from '../data/bucket';
 import type Point from '@mapbox/point-geometry';
 import type {FeatureFilter, FilterExpression} from '../style-spec/feature_filter/index';
-import type {TransitionParameters, PropertyValue, ConfigOptions} from './properties';
+import type {TransitionParameters, PropertyValue, ConfigOptions, Transitioning, Properties} from './properties';
 import type EvaluationParameters from './evaluation_parameters';
 import type Transform from '../geo/transform';
 import type {
     LayerSpecification,
+    LayoutSpecification,
+    PaintSpecification,
     FilterSpecification,
-    TransitionSpecification,
     PropertyValueSpecification
 } from '../style-spec/types';
 import type {CustomLayerInterface} from './style_layer/custom_style_layer';
@@ -112,10 +112,10 @@ class StyleLayer extends Evented {
             this._transitionablePaint = new Transitionable(properties.paint, this.scope, options);
 
             for (const property in layer.paint) {
-                this.setPaintProperty(property, layer.paint[property]);
+                this.setPaintProperty(property as keyof PaintSpecification, layer.paint[property]);
             }
             for (const property in layer.layout) {
-                this.setLayoutProperty(property, layer.layout[property]);
+                this.setLayoutProperty(property as keyof LayoutSpecification, layer.layout[property]);
             }
             this.configDependencies = new Set([...this.configDependencies, ...this._transitionablePaint.configDependencies]);
 
@@ -131,19 +131,21 @@ class StyleLayer extends Evented {
     onRemove(_map: MapboxMap): void {}
 
     isDraped(_sourceCache?: SourceCache): boolean {
-        return drapedLayers.has(this.type);
+        return !this.is3D() && drapedLayers.has(this.type);
     }
 
-    getLayoutProperty(name: string): PropertyValueSpecification<unknown> {
+    getLayoutProperty<T extends keyof LayoutSpecification>(name: T): LayoutSpecification[T] | undefined {
         if (name === 'visibility') {
+            // @ts-expect-error - TS2590 - Expression produces a union type that is too complex to represent.
             return this.visibility;
         }
 
         return this._unevaluatedLayout.getValue(name);
     }
 
-    setLayoutProperty(name: string, value: any) {
+    setLayoutProperty<T extends keyof LayoutSpecification>(name: string, value: LayoutSpecification[T]): void {
         if (this.type === 'custom' && name === 'visibility') {
+            // @ts-expect-error - TS2590 - Expression produces a union type that is too complex to represent.
             this.visibility = value;
             return;
         }
@@ -165,15 +167,15 @@ class StyleLayer extends Evented {
         this.visibility = this._unevaluatedLayout._values.visibility.possiblyEvaluate({zoom: 0});
     }
 
-    getPaintProperty(name: string): void | TransitionSpecification | PropertyValueSpecification<unknown> {
+    getPaintProperty<T extends keyof PaintSpecification>(name: T): PaintSpecification[T] | undefined {
         if (endsWith(name, TRANSITION_SUFFIX)) {
-            return this._transitionablePaint.getTransition(name.slice(0, -TRANSITION_SUFFIX.length));
+            return this._transitionablePaint.getTransition(name.slice(0, -TRANSITION_SUFFIX.length)) as PaintSpecification[T];
         } else {
-            return this._transitionablePaint.getValue(name);
+            return this._transitionablePaint.getValue(name) as PaintSpecification[T];
         }
     }
 
-    setPaintProperty(name: string, value: unknown): boolean {
+    setPaintProperty<T extends keyof PaintSpecification>(name: T, value: PaintSpecification[T]): boolean {
         const paint = this._transitionablePaint;
         const specProps = paint._properties.properties;
 
@@ -192,7 +194,7 @@ class StyleLayer extends Evented {
         const wasDataDriven = transitionable.value.isDataDriven();
         const oldValue = transitionable.value;
 
-        paint.setValue(name, value);
+        paint.setValue(name, value as PropertyValueSpecification<unknown>);
         this.configDependencies = new Set([...this.configDependencies, ...paint.configDependencies]);
         this._handleSpecialPaintPropertyUpdate(name);
 
@@ -326,9 +328,9 @@ class StyleLayer extends Evented {
         return false;
     }
 
-    compileFilter() {
+    compileFilter(options?: ConfigOptions | null) {
         if (!this._filterCompiled) {
-            this._featureFilter = featureFilter(this.filter);
+            this._featureFilter = featureFilter(this.filter, this.scope, options);
             this._filterCompiled = true;
         }
     }

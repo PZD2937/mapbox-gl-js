@@ -6,32 +6,32 @@ import {
     includeMap,
 } from '../shaders/shaders';
 // import assert from 'assert';
-import ProgramConfiguration from '../data/program_configuration';
 import VertexArrayObject from './vertex_array_object';
-import Context from '../gl/context';
 import {terrainUniforms, globeUniforms} from '../terrain/terrain';
-import type {TerrainUniformsType, GlobeUniformsType} from '../terrain/terrain';
 import {fogUniforms} from './fog';
-import type {FogUniformsType} from './fog';
 import {cutoffUniforms} from './cutoff';
-import type {CutoffUniformsType} from './cutoff';
 import {lightsUniforms} from '../../3d-style/render/lights';
-import type {LightsUniformsType} from '../../3d-style/render/lights';
 import {shadowUniforms} from '../../3d-style/render/shadow_uniforms';
-import type {ShadowUniformsType} from '../../3d-style/render/shadow_uniforms';
-
-import type SegmentVector from '../data/segment';
-import type VertexBuffer from '../gl/vertex_buffer';
-import IndexBuffer from '../gl/index_buffer';
 import DepthMode from '../gl/depth_mode';
 import StencilMode from '../gl/stencil_mode';
 import ColorMode from '../gl/color_mode';
+import Color from '../style-spec/util/color';
+
+import type ProgramConfiguration from '../data/program_configuration';
+import type Context from '../gl/context';
+import type {TerrainUniformsType, GlobeUniformsType} from '../terrain/terrain';
+import type {FogUniformsType} from './fog';
+import type {CutoffUniformsType} from './cutoff';
+import type {LightsUniformsType} from '../../3d-style/render/lights';
+import type {ShadowUniformsType} from '../../3d-style/render/shadow_uniforms';
+import type SegmentVector from '../data/segment';
+import type VertexBuffer from '../gl/vertex_buffer';
+import type IndexBuffer from '../gl/index_buffer';
 import type CullFaceMode from '../gl/cull_face_mode';
 import type {UniformBindings, UniformValues} from './uniform_binding';
 import type {BinderUniform} from '../data/program_configuration';
 import type Painter from './painter';
 import type {Segment} from "../data/segment";
-import Color from '../style-spec/util/color';
 
 export type DrawMode = WebGL2RenderingContext['POINTS'] | WebGL2RenderingContext['LINES'] | WebGL2RenderingContext['TRIANGLES'] | WebGL2RenderingContext['LINE_STRIP'];
 
@@ -55,7 +55,7 @@ const debugWireframe3DLayerProgramNames = [
     "stars",
     "fillExtrusion",  "fillExtrusionGroundEffect",
     "model",
-    "symbolSDF", "symbolIcon", "symbolTextAndIcon"];
+    "symbol"];
 
 class Program<Us extends UniformBindings> {
     program: WebGLProgram;
@@ -77,7 +77,7 @@ class Program<Us extends UniformBindings> {
     configuration: ProgramConfiguration | null | undefined;
     fixedDefines: string[];
 
-    static cacheKey<Us extends UniformBindings>(
+    static cacheKey(
         source: ShaderSource,
         name: string,
         defines: string[],

@@ -8,7 +8,6 @@ import {
     iconTransitioningAttributes,
     zOffsetAttributes
 } from './symbol_attributes';
-
 import {SymbolLayoutArray,
     SymbolGlobeExtArray,
     SymbolDynamicLayoutArray,
@@ -23,7 +22,6 @@ import {SymbolLayoutArray,
     SymbolIconTransitioningArray,
     ZOffsetVertexArray
 } from '../array_types';
-
 import ONE_EM from '../../symbol/one_em';
 import * as symbolSize from '../../symbol/symbol_size';
 import Point from '@mapbox/point-geometry';
@@ -39,7 +37,6 @@ import toEvaluationFeature from '../evaluation_feature';
 import {VectorTileFeature} from '@mapbox/vector-tile';
 const vectorTileFeatureTypes = VectorTileFeature.types;
 import {verticalizedCharacterMap} from '../../util/verticalize_punctuation';
-import Anchor from '../../symbol/anchor';
 import {getSizeData} from '../../symbol/symbol_size';
 import {MAX_PACKED_SIZE} from '../../symbol/symbol_layout';
 import {register} from '../../util/web_worker_transfer';
@@ -52,10 +49,11 @@ import {tileCoordToECEF} from '../../geo/projection/globe_util';
 import {getProjection} from '../../geo/projection/index';
 import {mat4, vec3} from 'gl-matrix';
 import assert from 'assert';
-import {ReplacementSource, regionsEquals} from '../../../3d-style/source/replacement_source';
+import {regionsEquals} from '../../../3d-style/source/replacement_source';
 
+import type Anchor from '../../symbol/anchor';
+import type {ReplacementSource} from '../../../3d-style/source/replacement_source';
 import type SymbolStyleLayer from '../../style/style_layer/symbol_style_layer';
-
 import type {Class} from '../../types/class';
 import type {ProjectionSpecification} from '../../style-spec/types';
 import type Projection from '../../geo/projection/projection';
@@ -77,6 +75,8 @@ import type {FeatureStates} from '../../source/source_state';
 import type {TileTransform} from '../../geo/projection/tile_transform';
 import type {TileFootprint} from '../../../3d-style/util/conflation';
 import type {LUT} from '../../util/lut';
+import type {SpritePositions} from '../../util/image';
+import type {VectorTileLayer} from '@mapbox/vector-tile';
 
 export type SingleCollisionBox = {
     x1: number;
@@ -92,11 +92,6 @@ export type SingleCollisionBox = {
     elevation?: number;
     tileID?: OverscaledTileID;
 };
-
-import type {SpritePositions} from '../../util/image';
-import type {VectorTileLayer} from '@mapbox/vector-tile';
-
-import {clamp} from '../../util/util';
 
 export type CollisionArrays = {
     textBox?: SingleCollisionBox;
@@ -117,7 +112,7 @@ export type SymbolFeature = {
     sourceLayerIndex: number;
     geometry: Array<Array<Point>>;
     properties: any;
-    type: 'Point' | 'LineString' | 'Polygon';
+    type: 'Unknown' | 'Point' | 'LineString' | 'Polygon';
     id?: any;
 };
 
@@ -511,8 +506,12 @@ class SymbolBucket implements Bucket {
     }
 
     createArrays() {
-        this.text = new SymbolBuffers(new ProgramConfigurationSet(this.layers, {zoom: this.zoom, lut: this.lut}, (property) => /^text/.test(property)));
-        this.icon = new SymbolBuffers(new ProgramConfigurationSet(this.layers, {zoom: this.zoom, lut: this.lut}, (property) => /^icon/.test(property)));
+        this.text = new SymbolBuffers(new ProgramConfigurationSet(this.layers, {zoom: this.zoom, lut: this.lut}, (property) => {
+            return property.startsWith('text') || property.startsWith('symbol');
+        }));
+        this.icon = new SymbolBuffers(new ProgramConfigurationSet(this.layers, {zoom: this.zoom, lut: this.lut}, (property) => {
+            return property.startsWith('icon') || property.startsWith('symbol');
+        }));
 
         this.glyphOffsetArray = new GlyphOffsetArray();
         this.lineVertexArray = new SymbolLineVertexArray();
@@ -598,7 +597,6 @@ class SymbolBucket implements Bucket {
                 continue;
             }
 
-            // @ts-expect-error - TS2345 - Argument of type 'VectorTileFeature' is not assignable to parameter of type 'FeatureWithGeometry'.
             if (!needGeometry) evaluationFeature.geometry = loadGeometry(feature, canonical, tileTransform);
 
             if (isGlobe && feature.type !== 1 && canonical.z <= 5) {
@@ -669,7 +667,6 @@ class SymbolBucket implements Bucket {
                 sourceLayerIndex,
                 geometry: evaluationFeature.geometry,
                 properties: feature.properties,
-                // @ts-expect-error - TS2322 - Type '"Polygon" | "Point" | "LineString" | "Unknown"' is not assignable to type '"Polygon" | "Point" | "LineString"'.
                 type: vectorTileFeatureTypes[feature.type],
                 sortKey
             };
@@ -958,7 +955,7 @@ class SymbolBucket implements Bucket {
         const symbolTileAnchorY = symbolInstance.tileAnchorY;
 
         for (let i = 0; i < 4; i++) {
-            arrays.collisionVertexArray.emplaceBack(0, 0, 0, 0);
+            arrays.collisionVertexArray.emplaceBack(0, 0, 0, 0, 0, 0);
         }
 
         this._commitDebugCollisionVertexUpdate(arrays.collisionVertexArrayExt, scale, box.padding, symbolInstance.zOffset);

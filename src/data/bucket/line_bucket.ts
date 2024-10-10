@@ -4,8 +4,7 @@ import {
     LinePatternLayoutArray,
     ZOffsetVertexArray,
 } from '../array_types';
-
-import {members as layoutAttributes} from './line_attributes';
+import {members as layoutAttributes, zOffsetAttributes} from './line_attributes';
 import {members as layoutAttributesExt} from './line_attributes_ext';
 import {members as layoutAttributesPattern} from './line_attributes_pattern';
 import SegmentVector from '../segment';
@@ -19,16 +18,16 @@ import {hasPattern, addPatternDependencies} from './pattern_bucket_features';
 import loadGeometry from '../load_geometry';
 import toEvaluationFeature from '../evaluation_feature';
 import EvaluationParameters from '../../style/evaluation_parameters';
-import {zOffsetAttributes} from './symbol_attributes';
 import assert from 'assert';
-
+import {Point4D, clipLine} from '../../util/polygon_clipping';
+import {warnOnce} from '../../util/util';
 // Import LineAtlas as a module with side effects to ensure
 // it's registered as a serializable class on the main thread
 import '../../render/line_atlas';
 
 import type {ProjectionSpecification} from '../../style-spec/types';
 import type {CanonicalTileID, UnwrappedTileID} from '../../source/tile_id';
-import Point from "@mapbox/point-geometry";
+import type Point from "@mapbox/point-geometry";
 import type {
     Bucket,
     BucketParameters,
@@ -48,8 +47,6 @@ import type LineAtlas from '../../render/line_atlas';
 import type {TileTransform} from '../../geo/projection/tile_transform';
 import type {VectorTileLayer} from '@mapbox/vector-tile';
 import type {TileFootprint} from '../../../3d-style/util/conflation';
-import {Point4D, clipLine} from '../../util/polygon_clipping';
-import {warnOnce} from '../../util/util';
 
 // NOTE ON EXTRUDE SCALE:
 // scale the extrusion vector so that the normal length is this value.
@@ -207,11 +204,9 @@ class LineBucket implements Bucket {
             const bucketFeature: BucketFeature = {
                 id,
                 properties: feature.properties,
-                // @ts-expect-error - TS2322 - Type '0 | 2 | 1 | 3' is not assignable to type '2 | 1 | 3'.
                 type: feature.type,
                 sourceLayerIndex,
                 index,
-                // @ts-expect-error - TS2345 - Argument of type 'VectorTileFeature' is not assignable to parameter of type 'FeatureWithGeometry'.
                 geometry: needGeometry ? evaluationFeature.geometry : loadGeometry(feature, canonical, tileTransform),
                 patterns: {},
                 sortKey

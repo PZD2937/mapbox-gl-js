@@ -1,11 +1,11 @@
 import StyleLayer from '../style_layer';
 import {getLayoutProperties, getPaintProperties} from './sky_style_layer_properties';
-import {Transitionable, Transitioning, PossiblyEvaluated} from '../properties';
 import {renderColorRamp} from '../../util/color_ramp';
 import {warnOnce, degToRad} from '../../util/util';
 import {vec3, quat} from 'gl-matrix';
 import assert from 'assert';
 
+import type {Transitionable, Transitioning, PossiblyEvaluated, ConfigOptions} from '../properties';
 import type {PaintProps} from './sky_style_layer_properties';
 import type Texture from '../../render/texture';
 import type Painter from '../../render/painter';
@@ -14,7 +14,6 @@ import type Framebuffer from '../../gl/framebuffer';
 import type {RGBAImage} from '../../util/image';
 import type SkyboxGeometry from '../../render/skybox_geometry';
 import type {Position} from '../../util/util';
-import type {ConfigOptions} from '../properties';
 import type {LUT} from "../../util/lut";
 
 function getCelestialDirection(azimuth: number, altitude: number, leftHanded: boolean): [number, number, number] {

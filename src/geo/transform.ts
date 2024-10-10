@@ -7,7 +7,7 @@ import {wrap, clamp, pick, radToDeg, degToRad, getAABBPointSquareDist, furthestT
 import {number as interpolate} from '../style-spec/util/interpolate';
 import EXTENT from '../style-spec/data/extent';
 import {vec4, mat4, mat2, vec3, quat} from 'gl-matrix';
-import {Frustum, FrustumCorners, Ray, Aabb} from '../util/primitives';
+import {Frustum, FrustumCorners, Ray} from '../util/primitives';
 import EdgeInsets from './edge_insets';
 import {FreeCamera, FreeCameraOptions, orientationFromFrame} from '../ui/free_camera';
 import assert from 'assert';
@@ -26,6 +26,7 @@ import {
 } from '../geo/projection/globe_util';
 import {projectClamped} from '../symbol/projection';
 
+import type {Aabb} from '../util/primitives';
 import type Projection from '../geo/projection/projection';
 import type {Elevation} from '../terrain/elevation';
 import type {PaddingOptions} from './edge_insets';
@@ -1117,7 +1118,6 @@ class Transform {
         let result = [];
         const maxZoom = z;
         const overscaledZ = options.reparseOverscaled ? actualZ : z;
-        const square = (a: number) => a * a;
         const cameraHeight = (cameraAltitude - this._centerAltitude) * meterToTile; // in tile coordinates.
 
         const getAABBFromElevation = (it: RootTile) => {
@@ -2309,8 +2309,7 @@ class Transform {
             const mc = this.locationCoordinate(this.center);
             const adjustments = mat4.identity([] as any);
             mat4.translate(adjustments, adjustments, [mc.x * this.worldSize, mc.y * this.worldSize, 0]);
-            // @ts-expect-error - TS2345 - Argument of type 'number[]' is not assignable to parameter of type 'ReadonlyMat4'.
-            mat4.multiply(adjustments, adjustments, getProjectionAdjustments(this));
+            mat4.multiply(adjustments, adjustments, getProjectionAdjustments(this) as mat4);
             mat4.translate(adjustments, adjustments, [-mc.x * this.worldSize, -mc.y * this.worldSize, 0]);
             mat4.multiply(m, m, adjustments);
             // @ts-expect-error - TS2345 - Argument of type 'number[] | Float32Array' is not assignable to parameter of type 'mat4'.

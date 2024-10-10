@@ -1,7 +1,5 @@
 import {modelUniformValues, modelDepthUniformValues} from './program/model_program';
 import {ModelTraits, DefaultModelScale} from '../data/model';
-
-import Transform from '../../src/geo/transform';
 import EXTENT from '../../src/style-spec/data/extent';
 import StencilMode from '../../src/gl/stencil_mode';
 import ColorMode from '../../src/gl/color_mode';
@@ -12,20 +10,20 @@ import {getMetersPerPixelAtLatitude, mercatorZfromAltitude} from '../../src/geo/
 import TextureSlots from './texture_slots';
 import {convertModelMatrixForGlobe} from '../util/model_util';
 import {clamp, warnOnce} from '../../src/util/util';
-import ModelBucket from '../data/bucket/model_bucket';
 import assert from 'assert';
 import {DEMSampler} from '../../src/terrain/elevation';
-import {OverscaledTileID} from '../../src/source/tile_id';
 import {Aabb} from '../../src/util/primitives';
 import {getCutoffParams} from '../../src/render/cutoff';
 import {FOG_OPACITY_THRESHOLD} from '../../src/style/fog_helpers';
 import {ZoomDependentExpression} from '../../src/style-spec/expression/index';
-import {Tiled3dModelFeature} from '../data/bucket/tiled_3d_model_bucket';
+import {Texture3D} from '../../src/render/texture';
+import {pointInFootprint} from '../../3d-style/source/replacement_source';
+import Point from '@mapbox/point-geometry';
 
-import type ModelSource from '../source/model_source';
-import type Tiled3DModelSource from '../source/tiled_3d_model_source';
-import type GeoJSONSource from '../../src/source/geojson_source';
-import type VectorTileSource from '../../src/source/vector_tile_source';
+import type Transform from '../../src/geo/transform';
+import type ModelBucket from '../data/bucket/model_bucket';
+import type {OverscaledTileID} from '../../src/source/tile_id';
+import type {Tiled3dModelFeature} from '../data/bucket/tiled_3d_model_bucket';
 import type Tiled3dModelBucket from '../data/bucket/tiled_3d_model_bucket';
 import type Painter from '../../src/render/painter';
 import type {CreateProgramParams} from '../../src/render/painter';
@@ -35,7 +33,6 @@ import type {Mesh, Node, ModelTexture} from '../data/model';
 import type {DynamicDefinesType} from '../../src/render/program/program_uniforms';
 import type VertexBuffer from '../../src/gl/vertex_buffer';
 import type {CutoffParams} from '../../src/render/cutoff';
-import {Texture3D} from '../../src/render/texture';
 import type {LUT} from "../../src/util/lut";
 import type EvaluationParameters from '../../src/style/evaluation_parameters';
 
@@ -113,7 +110,7 @@ function setupMeshDraw(definesValues: Array<string>, dynamicBuffers: Array<Verte
     setupTexture(emissionTexture, 'HAS_TEXTURE_u_emissionTexture', TextureSlots.Emission);
     if (lut) {
         if (!lut.texture) {
-            lut.texture = new Texture3D(painter.context, lut.image, [lut.image.height, lut.image.height, lut.image.height], context.gl.RGBA);
+            lut.texture = new Texture3D(painter.context, lut.image, [lut.image.height, lut.image.height, lut.image.height], context.gl.RGBA8);
         }
         context.activeTexture.set(context.gl.TEXTURE0 + TextureSlots.LUT);
         if (lut.texture) {
@@ -772,13 +769,13 @@ function drawBatchedModels(painter: Painter, source: SourceCache, layer: ModelSt
 
     const mercCameraPos = painter.transform.getFreeCameraOptions().position;
     const cameraPos = vec3.scale([] as any, [mercCameraPos.x, mercCameraPos.y, mercCameraPos.z], painter.transform.worldSize);
-    vec3.negate(cameraPos, cameraPos);
+    const negCameraPos = vec3.negate([] as any, cameraPos);
     // compute model parameters matrices
     const negCameraPosMatrix = mat4.identity([] as any);
     const metersPerPixel = getMetersPerPixelAtLatitude(tr.center.lat, tr.zoom);
     const pixelsPerMeter = 1.0 / metersPerPixel;
     const zScaleMatrix = mat4.fromScaling([] as any, [1.0, 1.0, pixelsPerMeter]);
-    mat4.translate(negCameraPosMatrix, negCameraPosMatrix, cameraPos);
+    mat4.translate(negCameraPosMatrix, negCameraPosMatrix, negCameraPos);
     const layerOpacity = layer.paint.get('model-opacity');
 
     const depthModeRW = new DepthMode(context.gl.LEQUAL, DepthMode.ReadWrite, painter.depthRangeFor3D);
@@ -807,6 +804,10 @@ function drawBatchedModels(painter: Painter, source: SourceCache, layer: ModelSt
             step = 1;
         }
 
+        const invTileMatrix = new Float64Array(16);
+        const cameraPosTileCoord = vec3.create();
+        const cameraPointTileCoord = new Point(0.0, 0.0);
+
         for (let i = start; i !== end; i += step) {
             const coord = coords[i];
             const tile = source.getTile(coord);
@@ -820,6 +821,15 @@ function drawBatchedModels(painter: Painter, source: SourceCache, layer: ModelSt
             const tileMatrix = tr.calculatePosMatrix(coord.toUnwrapped(), tr.worldSize);
             const modelTraits = bucket.modelTraits;
 
+            if (!isShadowPass && frontCutoffEnabled) {
+                // @ts-expect-error - TS2345 - Argument of type 'Float64Array' is not assignable to parameter of type 'ReadonlyMat4'.
+                mat4.invert(invTileMatrix, tileMatrix);
+                // @ts-expect-error - TS2345 - Argument of type 'Float64Array' is not assignable to parameter of type 'ReadonlyMat4'.
+                vec3.transformMat4(cameraPosTileCoord, cameraPos, invTileMatrix);
+                cameraPointTileCoord.x = cameraPosTileCoord[0];
+                cameraPointTileCoord.y = cameraPosTileCoord[1];
+            }
+
             const sortedNodes: Array<SortedNode> = [];
             for (const nodeInfo of bucket.getNodesInfo()) {
                 if (nodeInfo.hiddenByReplacement) continue;
@@ -831,7 +841,7 @@ function drawBatchedModels(painter: Painter, source: SourceCache, layer: ModelSt
                     elevation = node.elevation * painter.terrain.exaggeration();
                 }
 
-                const nodeAabb = () => {
+                const calculateNodeAabb = () => {
                     const localBounds = nodeInfo.aabb;
                     // @ts-expect-error - TS2322 - Type 'number[]' is not assignable to type 'vec3'.
                     aabb.min = [...localBounds.min];
@@ -845,12 +855,25 @@ function drawBatchedModels(painter: Painter, source: SourceCache, layer: ModelSt
                     vec3.transformMat4(aabb.max, aabb.max, tileMatrix);
                     return aabb;
                 };
+                const nodeAabb = calculateNodeAabb();
 
                 const scale = nodeInfo.evaluatedScale;
-                if (scale[0] <= 1 && scale[1] <= 1 && scale[2] <= 1 && nodeAabb().intersects(frustum) === 0) {
-                    // While it is possible to use arbitrary scale for landmarks, it is highly unlikely
+                if (scale[0] <= 1 && scale[1] <= 1 && scale[2] <= 1 && nodeAabb.intersects(frustum) === 0) {
+                    // While it is possible to use arbitrary scale for  landmarks, it is highly unlikely
                     // and frustum culling optimization could be skipped in that case.
                     continue;
+                }
+
+                if (!isShadowPass && frontCutoffEnabled) {
+                    const opacityChangePerFrame = 1.0 / 6.0; // this is not driving animation evaluation, but is updated on change
+                    if (cameraPos[0] > nodeAabb.min[0] && cameraPos[0] < nodeAabb.max[0] &&
+                        cameraPos[1] > nodeAabb.min[1] && cameraPos[1] < nodeAabb.max[1] &&
+                        cameraPos[2] * metersPerPixel < nodeAabb.max[2] &&
+                        node.footprint && pointInFootprint(cameraPointTileCoord, node.footprint)) {
+                        nodeInfo.cameraCollisionOpacity = Math.max(nodeInfo.cameraCollisionOpacity - opacityChangePerFrame, 0.0);
+                    } else {
+                        nodeInfo.cameraCollisionOpacity = Math.min(1.0, nodeInfo.cameraCollisionOpacity + opacityChangePerFrame);
+                    }
                 }
 
                 const tileModelMatrix = [...tileMatrix];
@@ -882,6 +905,7 @@ function drawBatchedModels(painter: Painter, source: SourceCache, layer: ModelSt
                 let opacity = layerOpacity;
                 if (!isShadowPass) {
                     if (frontCutoffEnabled) {
+                        opacity *= nodeInfo.cameraCollisionOpacity;
                         opacity *= calculateFrontCutoffOpacity(tileModelMatrix as any, tr, nodeInfo.aabb, frontCutoffParams);
                     }
 
@@ -966,12 +990,10 @@ function drawBatchedModels(painter: Painter, source: SourceCache, layer: ModelSt
                     const dynamicBuffers = [];
                     setupMeshDraw((programOptions.defines as Array<string>), dynamicBuffers, mesh, painter, layer.lut);
                     if (!hasMapboxFeatures) {
-                        // @ts-expect-error
                         programOptions.defines.push('DIFFUSE_SHADED');
                     }
 
                     if (singleCascade) {
-                        // @ts-expect-error
                         programOptions.defines.push('SHADOWS_SINGLE_CASCADE');
                     }
 
@@ -1006,7 +1028,6 @@ function drawBatchedModels(painter: Painter, source: SourceCache, layer: ModelSt
                     // Handle Texture transform
                     if (material.occlusionTexture && material.occlusionTexture.offsetScale) {
                         occlusionTextureTransform = material.occlusionTexture.offsetScale;
-                        // @ts-expect-error
                         programOptions.defines.push('OCCLUSION_TEXTURE_TRANSFORM');
                     }
 
@@ -1137,29 +1158,25 @@ function calculateFrontCutoffOpacity(tileModelMatrix: mat4, tr: Transform, aabb:
         return 1.0;
     }
 
-    const worldToCamera = tr.getWorldToCameraMatrix();
-    const mat = mat4.multiply([] as any, worldToCamera, tileModelMatrix);
+    const mat = tr.getWorldToCameraMatrix();
+    mat4.multiply(mat, mat, tileModelMatrix);
 
     // The cutoff opacity is calculated based on how much below the view the AABB bottom corners are.
     // For this, we find the AABB points with the highest and lowest y value in the view space.
-    const p = [...aabb.min, 1.0];
-    // @ts-expect-error - TS2345 - Argument of type '[number, number]' is not assignable to parameter of type 'ReadonlyVec4'.
-    let r = vec4.transformMat4([] as any, p as [number, number], mat);
+    const p = vec4.fromValues(aabb.min[0], aabb.min[1], aabb.min[2], 1.0);
+    let r = vec4.transformMat4(vec4.create(), p, mat);
     let pMin = r;
     let pMax = r;
     p[1] = aabb.max[1];
-    // @ts-expect-error - TS2345 - Argument of type '[number, number]' is not assignable to parameter of type 'ReadonlyVec4'.
-    r = vec4.transformMat4([] as any, p as [number, number], mat);
+    r = vec4.transformMat4(vec4.create(), p, mat);
     pMin = r[1] < pMin[1] ? r : pMin;
     pMax = r[1] > pMax[1] ? r : pMax;
     p[0] = aabb.max[0];
-    // @ts-expect-error - TS2345 - Argument of type '[number, number]' is not assignable to parameter of type 'ReadonlyVec4'.
-    r = vec4.transformMat4([] as any, p as [number, number], mat);
+    r = vec4.transformMat4(vec4.create(), p, mat);
     pMin = r[1] < pMin[1] ? r : pMin;
     pMax = r[1] > pMax[1] ? r : pMax;
     p[1] = aabb.min[1];
-    // @ts-expect-error - TS2345 - Argument of type '[number, number]' is not assignable to parameter of type 'ReadonlyVec4'.
-    r = vec4.transformMat4([] as any, p as [number, number], mat);
+    r = vec4.transformMat4(vec4.create(), p, mat);
     pMin = r[1] < pMin[1] ? r : pMin;
     pMax = r[1] > pMax[1] ? r : pMax;
 
@@ -1168,8 +1185,7 @@ function calculateFrontCutoffOpacity(tileModelMatrix: mat4, tr: Transform, aabb:
     // This value could be increased to allow longer fade ranges.
     const cutoffRangeParam = 100.0 * tr.pixelsPerMeter * clamp(cutoffParams[1], 0.0, 1.0);
     const finalOpacity = clamp(cutoffParams[2], 0.0, 1.0);
-    // @ts-expect-error - TS2345 - Argument of type 'vec4' is not assignable to parameter of type 'ReadonlyVec3'.
-    const cutoffStart = vec3.lerp([] as any, pMin, pMax, cutoffStartParam);
+    const cutoffStart = vec4.lerp(vec4.create(), pMin, pMax, cutoffStartParam);
 
     const fovScale = Math.tan(tr.fovX * 0.5);
     // Lowest y coordinate that's still visible at the depth of the cutoff start point.

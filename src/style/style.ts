@@ -1,8 +1,6 @@
 import assert from 'assert';
 import murmur3 from 'murmurhash-js';
-
 import {Event, ErrorEvent, Evented} from '../util/evented';
-import StyleLayer from './style_layer';
 import StyleChanges from './style_changes';
 import createStyleLayer from './create_style_layer';
 import loadSprite from './load_sprite';
@@ -21,11 +19,6 @@ import Lights from '../../3d-style/style/lights';
 import {getProperties as getAmbientProps} from '../../3d-style/style/ambient_light_properties';
 import {getProperties as getDirectionalProps} from '../../3d-style/style/directional_light_properties';
 import {createExpression} from '../style-spec/expression/index';
-import Painter from '../render/painter';
-import ClipStyleLayer from './style_layer/clip_style_layer';
-import {LayerTypeMask} from '../../3d-style/util/conflation';
-import SymbolStyleLayer from '../style/style_layer/symbol_style_layer';
-
 import {
     validateStyle,
     validateLayoutProperty,
@@ -47,7 +40,6 @@ import {
 import {queryRenderedFeatures, queryRenderedSymbols, querySourceFeatures} from '../source/query_features';
 import SourceCache from '../source/source_cache';
 import BuildingIndex from '../source/building_index';
-import GeoJSONSource from '../source/geojson_source';
 import styleSpec from '../style-spec/reference/latest';
 import getWorkerPool from '../util/global_worker_pool';
 import deref from '../style-spec/deref';
@@ -65,12 +57,20 @@ import {isFQID, makeFQID, getNameFromFQID, getScopeFromFQID} from '../util/fqid'
 import {shadowDirectionFromProperties} from '../../3d-style/render/shadow_renderer';
 import ModelManager from '../../3d-style/render/model_manager';
 import {DEFAULT_MAX_ZOOM, DEFAULT_MIN_ZOOM} from '../geo/transform';
-import type {ReplacementSource} from "../../3d-style/source/replacement_source";
 import {RGBAImage} from '../util/image';
+import {evaluateColorThemeProperties} from '../util/lut';
+import EvaluationParameters from './evaluation_parameters';
+
+import type GeoJSONSource from '../source/geojson_source';
+import type {ReplacementSource} from "../../3d-style/source/replacement_source";
+import type Painter from '../render/painter';
+import type StyleLayer from './style_layer';
+import type SymbolStyleLayer from '../style/style_layer/symbol_style_layer';
 import type {ColorThemeSpecification,
     LayerSpecification,
+    LayoutSpecification,
+    PaintSpecification,
     FilterSpecification,
-    ExpressionSpecification,
     StyleSpecification,
     ImportSpecification,
     LightSpecification,
@@ -81,29 +81,19 @@ import type {ColorThemeSpecification,
     FogSpecification,
     ProjectionSpecification,
     TransitionSpecification,
-    PropertyValueSpecification,
     ConfigSpecification,
     SchemaSpecification,
     CameraSpecification
 } from '../style-spec/types';
-import {evaluateColorThemeProperties} from '../util/lut';
-
-// We're skipping validation errors with the `source.canvas` identifier in order
-// to continue to allow canvas sources to be added at runtime/updated in
-// smart setStyle (see https://github.com/mapbox/mapbox-gl-js/pull/6424):
-const emitValidationErrors = (evented: Evented, errors?: ValidationErrors | null) =>
-    _emitValidationErrors(evented, errors && errors.filter(error => error.identifier !== 'source.canvas'));
-
-import type {LightProps as Ambient} from '../../3d-style/style/ambient_light_properties';
-import type {LightProps as Directional} from '../../3d-style/style/directional_light_properties';
-import type {vec3} from 'gl-matrix';
-import type {MapEvents} from '../ui/events';
-import type {Map as MapboxMap} from '../ui/map';
-import type Transform from '../geo/transform';
-import type {StyleImage} from './style_image';
-import type {StyleGlyph} from './style_glyph';
 import type {Callback} from '../types/callback';
-import EvaluationParameters from './evaluation_parameters';
+import type {StyleGlyph} from './style_glyph';
+import type {StyleImage} from './style_image';
+import type Transform from '../geo/transform';
+import type {Map as MapboxMap} from '../ui/map';
+import type {MapEvents} from '../ui/events';
+import type {vec3} from 'gl-matrix';
+import type {LightProps as Directional} from '../../3d-style/style/directional_light_properties';
+import type {LightProps as Ambient} from '../../3d-style/style/ambient_light_properties';
 import type {Placement} from '../symbol/placement';
 import type {Cancelable} from '../types/cancelable';
 import type {RequestParameters, ResponseCallback} from '../util/ajax';
@@ -117,6 +107,13 @@ import type {TransitionParameters, ConfigOptions} from './properties';
 import type {QueryResult, QueryRenderedFeaturesParams} from '../source/query_features';
 import type {GeoJSONFeature} from '../util/vectortile_to_geojson';
 import type {LUT} from '../util/lut';
+import type {SerializedExpression} from '../style-spec/expression/expression';
+
+// We're skipping validation errors with the `source.canvas` identifier in order
+// to continue to allow canvas sources to be added at runtime/updated in
+// smart setStyle (see https://github.com/mapbox/mapbox-gl-js/pull/6424):
+const emitValidationErrors = (evented: Evented, errors?: ValidationErrors | null) =>
+    _emitValidationErrors(evented, errors && errors.filter(error => error.identifier !== 'source.canvas'));
 
 const supportedDiffOperations = pick(diffOperations, [
     'addLayer',
@@ -254,7 +251,7 @@ class Style extends Evented<MapEvents> {
     _mergedSourceCaches: Record<string, SourceCache>;
     _mergedOtherSourceCaches: Record<string, SourceCache>;
     _mergedSymbolSourceCaches: Record<string, SourceCache>;
-    _clipLayerIndices: Array<number>;
+    _clipLayerPresent: boolean;
 
     _request: Cancelable | null | undefined;
     _spriteRequest: Cancelable | null | undefined;
@@ -333,7 +330,7 @@ class Style extends Evented<MapEvents> {
         this._mergedSourceCaches = {};
         this._mergedOtherSourceCaches = {};
         this._mergedSymbolSourceCaches = {};
-        this._clipLayerIndices = [];
+        this._clipLayerPresent = false;
 
         this._has3DLayers = false;
         this._hasCircleLayers = false;
@@ -404,7 +401,7 @@ class Style extends Evented<MapEvents> {
                 pluginStatus: event.pluginStatus,
                 pluginURL: event.pluginURL
             };
-            self.dispatcher.broadcast('syncRTLPluginState', state, (err, results) => {
+            self.dispatcher.broadcast('syncRTLPluginState', state, (err, results: boolean[]) => {
                 triggerPluginCompletionEvent(err);
                 if (results) {
                     const allComplete = results.every((elem) => elem);
@@ -494,9 +491,8 @@ class Style extends Evented<MapEvents> {
 
         if (typeof style === 'string') {
             const url = this.map._requestManager.normalizeStyleURL(style);
-            // @ts-expect-error - TS2345 - Argument of type 'string' is not assignable to parameter of type '"Unknown" | "Style" | "Source" | "Tile" | "Glyphs" | "SpriteImage" | "SpriteJSON" | "Image" | "Model"'.
             const request = this.map._requestManager.transformRequest(url, ResourceType.Style);
-            getJSON(request, (error?: Error | null, json?: any | null) => {
+            getJSON(request, (error?: Error | null, json?: StyleSpecification) => {
                 if (error) {
                     this.fire(new ErrorEvent(error));
                 } else if (json) {
@@ -527,9 +523,8 @@ class Style extends Evented<MapEvents> {
         const cachedImport = this.importsCache.get(url);
         if (cachedImport) return this._load(cachedImport, validate);
 
-        // @ts-expect-error - TS2345 - Argument of type 'string' is not assignable to parameter of type '"Unknown" | "Style" | "Source" | "Tile" | "Glyphs" | "SpriteImage" | "SpriteJSON" | "Image" | "Model"'.
         const request = this.map._requestManager.transformRequest(url, ResourceType.Style);
-        this._request = getJSON(request, (error?: Error | null, json?: any | null) => {
+        this._request = getJSON(request, (error?: Error, json?: StyleSpecification) => {
             this._request = null;
             if (error) {
                 this.fire(new ErrorEvent(error));
@@ -1026,9 +1021,7 @@ class Style extends Evented<MapEvents> {
         });
 
         this._mergedOrder = [];
-        this._clipLayerIndices = [];
 
-        let i = 0;
         const sort = (layers: StyleLayer[] = []) => {
             for (const layer of layers) {
                 if (layer.type === 'slot') {
@@ -1044,8 +1037,7 @@ class Style extends Evented<MapEvents> {
                     if (layer.is3D()) this._has3DLayers = true;
                     if (layer.type === 'circle') this._hasCircleLayers = true;
                     if (layer.type === 'symbol') this._hasSymbolLayers = true;
-                    if (layer.type === 'clip') this._clipLayerIndices.push(i);
-                    i++;
+                    if (layer.type === 'clip') this._clipLayerPresent = true;
                 }
             }
         };
@@ -1380,7 +1372,6 @@ class Style extends Evented<MapEvents> {
 
     isLayerDraped(layer: StyleLayer): boolean {
         if (!this.terrain) return false;
-        // @ts-expect-error - TS2345 - Argument of type 'void | SourceCache' is not assignable to parameter of type 'SourceCache'.
         return layer.isDraped(this.getLayerSourceCache(layer));
     }
 
@@ -1981,7 +1972,7 @@ class Style extends Evented<MapEvents> {
         }
     }
 
-    getConfigProperty(fragmentId: string, key: string): unknown {
+    getConfigProperty(fragmentId: string, key: string): SerializedExpression | null {
         const fragmentStyle = this.getFragmentStyle(fragmentId);
         if (!fragmentStyle) return null;
         const fqid = makeFQID(key, fragmentStyle.scope);
@@ -2453,7 +2444,7 @@ class Style extends Evented<MapEvents> {
         return clone(layer.filter);
     }
 
-    setLayoutProperty(layerId: string, name: string, value: any, options: StyleSetterOptions = {}) {
+    setLayoutProperty<T extends keyof LayoutSpecification>(layerId: string, name: T, value: LayoutSpecification[T], options: StyleSetterOptions = {}) {
         this._checkLoaded();
 
         const layer = this._checkLayer(layerId);
@@ -2488,13 +2479,13 @@ class Style extends Evented<MapEvents> {
      * @param {string} name The name of the layout property.
      * @returns {*} The property value.
      */
-    getLayoutProperty(layerId: string, name: string): PropertyValueSpecification<unknown> | null | undefined {
+    getLayoutProperty<T extends keyof LayoutSpecification>(layerId: string, name: T): LayoutSpecification[T] | undefined {
         const layer = this._checkLayer(layerId);
         if (!layer) return;
         return layer.getLayoutProperty(name);
     }
 
-    setPaintProperty(layerId: string, name: string, value: any, options: StyleSetterOptions = {}) {
+    setPaintProperty<T extends keyof PaintSpecification>(layerId: string, name: T, value: PaintSpecification[T], options: StyleSetterOptions = {}) {
         this._checkLoaded();
 
         const layer = this._checkLayer(layerId);
@@ -2525,7 +2516,7 @@ class Style extends Evented<MapEvents> {
         this._changes.updatePaintProperties(layer);
     }
 
-    getPaintProperty(layerId: string, name: string): void | TransitionSpecification | PropertyValueSpecification<unknown> {
+    getPaintProperty<T extends keyof PaintSpecification>(layerId: string, name: T): PaintSpecification[T] | undefined {
         const layer = this._checkLayer(layerId);
         if (!layer) return;
         return layer.getPaintProperty(name);
@@ -2686,7 +2677,7 @@ class Style extends Evented<MapEvents> {
         //      This means that that the line_layer feature is above the extrusion_layer_b feature despite
         //      it being in an earlier layer.
 
-        const isLayer3D = (layerId: string) => this._mergedLayers[layerId].type === 'fill-extrusion' ||  this._mergedLayers[layerId].type === 'model';
+        const isLayer3D = (layerId: string) => this._mergedLayers[layerId].is3D();
 
         const order = this.order;
 
@@ -3322,7 +3313,7 @@ class Style extends Evented<MapEvents> {
                 const layerId = this._mergedOrder[i];
                 const styleLayer = this._mergedLayers[layerId];
                 if (styleLayer.type !== 'symbol') continue;
-                const checkAgainstClipLayer = this.isLayerClipped(styleLayer) && this._clipLayerIndices.some(c => i < c);
+                const checkAgainstClipLayer = this.isLayerClipped(styleLayer);
                 this.placement.updateLayerOpacities(styleLayer, layerTiles[makeFQID(styleLayer.source, styleLayer.scope)], i, checkAgainstClipLayer ? replacementSource : null);
             }
         }
@@ -3560,7 +3551,7 @@ class Style extends Evented<MapEvents> {
         return this._mergedOtherSourceCaches[fqid];
     }
 
-    getLayerSourceCache(layer: StyleLayer): SourceCache | void {
+    getLayerSourceCache(layer: StyleLayer): SourceCache | undefined {
         const fqid = makeFQID(layer.source, layer.scope);
         return layer.type === 'symbol' ?
             this._mergedSymbolSourceCaches[fqid] :
@@ -3706,34 +3697,16 @@ class Style extends Evented<MapEvents> {
 
     isLayerClipped(layer: StyleLayer, source?: Source | null): boolean {
         // fill-extrusions can be conflated by landmarks.
-        if (this._clipLayerIndices.length === 0 && layer.type !== 'fill-extrusion') return false;
+        if (!this._clipLayerPresent && layer.type !== 'fill-extrusion') return false;
         const isFillExtrusion = layer.type === 'fill-extrusion' && layer.sourceLayer === 'building';
 
-        let layerMask = 0;
         if (layer.is3D()) {
             if (isFillExtrusion || (!!source && source.type === 'batched-model')) return true;
             if (layer.type === 'model') {
-                layerMask = LayerTypeMask.Model;
+                return true;
             }
-        } else {
-            if (layer.type === 'symbol') {
-                layerMask = LayerTypeMask.Symbol;
-            }
-        }
-
-        for (const i of this._clipLayerIndices) {
-            assert(i < this._mergedOrder.length);
-            const clipLayer: ClipStyleLayer = (this._mergedLayers[this._mergedOrder[i]] as any);
-            if (!clipLayer) continue;
-
-            const extraLayersToBeClipped = [];
-
-            for (const extra of clipLayer.layout.get('clip-layer-types'))
-                extraLayersToBeClipped.push(extra === 'model' ? LayerTypeMask.Model : (extra === 'symbol' ? LayerTypeMask.Symbol : LayerTypeMask.FillExtrusion));
-
-            for (const mask of extraLayersToBeClipped)
-                if (layerMask & mask)
-                    return true;
+        } else if (layer.type === 'symbol') {
+            return true;
         }
 
         return false;

@@ -1,3 +1,35 @@
+## v3.7.0
+
+### Features and improvements ✨
+
+- Add `background-pitch-alignment` property of the `background` layer, which is set to `map` by default but can now be set to `viewport`. Useful for highlighting individual features by dimming the rest of the map with a semitransparent background.
+- Add new control positions (`top`, `right`, `bottom`, and `left`) (h/t [@Ethan-Guttman](https://github.com/Ethan-Guttman)).
+- Add `retainPadding` option for camera movement methods, which can be set to `false` for pre-v3.4 padding behavior.
+- Add `config` expression support in layer filter.
+- Add symbol elevation properties: `symbol-z-offset` and `symbol-elevation-reference`.
+- Add the `fill-z-offset` property for fill layers.
+- Improve `Map#fitBounds` for the alternative projections.
+- Improve terrain hillshade lighting anchored to viewport.
+- Improve shadow casting from 3D models.
+- Improve error messages for invalid expressions.
+- Skip landmarks rendering when the camera is inside them.
+- Improve type checking for the `Map#setPaintProperty` and `Map#setLayoutProperty` methods.
+- Allow the `string` event type in Map event handlers.
+- Expose `RequestTransformFunction`, `ResourceType`, and `RequestParameters` types.
+- Improve texture memory footprint on some platforms.
+
+### Bug fixes 🐞
+- Fix feature filtering when using 3D lights.
+- Fix pattern rendering issues on some devices at high zoom levels.
+- Fix `fill-extrusion-line-width` rendering for large polygons
+- Fix symbol placement ordering when `symbol-z-order` is set to `auto`.
+- Fix the issue where `minzoom` and `maxzoom` properties were ignored by `clip` layers.
+- Fix handling previously hidden models in `clip` layers.
+- Fix directional light `cast-shadows` property type.
+- Fix an edge case that could produce `setStencilMode`-related error in the console with the dev build.
+- Fix an issue where some fill extrusions could temporarily disappear when zooming quickly in certain areas.
+- Fix an edge case that could cause flickering on a far plane on high zooms.
+
 ## 3.6.0
 
 ### Features and improvements ✨

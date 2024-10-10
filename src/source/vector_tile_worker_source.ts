@@ -15,7 +15,6 @@ import type {
     WorkerTileCallback,
     TileParameters
 } from './worker_source';
-
 import type Actor from '../util/actor';
 import type StyleLayerIndex from '../style/style_layer_index';
 import type Scheduler from '../util/scheduler';
@@ -79,7 +78,6 @@ class VectorTileWorkerSource extends Evented implements WorkerSource {
 
         const workerTile = this.loading[uid] = new WorkerTile(params);
         workerTile.abort = this.loadVectorData(params, (err, response) => {
-
             const aborted = !this.loading[uid];
 
             delete this.loading[uid];

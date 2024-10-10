@@ -8,12 +8,14 @@ import {
 } from '../uniform_binding';
 import {mat3, mat4, vec3} from 'gl-matrix';
 import {extend} from '../../util/util';
+import {CanonicalTileID} from '../../source/tile_id';
+import EXTENT from '../../style-spec/data/extent';
+
 import type Context from '../../gl/context';
 import type Painter from '../painter';
 import type {UniformValues} from '../uniform_binding';
 import type Tile from '../../source/tile';
-import {CanonicalTileID, OverscaledTileID} from '../../source/tile_id';
-import EXTENT from '../../style-spec/data/extent';
+import type {OverscaledTileID} from '../../source/tile_id';
 
 export type FillExtrusionUniformsType = {
     ['u_matrix']: UniformMatrix4f;
@@ -31,19 +33,16 @@ export type FillExtrusionUniformsType = {
     ['u_height_lift']: Uniform1f;
     ['u_ao']: Uniform2f;
     ['u_edge_radius']: Uniform1f;
-    ['u_alignment']: Uniform1f;
     ['u_width_scale']: Uniform1f;
     ['u_flood_light_color']: Uniform3f;
     ['u_vertical_scale']: Uniform1f;
     ['u_flood_light_intensity']: Uniform1f;
     ['u_ground_shadow_factor']: Uniform3f;
-    ['u_emissive_strength']: Uniform1f;
 };
 
 export type FillExtrusionDepthUniformsType = {
     ['u_matrix']: UniformMatrix4f;
     ['u_edge_radius']: Uniform1f;
-    ['u_alignment']: Uniform1f;
     ['u_width_scale']: Uniform1f;
     ['u_vertical_scale']: Uniform1f;
 };
@@ -57,7 +56,6 @@ export type FillExtrusionPatternUniformsType = {
     ['u_vertical_gradient']: Uniform1f;
     ['u_ao']: Uniform2f;
     ['u_edge_radius']: Uniform1f;
-    ['u_alignment']: Uniform1f;
     ['u_width_scale']: Uniform1f;
     // globe uniforms:
     ['u_tile_id']: Uniform3f;
@@ -86,6 +84,7 @@ export type FillExtrusionGroundEffectUniformsType = {
     ['u_edge_radius']: Uniform1f;
     ['u_fb']: Uniform1i;
     ['u_fb_size']: Uniform1f;
+    ['u_dynamic_offset']: Uniform1f;
 };
 
 const fillExtrusionUniforms = (context: Context): FillExtrusionUniformsType => ({
@@ -96,7 +95,6 @@ const fillExtrusionUniforms = (context: Context): FillExtrusionUniformsType => (
     'u_vertical_gradient': new Uniform1f(context),
     'u_opacity': new Uniform1f(context),
     'u_edge_radius': new Uniform1f(context),
-    'u_alignment': new Uniform1f(context),
     'u_width_scale': new Uniform1f(context),
     'u_ao': new Uniform2f(context),
     // globe uniforms:
@@ -109,14 +107,12 @@ const fillExtrusionUniforms = (context: Context): FillExtrusionUniformsType => (
     'u_flood_light_color': new Uniform3f(context),
     'u_vertical_scale': new Uniform1f(context),
     'u_flood_light_intensity': new Uniform1f(context),
-    'u_ground_shadow_factor': new Uniform3f(context),
-    'u_emissive_strength': new Uniform1f(context)
+    'u_ground_shadow_factor': new Uniform3f(context)
 });
 
 const fillExtrusionDepthUniforms = (context: Context): FillExtrusionDepthUniformsType => ({
     'u_matrix': new UniformMatrix4f(context),
     'u_edge_radius': new Uniform1f(context),
-    'u_alignment': new Uniform1f(context),
     'u_width_scale': new Uniform1f(context),
     'u_vertical_scale': new Uniform1f(context)
 });
@@ -129,7 +125,6 @@ const fillExtrusionPatternUniforms = (context: Context): FillExtrusionPatternUni
     'u_vertical_gradient': new Uniform1f(context),
     'u_height_factor': new Uniform1f(context),
     'u_edge_radius': new Uniform1f(context),
-    'u_alignment': new Uniform1f(context),
     'u_width_scale': new Uniform1f(context),
     'u_ao': new Uniform2f(context),
     // globe uniforms:
@@ -159,7 +154,8 @@ const fillExtrusionGroundEffectUniforms = (context: Context): FillExtrusionGroun
     'u_attenuation': new Uniform1f(context),
     'u_edge_radius': new Uniform1f(context),
     'u_fb': new Uniform1i(context),
-    'u_fb_size': new Uniform1f(context)
+    'u_fb_size': new Uniform1f(context),
+    'u_dynamic_offset': new Uniform1f(context)
 });
 
 const identityMatrix = mat4.create() as Float32Array;
@@ -171,7 +167,6 @@ const fillExtrusionUniformValues = (
     opacity: number,
     aoIntensityRadius: [number, number],
     edgeRadius: number,
-    lineAlignment: number,
     lineWidthScale: number,
     coord: OverscaledTileID,
     heightLift: number,
@@ -181,8 +176,7 @@ const fillExtrusionUniformValues = (
     floodLightColor: [number, number, number],
     verticalScale: number,
     floodLightIntensity: number,
-    groundShadowFactor: [number, number, number],
-    emissiveStrength: number,
+    groundShadowFactor: [number, number, number]
 ): UniformValues<FillExtrusionUniformsType> => {
     const light = painter.style.light;
     const _lp = light.properties.get('position');
@@ -213,13 +207,11 @@ const fillExtrusionUniformValues = (
         'u_height_lift': 0,
         'u_ao': aoIntensityRadius,
         'u_edge_radius': edgeRadius,
-        'u_alignment': lineAlignment,
         'u_width_scale': lineWidthScale,
         'u_flood_light_color': floodLightColor,
         'u_vertical_scale': verticalScale,
         'u_flood_light_intensity': floodLightIntensity,
-        'u_ground_shadow_factor': groundShadowFactor,
-        'u_emissive_strength': emissiveStrength
+        'u_ground_shadow_factor': groundShadowFactor
     };
 
     if (tr.projection.name === 'globe') {
@@ -234,11 +226,10 @@ const fillExtrusionUniformValues = (
     return uniformValues;
 };
 
-const fillExtrusionDepthUniformValues = (matrix: Float32Array, edgeRadius: number, lineAlignment: number, lineWidthScale: number, verticalScale: number): UniformValues<FillExtrusionDepthUniformsType> => {
+const fillExtrusionDepthUniformValues = (matrix: Float32Array, edgeRadius: number, lineWidthScale: number, verticalScale: number): UniformValues<FillExtrusionDepthUniformsType> => {
     return {
         'u_matrix': matrix,
         'u_edge_radius': edgeRadius,
-        'u_alignment': lineAlignment,
         'u_width_scale': lineWidthScale,
         'u_vertical_scale': verticalScale
     };
@@ -251,7 +242,6 @@ const fillExtrusionPatternUniformValues = (
     opacity: number,
     aoIntensityRadius: [number, number],
     edgeRadius: number,
-    lineAlignment: number,
     lineWidthScale: number,
     coord: OverscaledTileID,
     tile: Tile,
@@ -263,8 +253,8 @@ const fillExtrusionPatternUniformValues = (
     verticalScale: number,
 ): UniformValues<FillExtrusionPatternUniformsType> => {
     const uniformValues = fillExtrusionUniformValues(
-        matrix, painter, shouldUseVerticalGradient, opacity, aoIntensityRadius, edgeRadius, lineAlignment, lineWidthScale, coord,
-        heightLift, zoomTransition, mercatorCenter, invMatrix, floodLightColor, verticalScale, 1.0, [0, 0, 0], 0);
+        matrix, painter, shouldUseVerticalGradient, opacity, aoIntensityRadius, edgeRadius, lineWidthScale, coord,
+        heightLift, zoomTransition, mercatorCenter, invMatrix, floodLightColor, verticalScale, 1.0, [0, 0, 0]);
     const heightFactorUniform = {
         'u_height_factor': -Math.pow(2, coord.overscaledZ) / tile.tileSize / 8
     };
@@ -295,7 +285,8 @@ const fillExtrusionGroundEffectUniformValues = (
         'u_attenuation': attenuation,
         'u_edge_radius': edgeRadius,
         'u_fb': 0,
-        'u_fb_size': fbSize
+        'u_fb_size': fbSize,
+        'u_dynamic_offset': 1
     };
     return uniformValues;
 };

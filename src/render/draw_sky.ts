@@ -3,15 +3,15 @@ import DepthMode from '../gl/depth_mode';
 import ColorMode from '../gl/color_mode';
 import CullFaceMode from '../gl/cull_face_mode';
 import Texture from './texture';
-import Program from './program';
 import SkyboxGeometry from './skybox_geometry';
 import {skyboxUniformValues, skyboxGradientUniformValues} from './program/skybox_program';
 import {skyboxCaptureUniformValues} from './program/skybox_capture_program';
-import SkyLayer from '../style/style_layer/sky_style_layer';
 import {mat3, mat4} from 'gl-matrix';
 import assert from 'assert';
 import {globeToMercatorTransition} from '../geo/projection/globe_util';
 
+import type SkyLayer from '../style/style_layer/sky_style_layer';
+import type Program from './program';
 import type SourceCache from '../source/source_cache';
 import type Painter from './painter';
 
@@ -63,7 +63,7 @@ function drawSkyboxGradient(painter: Painter, layer: SkyLayer, depthMode: DepthM
     context.activeTexture.set(gl.TEXTURE0);
     let colorRampTexture = layer.colorRampTexture;
     if (!colorRampTexture) {
-        colorRampTexture = layer.colorRampTexture = new Texture(context, layer.colorRamp, gl.RGBA);
+        colorRampTexture = layer.colorRampTexture = new Texture(context, layer.colorRamp, gl.RGBA8);
     }
     colorRampTexture.bind(gl.LINEAR, gl.CLAMP_TO_EDGE);
     const uniformValues = skyboxGradientUniformValues(

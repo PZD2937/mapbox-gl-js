@@ -7,7 +7,6 @@ import {
     PosArray,
     FillExtrusionWallArray,
 } from '../array_types';
-
 import {members as layoutAttributes, fillExtrusionGroundAttributes, centroidAttributes, fillExtrusionAttributesExt, hiddenByLandmarkAttributes, wallAttributes} from './fill_extrusion_attributes';
 import SegmentVector from '../segment';
 import {ProgramConfigurationSet} from '../program_configuration';
@@ -28,14 +27,15 @@ import Point from '@mapbox/point-geometry';
 import {number as interpolate} from '../../style-spec/util/interpolate';
 import {lngFromMercatorX, latFromMercatorY, mercatorYfromLat, tileToMeter} from '../../geo/mercator_coordinate';
 import {subdividePolygons} from '../../util/polygon_clipping';
-import {ReplacementSource, regionsEquals, footprintTrianglesIntersect} from '../../../3d-style/source/replacement_source';
+import {regionsEquals, footprintTrianglesIntersect} from '../../../3d-style/source/replacement_source';
 import {clamp, warnOnce} from '../../util/util';
 import {earthRadius} from '../../geo/lng_lat';
-import {Aabb, Frustum} from '../../util/primitives';
-import {Elevation} from '../../terrain/elevation';
-import {LayerTypeMask} from '../../../3d-style/util/conflation';
-import {createLineWallGeometry} from '../../geo/line_geometry';
+import {Aabb} from '../../util/primitives';
+import {dropBufferConnectionLines, createLineWallGeometry} from '../../geo/line_geometry';
 
+import type {Elevation} from '../../terrain/elevation';
+import type {Frustum} from '../../util/primitives';
+import type {ReplacementSource} from '../../../3d-style/source/replacement_source';
 import type {Feature} from "../../style-spec/expression";
 import type {ClippedPolygon} from '../../util/polygon_clipping';
 import type {vec3} from 'gl-matrix';
@@ -67,7 +67,7 @@ export const fillExtrusionDefaultDataDrivenProperties: Array<string> = [
     'fill-extrusion-pattern',
     'fill-extrusion-flood-light-wall-radius',
     'fill-extrusion-line-width',
-    'fill-extrusion-line-alignment'
+    'fill-extrusion-emissive-strength'
 ];
 
 export const fillExtrusionGroundDataDrivenProperties: Array<string> = [
@@ -108,13 +108,12 @@ function addVertex(vertexArray: FillExtrusionLayoutArray, x: number, y: number, 
     );
 }
 
-function addWallVertex(vertexArray: FillExtrusionWallArray, joinNormal: Point, inside: boolean, isPolygon: boolean) {
+function addWallVertex(vertexArray: FillExtrusionWallArray, joinNormal: Point, inside: boolean) {
     vertexArray.emplaceBack(
-        // a_join_normal_inside_polygon:
+        // a_join_normal_inside:
         joinNormal.x * EXTENT,
         joinNormal.y * EXTENT,
-        inside ? 0.0 : 1.0,
-        isPolygon ? 1.0 : 0.0
+        inside ? 1.0 : 0.0
     );
 }
 
@@ -743,21 +742,22 @@ class FillExtrusionBucket implements Bucket {
                 id,
                 sourceLayerIndex,
                 index,
-                // @ts-expect-error - TS2345 - Argument of type 'VectorTileFeature' is not assignable to parameter of type 'FeatureWithGeometry'.
                 geometry: needGeometry ? evaluationFeature.geometry : loadGeometry(feature, canonical, tileTransform),
                 properties: feature.properties,
-                // @ts-expect-error - TS2322 - Type '0 | 2 | 1 | 3' is not assignable to type '2 | 1 | 3'.
                 type: feature.type,
                 patterns: {}
             };
 
             const vertexArrayOffset = this.layoutVertexArray.length;
+            const featureIsPolygon = vectorTileFeatureTypes[bucketFeature.type] === 'Polygon';
             if (this.hasPattern) {
                 this.features.push(addPatternDependencies('fill-extrusion', this.layers, bucketFeature, this.zoom, options));
             } else {
                 if (this.wallMode) {
                     for (const polygon of bucketFeature.geometry) {
-                        this.addFeature(bucketFeature, [polygon], index, canonical, {}, options.availableImages, tileTransform, options.brightness);
+                        for (const line of dropBufferConnectionLines(polygon, featureIsPolygon)) {
+                            this.addFeature(bucketFeature, [line], index, canonical, {}, options.availableImages, tileTransform, options.brightness);
+                        }
                     }
                 } else {
                     this.addFeature(bucketFeature, bucketFeature.geometry, index, canonical, {}, options.availableImages, tileTransform, options.brightness);
@@ -777,10 +777,13 @@ class FillExtrusionBucket implements Bucket {
 
     addFeatures(options: PopulateParameters, canonical: CanonicalTileID, imagePositions: SpritePositions, availableImages: Array<string>, tileTransform: TileTransform, brightness?: number | null) {
         for (const feature of this.features) {
+            const featureIsPolygon = vectorTileFeatureTypes[feature.type] === 'Polygon';
             const {geometry} = feature;
             if (this.wallMode) {
                 for (const polygon of geometry) {
-                    this.addFeature(feature, [polygon], feature.index, canonical, imagePositions, availableImages, tileTransform, brightness);
+                    for (const line of dropBufferConnectionLines(polygon, featureIsPolygon)) {
+                        this.addFeature(feature, [line], feature.index, canonical, imagePositions, availableImages, tileTransform, brightness);
+                    }
                 }
             } else {
                 this.addFeature(feature, geometry, feature.index, canonical, imagePositions, availableImages, tileTransform, brightness);
@@ -859,7 +862,7 @@ class FillExtrusionBucket implements Bucket {
         const floodLightRadius = this.layers[0].paint.get('fill-extrusion-flood-light-ground-radius').evaluate(feature, {});
         const maxRadius = floodLightRadius / this.tileToMeter;
 
-        const tileBounds = [new Point(0, 0), new Point(EXTENT, EXTENT)];
+        const tileBounds: [Point, Point] = [new Point(0, 0), new Point(EXTENT, EXTENT)];
         const projection = tileTransform.projection;
         const isGlobe = projection.name === 'globe';
         // If wallMode is used, LineString geometries will be converted into polygons
@@ -919,12 +922,10 @@ class FillExtrusionBucket implements Bucket {
             // for a tile depends on the zoom level. For example tile with z=0 requires 2⁴
             // subdivisions, tile with z=1 2³ etc. The subdivision is done in polar coordinates
             // instead of tile coordinates.
-            // @ts-expect-error - TS2345 - Argument of type 'Point[]' is not assignable to parameter of type '[Point, Point]'.
             clippedPolygons = resampleFillExtrusionPolygonsForGlobe(polygons, tileBounds, canonical);
         } else {
             clippedPolygons = [];
             for (const polygon of polygons) {
-                // @ts-expect-error - TS2322 - Type 'Point[]' is not assignable to type '[Point, Point]'.
                 clippedPolygons.push({polygon, bounds: tileBounds});
             }
         }
@@ -1021,7 +1022,7 @@ class FillExtrusionBucket implements Bucket {
                         if (this.wallMode) {
                             const isInside = isPointOnInnerWall(i, ring);
                             const joinNormal = wallGeometry.joinNormals[i];
-                            addWallVertex(this.wallVertexArray, joinNormal, isInside, wallGeometry.isPolygon);
+                            addWallVertex(this.wallVertexArray, joinNormal, !isInside);
                         }
 
                         segment.vertexLength++;
@@ -1047,7 +1048,7 @@ class FillExtrusionBucket implements Bucket {
                     }
                 }
 
-                const indices = earcut(flattened, holeIndices);
+                const indices = this.wallMode ? wallGeometry.indices : earcut(flattened, holeIndices);
                 assert(indices.length % 3 === 0);
 
                 for (let j = 0; j < indices.length; j += 3) {
@@ -1158,8 +1159,8 @@ class FillExtrusionBucket implements Bucket {
                     if (this.wallMode) {
                         const isInside = isPointOnInnerWall(i - 1, ring);
                         const joinNormal = wallGeometry.joinNormals[i - 1];
-                        addWallVertex(this.wallVertexArray, joinNormal, !isInside, wallGeometry.isPolygon);
-                        addWallVertex(this.wallVertexArray, joinNormal, !isInside, wallGeometry.isPolygon);
+                        addWallVertex(this.wallVertexArray, joinNormal, isInside);
+                        addWallVertex(this.wallVertexArray, joinNormal, isInside);
                     }
 
                     edgeDistance += dist;
@@ -1171,8 +1172,8 @@ class FillExtrusionBucket implements Bucket {
                     if (this.wallMode) {
                         const isInside = isPointOnInnerWall(i, ring);
                         const joinNormal = wallGeometry.joinNormals[i];
-                        addWallVertex(this.wallVertexArray, joinNormal, !isInside, wallGeometry.isPolygon);
-                        addWallVertex(this.wallVertexArray, joinNormal, !isInside, wallGeometry.isPolygon);
+                        addWallVertex(this.wallVertexArray, joinNormal, isInside);
+                        addWallVertex(this.wallVertexArray, joinNormal, isInside);
                     }
 
                     segment.vertexLength += 4;

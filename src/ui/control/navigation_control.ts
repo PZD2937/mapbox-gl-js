@@ -1,9 +1,9 @@
-import type Point from '@mapbox/point-geometry';
 
 import * as DOM from '../../util/dom';
 import {extend, bindAll} from '../../util/util';
 import {MouseRotateHandler, MousePitchHandler} from '../handler/mouse';
 
+import type Point from '@mapbox/point-geometry';
 import type {Map, IControl} from '../map';
 
 export type NavigationControlOptions = {
@@ -152,11 +152,9 @@ class NavigationControl implements IControl {
     }
 
     _createButton(className: string, fn: () => unknown): HTMLButtonElement {
-        const a = DOM.create('button', className, this._container);
-        // @ts-expect-error - TS2339 - Property 'type' does not exist on type 'HTMLElement'.
+        const a = DOM.create('button', className, this._container) as HTMLButtonElement;
         a.type = 'button';
         a.addEventListener('click', fn);
-        // @ts-expect-error - TS2322 - Type 'HTMLElement' is not assignable to type 'HTMLButtonElement'.
         return a;
     }
 

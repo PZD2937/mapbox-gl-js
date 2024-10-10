@@ -5,8 +5,7 @@ import DepthMode from '../gl/depth_mode';
 import CullFaceMode from '../gl/cull_face_mode';
 import Texture from './texture';
 import {rasterPoleUniformValues, rasterUniformValues} from './program/raster_program';
-
-import {OverscaledTileID, CanonicalTileID} from '../source/tile_id';
+import {CanonicalTileID} from '../source/tile_id';
 import rasterFade from './raster_fade';
 import {
     calculateGlobeMercatorMatrix,
@@ -21,11 +20,12 @@ import {
 import {GLOBE_ZOOM_THRESHOLD_MIN} from '../geo/projection/globe_constants';
 import {mat4} from "gl-matrix";
 import {mercatorXfromLng, mercatorYfromLat} from '../geo/mercator_coordinate';
-import Transform from '../geo/transform';
 import {COLOR_MIX_FACTOR} from '../style/style_layer/raster_style_layer';
 import RasterArrayTile from '../source/raster_array_tile';
 import RasterArrayTileSource from '../source/raster_array_tile_source';
 
+import type Transform from '../geo/transform';
+import type {OverscaledTileID} from '../source/tile_id';
 import type Tile from '../source/tile';
 import type Context from '../gl/context';
 import type Painter from './painter';
@@ -514,7 +514,7 @@ function configureRaster(
         layer.updateColorRamp(range);
 
         let tex = layer.colorRampTexture;
-        if (!tex) tex = layer.colorRampTexture = new Texture(context, layer.colorRamp, gl.RGBA);
+        if (!tex) tex = layer.colorRampTexture = new Texture(context, layer.colorRamp, gl.RGBA8);
         tex.bind(gl.LINEAR, gl.CLAMP_TO_EDGE);
     }
 

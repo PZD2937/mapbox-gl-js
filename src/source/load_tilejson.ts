@@ -1,5 +1,4 @@
 import {pick, extend} from '../util/util';
-
 import {getJSON, ResourceType} from '../util/ajax';
 import browser from '../util/browser';
 
@@ -131,7 +130,6 @@ export default function(
     }
 
     if (options.url) {
-        // @ts-expect-error - TS2345 - Argument of type 'string' is not assignable to parameter of type '"Unknown" | "Style" | "Source" | "Tile" | "Glyphs" | "SpriteImage" | "SpriteJSON" | "Image" | "Model"'.
         return getJSON(requestManager.transformRequest(requestManager.normalizeSourceURL(options.url, null, language, worldview), ResourceType.Source), loaded);
     } else {
         return browser.frame(() => {

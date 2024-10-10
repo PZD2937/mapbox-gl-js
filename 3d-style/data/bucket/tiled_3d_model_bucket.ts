@@ -3,7 +3,6 @@ import Point from '@mapbox/point-geometry';
 import browser from '../../../src/util/browser';
 import {register} from '../../../src/util/web_worker_transfer';
 import {uploadNode, destroyNodeArrays, destroyBuffers, ModelTraits, HEIGHTMAP_DIM} from '../model';
-import {OverscaledTileID} from '../../../src/source/tile_id';
 import {FeatureVertexArray} from '../../../src/data/array_types';
 import {number as interpolate} from '../../../src/style-spec/util/interpolate';
 import {clamp} from '../../../src/util/util';
@@ -12,18 +11,18 @@ import {ZoomConstantExpression} from '../../../src/style-spec/expression/index';
 import {Aabb} from '../../../src/util/primitives';
 import {vec3, mat4} from 'gl-matrix';
 
+import type {OverscaledTileID, CanonicalTileID, UnwrappedTileID} from '../../../src/source/tile_id';
 import type ModelStyleLayer from '../../style/style_layer/model_style_layer';
 import type {ReplacementSource} from '../../source/replacement_source';
 import type {Bucket} from '../../../src/data/bucket';
 import type {Node} from '../model';
 import type {EvaluationFeature} from '../../../src/data/evaluation_feature';
-import type {CanonicalTileID, UnwrappedTileID} from '../../../src/source/tile_id';
 import type Context from '../../../src/gl/context';
 import type {ProjectionSpecification} from '../../../src/style-spec/types';
 import type Painter from '../../../src/render/painter';
 import type {vec4} from 'gl-matrix';
 import type {Terrain} from '../../../src/terrain/terrain';
-import FeatureIndex from '../../../src/data/feature_index';
+import type FeatureIndex from '../../../src/data/feature_index';
 import type {GridIndex} from '../../../src/types/grid-index';
 import type {TileFootprint} from '../../../3d-style/util/conflation';
 
@@ -80,6 +79,7 @@ export class Tiled3dModelFeature {
     node: Node;
     aabb: Aabb;
     emissionHeightBasedParams: Array<[number, number, number, number, number]>;
+    cameraCollisionOpacity: number;
     constructor(node: Node) {
         this.node = node;
         this.evaluatedRMEA = [[1, 0, 0, 1],
@@ -93,6 +93,7 @@ export class Tiled3dModelFeature {
         this.evaluatedScale = [1, 1, 1];
         this.evaluatedColor = [];
         this.emissionHeightBasedParams = [];
+        this.cameraCollisionOpacity = 1;
         // Needs to calculate geometry
         this.feature = {type: 'Point', id: node.id, geometry: [], properties: {'height' : getNodeHeight(node)}};
         this.aabb = this._getLocalBounds();
@@ -555,7 +556,7 @@ class Tiled3dModelBucket implements Bucket {
             const mesh = nodeInfo.node.meshes[0];
             const meshAabb = mesh.transformedAabb;
             if (x < meshAabb.min[0] || y < meshAabb.min[1] || x > meshAabb.max[0] || y > meshAabb.max[1]) continue;
-            if (nodeInfo.node.hidden === true) return {height: 0.0, maxHeight: nodeInfo.feature.properties["height"], hidden: false, verticalScale: nodeInfo.evaluatedScale[2]};
+            if (nodeInfo.node.hidden === true) return {height: Infinity, maxHeight: nodeInfo.feature.properties["height"], hidden: false, verticalScale: nodeInfo.evaluatedScale[2]};
 
             assert(mesh.heightmap);
 

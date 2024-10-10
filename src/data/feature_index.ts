@@ -1,4 +1,3 @@
-import Point from '@mapbox/point-geometry';
 
 import loadGeometry from './load_geometry';
 import toEvaluationFeature from './evaluation_feature';
@@ -10,15 +9,16 @@ import {VectorTile} from '@mapbox/vector-tile';
 import Protobuf from 'pbf';
 import Feature from '../util/vectortile_to_geojson';
 import {arraysIntersect, mapObject, extend} from '../util/util';
-import {OverscaledTileID} from '../source/tile_id';
 import {register} from '../util/web_worker_transfer';
 import EvaluationParameters from '../style/evaluation_parameters';
-import SourceFeatureState from '../source/source_state';
 import {polygonIntersectsBox} from '../util/intersection_tests';
 import {PossiblyEvaluated} from '../style/properties';
 import {FeatureIndexArray} from './array_types';
 import {DEMSampler} from '../terrain/elevation';
 
+import type SourceFeatureState from '../source/source_state';
+import type {OverscaledTileID} from '../source/tile_id';
+import type Point from '@mapbox/point-geometry';
 import type StyleLayer from '../style/style_layer';
 import type {QueryResult} from '../source/query_features';
 import type {FeatureStates} from '../source/source_state';
@@ -138,18 +138,13 @@ class FeatureIndex {
     // Finds non-symbol features in this tile at a particular position.
     query(
         args: QueryParameters,
-        styleLayers: {
-            [_: string]: StyleLayer;
-        },
-        serializedLayers: {
-            [_: string]: any;
-        },
+        styleLayers: {[_: string]: StyleLayer},
+        serializedLayers: {[_: string]: any},
         sourceFeatureState: SourceFeatureState,
     ): QueryResult {
         this.loadVTLayers();
-        const params = args.params || {},
-            // @ts-expect-error - TS2339 - Property 'filter' does not exist on type '{}'.
-            filter = featureFilter(params.filter);
+        const params = args.params || ({} as Partial<QueryParameters['params']>);
+        const filter = featureFilter(params.filter);
         const tilespaceGeometry = args.tileResult;
         const transform = args.transform;
 
@@ -193,16 +188,13 @@ class FeatureIndex {
                 result,
                 match,
                 filter,
-                // @ts-expect-error - TS2339 - Property 'layers' does not exist on type '{}'.
                 params.layers,
-                // @ts-expect-error - TS2339 - Property 'availableImages' does not exist on type '{}'.
                 params.availableImages,
                 styleLayers,
                 serializedLayers,
                 sourceFeatureState,
                 (feature: VectorTileFeature, styleLayer: StyleLayer, featureState: any, layoutVertexArrayOffset: number = 0) => {
                     if (!featureGeometry) {
-                        // @ts-expect-error - TS2345 - Argument of type 'VectorTileFeature' is not assignable to parameter of type 'FeatureWithGeometry'.
                         featureGeometry = loadGeometry(feature, this.tileID.canonical, args.tileTransform);
                     }
 
@@ -248,7 +240,6 @@ class FeatureIndex {
             if (!filter.filter(new EvaluationParameters(this.tileID.overscaledZ), evaluationFeature, this.tileID.canonical)) {
                 return;
             }
-            // @ts-expect-error - TS2345 - Argument of type 'VectorTileFeature' is not assignable to parameter of type 'Feature'.
         } else if (!filter.filter(new EvaluationParameters(this.tileID.overscaledZ), feature)) {
             return;
         }

@@ -34,6 +34,10 @@ const todo = [
 
     // https://mapbox.atlassian.net/browse/MAPS3D-987
     "render-tests/model-layer/landmark-shadows-terrain",
+
+    // https://mapbox.atlassian.net/browse/GLJS-1005
+    "expression-tests/image/two-arguments/available",
+    "render-tests/image-fallback-nested/add-image-after"
 ];
 
 const skip = [

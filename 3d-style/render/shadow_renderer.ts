@@ -1,28 +1,25 @@
 import Texture from '../../src/render/texture';
-import Framebuffer from '../../src/gl/framebuffer';
 import ColorMode from '../../src/gl/color_mode';
 import DepthMode from '../../src/gl/depth_mode';
 import StencilMode from '../../src/gl/stencil_mode';
 import CullFaceMode from '../../src/gl/cull_face_mode';
-import Transform from '../../src/geo/transform';
 import {Frustum, Aabb} from '../../src/util/primitives';
 import Color from '../../src/style-spec/util/color';
 import {FreeCamera} from '../../src/ui/free_camera';
-import {OverscaledTileID, UnwrappedTileID} from '../../src/source/tile_id';
 import {mercatorZfromAltitude, tileToMeter} from '../../src/geo/mercator_coordinate';
 import {cartesianPositionToSpherical, sphericalPositionToCartesian, clamp, linearVec3TosRGB} from '../../src/util/util';
-
-import Lights from '../style/lights';
 import {defaultShadowUniformValues} from '../render/shadow_uniforms';
 import TextureSlots from './texture_slots';
-
 import assert from 'assert';
-
 import {mat4, vec3} from 'gl-matrix';
 import {groundShadowUniformValues} from './program/ground_shadow_program';
 import EXTENT from '../../src/style-spec/data/extent';
 import {getCutoffParams} from '../../src/render/cutoff';
 
+import type Lights from '../style/lights';
+import type {OverscaledTileID, UnwrappedTileID} from '../../src/source/tile_id';
+import type Transform from '../../src/geo/transform';
+import type Framebuffer from '../../src/gl/framebuffer';
 import type Painter from '../../src/render/painter';
 import type Program from '../../src/render/program';
 import type Style from '../../src/style/style';
@@ -223,11 +220,11 @@ export class ShadowRenderer {
 
                 const gl = context.gl;
                 const fbo = context.createFramebuffer(width, height, useColor, 'texture');
-                const depthTexture = new Texture(context, {width, height, data: null}, gl.DEPTH_COMPONENT);
+                const depthTexture = new Texture(context, {width, height, data: null}, gl.DEPTH_COMPONENT16);
                 fbo.depthAttachment.set(depthTexture.texture);
 
                 if (useColor) {
-                    const colorTexture = new Texture(context, {width, height, data: null}, gl.RGBA);
+                    const colorTexture = new Texture(context, {width, height, data: null}, gl.RGBA8);
                     fbo.colorAttachment.set(colorTexture.texture);
                 }
 
@@ -360,7 +357,6 @@ export class ShadowRenderer {
                 const coords = sourceCache ? sourceCoords[sourceCache.id] : undefined;
                 if (layer.type !== 'model' && !(coords && coords.length)) continue;
 
-                // @ts-expect-error - TS2345 - Argument of type 'void | SourceCache' is not assignable to parameter of type 'SourceCache'.
                 painter.renderLayer(painter, sourceCache, layer, coords);
             }
         }

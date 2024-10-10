@@ -14,6 +14,8 @@ import type {PromoteIdSpecification} from '../style-spec/types';
 import type Projection from '../geo/projection/projection';
 import type {LUT} from "../util/lut";
 
+type TDecodingResult = any;
+
 export type TileParameters = {
     source: string;
     scope: string;
@@ -109,12 +111,9 @@ export type WorkerTileResult = {
     glyphPositions?: GlyphPositions | null;
 };
 
-export type WorkerTileCallback = (
-    error?: Error | null | undefined,
-    result?: WorkerTileResult | null | undefined,
-) => void;
-export type WorkerDEMTileCallback = (err?: Error | null | undefined, result?: DEMData | null | undefined) => void;
-export type WorkerRasterArrayTileCallback = (err?: Error | null | undefined, result?: any | null | undefined) => void;
+export type WorkerTileCallback = (error?: Error, result?: WorkerTileResult) => void;
+export type WorkerDEMTileCallback = (err?: Error, result?: DEMData) => void;
+export type WorkerRasterArrayTileCallback = (err?: Error, result?: TDecodingResult) => void;
 
 /**
  * May be implemented by custom source types to provide code that can be run on
@@ -140,20 +139,20 @@ export interface WorkerSource {
      * back to the main thread for rendering.  Should call the callback with:
      * `{ buckets, featureIndex, collisionIndex, rawTileData}`.
      */
-    loadTile(params: WorkerTileParameters, callback: WorkerTileCallback): void;
+    loadTile: (params: WorkerTileParameters, callback: WorkerTileCallback) => void;
     /**
      * Re-parses a tile that has already been loaded.  Yields the same data as
      * {@link WorkerSource#loadTile}.
      */
-    reloadTile(params: WorkerTileParameters, callback: WorkerTileCallback): void;
+    reloadTile: (params: WorkerTileParameters, callback: WorkerTileCallback) => void;
     /**
      * Aborts _loading a tile that is in progress.
      */
-    abortTile(params: TileParameters, callback: WorkerTileCallback): void;
+    abortTile: (params: TileParameters, callback: WorkerTileCallback) => void;
     /**
      * Removes this tile from any local caches.
      */
-    removeTile(params: TileParameters, callback: WorkerTileCallback): void;
+    removeTile: (params: TileParameters, callback: WorkerTileCallback) => void;
     /**
      * Tells the WorkerSource to abort in-progress tasks and release resources.
      * The foreground Source is responsible for ensuring that 'removeSource' is

@@ -1,41 +1,19 @@
 import {mat4} from 'gl-matrix';
-
 import StyleLayer from '../style_layer';
-
 import assert from 'assert';
 import SymbolBucket from '../../data/bucket/symbol_bucket';
 import resolveTokens from '../../util/resolve_tokens';
 import {getLayoutProperties, getPaintProperties} from './symbol_style_layer_properties';
 import {computeColorAdjustmentMatrix} from '../../util/util';
-
-import type {FormattedSection} from '../../style-spec/expression/types/formatted';
-import type {FormattedSectionExpression} from '../../style-spec/expression/definitions/format';
-import type {CreateProgramParams} from '../../render/painter';
-import type {ConfigOptions, Properties} from '../properties';
-
 import {
-    Transitionable,
-    Transitioning,
-    Layout,
-    PossiblyEvaluated,
-    PossiblyEvaluatedPropertyValue,
-    PropertyValue
+    PossiblyEvaluatedPropertyValue
 } from '../properties';
-
 import {
     isExpression,
     StyleExpression,
     ZoomConstantExpression,
     ZoomDependentExpression
 } from '../../style-spec/expression/index';
-
-import type {BucketParameters} from '../../data/bucket';
-import type {LayoutProps, PaintProps} from './symbol_style_layer_properties';
-import type EvaluationParameters from '../evaluation_parameters';
-import type {LayerSpecification} from '../../style-spec/types';
-import type {Feature, SourceExpression, CompositeExpression} from '../../style-spec/expression/index';
-import type {Expression} from '../../style-spec/expression/expression';
-import type {CanonicalTileID} from '../../source/tile_id';
 import {FormattedType} from '../../style-spec/expression/types';
 import {typeOf} from '../../style-spec/expression/values';
 import Formatted from '../../style-spec/expression/types/formatted';
@@ -43,6 +21,24 @@ import FormatSectionOverride from '../format_section_override';
 import FormatExpression from '../../style-spec/expression/definitions/format';
 import Literal from '../../style-spec/expression/definitions/literal';
 import ProgramConfiguration from '../../data/program_configuration';
+
+import type {FormattedSection} from '../../style-spec/expression/types/formatted';
+import type {FormattedSectionExpression} from '../../style-spec/expression/definitions/format';
+import type {CreateProgramParams} from '../../render/painter';
+import type {ConfigOptions, Properties,
+    Transitionable,
+    Transitioning,
+    Layout,
+    PossiblyEvaluated,
+    PropertyValue
+} from '../properties';
+import type {BucketParameters} from '../../data/bucket';
+import type {LayoutProps, PaintProps} from './symbol_style_layer_properties';
+import type EvaluationParameters from '../evaluation_parameters';
+import type {LayerSpecification} from '../../style-spec/types';
+import type {Feature, SourceExpression, CompositeExpression} from '../../style-spec/expression/index';
+import type {Expression} from '../../style-spec/expression/expression';
+import type {CanonicalTileID} from '../../source/tile_id';
 import type {LUT} from "../../util/lut";
 
 let properties: {
@@ -265,18 +261,7 @@ class SymbolStyleLayer extends StyleLayer {
     }
 
     getProgramIds(): string[] {
-
-        const hasIcon = (this.paint.get('icon-opacity').constantOr(1) !== 0);
-
-        const hasText = (this.paint.get('text-opacity').constantOr(1) !== 0);
-        const ids = [];
-        if (hasIcon) {
-            ids.push('symbolIcon');
-        }
-        if (hasText) {
-            ids.push('symbolSDF');
-        }
-        return ids;
+        return ['symbol'];
     }
 
     getDefaultProgramParams(name: string, zoom: number, lut: LUT | null): CreateProgramParams | null {

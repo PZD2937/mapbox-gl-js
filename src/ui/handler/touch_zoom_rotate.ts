@@ -1,8 +1,9 @@
-import Point from '@mapbox/point-geometry';
 import * as DOM from '../../util/dom';
+import {isFullscreen} from '../../util/util';
+
+import type Point from '@mapbox/point-geometry';
 import type {Map} from '../map';
 import type {Handler, HandlerResult} from '../handler';
-import {isFullscreen} from '../../util/util';
 
 export type TouchPitchHandlerOptions = {
     around?: 'center';
@@ -242,7 +243,6 @@ export class TouchPitchHandler extends TwoTouchHandler {
 
         if (this._map._cooperativeGestures && !isFullscreen() && e.touches.length < 3) return;
 
-        // @ts-expect-error - TS2322 - Type 'boolean | void' is not assignable to type 'boolean'.
         this._valid = this.gestureBeginsVertically(vectorA, vectorB, e.timeStamp);
 
         if (!this._valid) return;
@@ -256,7 +256,7 @@ export class TouchPitchHandler extends TwoTouchHandler {
         };
     }
 
-    gestureBeginsVertically(vectorA: Point, vectorB: Point, timeStamp: number): void | boolean {
+    gestureBeginsVertically(vectorA: Point, vectorB: Point, timeStamp: number): undefined | boolean {
         if (this._valid !== undefined) return this._valid;
 
         const threshold = 2;

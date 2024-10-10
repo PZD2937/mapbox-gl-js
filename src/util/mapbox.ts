@@ -18,18 +18,18 @@ import {isMapboxHTTPURL, isMapboxURL} from './mapbox_url';
 import {createSkuToken, SKU_ID} from './sku_token';
 import {version as sdkVersion} from '../../package.json';
 import {uuid, validateUuid, storageAvailable, b64DecodeUnicode, b64EncodeUnicode, warnOnce, extend} from './util';
-import {postData, ResourceType, getData} from './ajax';
+import {postData, getData} from './ajax';
 import {getLivePerformanceMetrics} from '../util/live_performance';
 
 import type {LivePerformanceData} from '../util/live_performance';
-import type {RequestParameters} from './ajax';
+import type {RequestParameters, ResourceType as ResourceTypeEnum} from './ajax';
 import type {Cancelable} from '../types/cancelable';
 import type {TileJSON} from '../types/tilejson';
 import type {Map as MapboxMap} from "../ui/map";
 import type {CanonicalTileID} from "../source/tile_id";
 
-type ResourceTypeEnum = keyof typeof ResourceType;
-export type RequestTransformFunction = (url: string, resourceType?: ResourceTypeEnum) => RequestParameters;
+export type ResourceType = keyof typeof ResourceTypeEnum;
+export type RequestTransformFunction = (url: string, resourceTypeEnum?: ResourceType) => RequestParameters;
 
 type UrlObject = {
     protocol: string;
@@ -38,7 +38,7 @@ type UrlObject = {
     params: Array<string>;
 };
 
-type EventCallback = (err?: Error | null | undefined) => void;
+type EventCallback = (err?: Error | null) => void;
 
 export const AUTH_ERR_MSG: string = 'NO_ACCESS_TOKEN';
 
@@ -66,7 +66,7 @@ export class RequestManager {
         return Date.now() > this._skuTokenExpiresAt;
     }
 
-    transformRequest(url: string, type: ResourceTypeEnum, tags?: Record<string, any>, tileID?: CanonicalTileID): RequestParameters {
+    transformRequest(url: string, type: ResourceType, tags?: Record<string, any>, tileID?: CanonicalTileID): RequestParameters {
         if (typeof tags === 'object') {
             url = url.replace(/\{ *([\w_]+) *}/g, (str, key) => {
                 let value = tags[key];
@@ -743,7 +743,7 @@ export class TurnstileEvent extends TelemetryEvent {
 }
 
 const turnstileEvent_ = new TurnstileEvent();
-export const postTurnstileEvent: (tileUrls: Array<string>, customAccessToken?: string | null | undefined) => void = turnstileEvent_.postTurnstileEvent.bind(turnstileEvent_);
+export const postTurnstileEvent: (tileUrls: Array<string>, customAccessToken?: string | null) => void = turnstileEvent_.postTurnstileEvent.bind(turnstileEvent_);
 
 export const mapLoadEvent: MapLoadEvent = new MapLoadEvent();
 export const postMapLoadEvent: (

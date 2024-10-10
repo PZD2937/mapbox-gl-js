@@ -1,22 +1,22 @@
 import Point from '@mapbox/point-geometry';
 import EXTENT from '../../src/style-spec/data/extent';
-import {UnwrappedTileID, CanonicalTileID} from '../../src/source/tile_id';
 import {triangleIntersectsTriangle, polygonContainsPoint} from '../../src/util/intersection_tests';
+import deepEqual from '../../src/style-spec/util/deep_equal';
 
+import type {UnwrappedTileID, CanonicalTileID} from '../../src/source/tile_id';
 import type {Bucket} from '../../src/data/bucket';
 import type {Footprint, TileFootprint} from '../util/conflation';
 import type SourceCache from '../../src/source/source_cache';
-import deepEqual from '../../src/style-spec/util/deep_equal';
 
 export const ReplacementOrderLandmark = Number.MAX_SAFE_INTEGER;
 
 // Abstract interface that acts as a source for footprints used in the replacement process
 interface FootprintSource {
-    getSourceId(): string;
-    getFootprints(): Array<TileFootprint>;
-    getOrder(): number;
-    getClipMask(): number;
-    getClipScope(): Array<string>;
+    getSourceId: () => string;
+    getFootprints: () => Array<TileFootprint>;
+    getOrder: () => number;
+    getClipMask: () => number;
+    getClipScope: () => Array<string>;
 }
 
 type Region = {
@@ -460,14 +460,14 @@ function transformPointToTile(x: number, y: number, src: CanonicalTileID, dst: C
     return new Point(xf, yf);
 }
 
-function pointInFootprint(p: Point, region: Region): boolean {
+function pointInFootprint(p: Point, footprint: Footprint): boolean {
     // get a list of all triangles that potentially cover this point.
     const candidateTriangles = [];
-    region.footprint.grid.queryPoint(p, candidateTriangles);
+    footprint.grid.queryPoint(p, candidateTriangles);
 
     // finally check if the point is in any of the triangles.
-    const fpIndices: Array<number> = region.footprint.indices;
-    const fpVertices: Array<Point> = region.footprint.vertices;
+    const fpIndices: Array<number> = footprint.indices;
+    const fpVertices: Array<Point> = footprint.vertices;
     for (let j = 0; j < candidateTriangles.length; j++) {
         const triIdx = candidateTriangles[j];
         const triangle = [

@@ -12,12 +12,7 @@ import {computeRasterColorMix, computeRasterColorOffset} from './raster';
 import {COLOR_RAMP_RES} from '../style/style_layer/raster_particle_style_layer';
 import RasterArrayTile from '../source/raster_array_tile';
 import RasterArrayTileSource from '../source/raster_array_tile_source';
-
-import type {DynamicDefinesType} from "./program/program_uniforms";
-import type Painter from './painter';
-import type SourceCache from '../source/source_cache';
-import type RasterParticleStyleLayer from '../style/style_layer/raster_particle_style_layer';
-import {OverscaledTileID, neighborCoord} from '../source/tile_id';
+import {neighborCoord} from '../source/tile_id';
 import {
     calculateGlobeMercatorMatrix,
     getGridMatrix,
@@ -29,12 +24,18 @@ import {
 import RasterParticleState from './raster_particle_state';
 import Texture from './texture';
 import {mercatorXfromLng, mercatorYfromLat} from '../geo/mercator_coordinate';
-import Transform from '../geo/transform';
 import rasterFade from './raster_fade';
 import assert from 'assert';
 import {RGBAImage} from '../util/image';
 import {smoothstep} from '../util/util';
 import {GLOBE_ZOOM_THRESHOLD_MAX} from '../geo/projection/globe_constants';
+
+import type Transform from '../geo/transform';
+import type {OverscaledTileID} from '../source/tile_id';
+import type RasterParticleStyleLayer from '../style/style_layer/raster_particle_style_layer';
+import type SourceCache from '../source/source_cache';
+import type Painter from './painter';
+import type {DynamicDefinesType} from "./program/program_uniforms";
 
 export default drawRasterParticle;
 
@@ -176,7 +177,7 @@ function renderParticlesToTexture(painter: Painter, sourceCache: SourceCache, la
         // Allocate a texture if not allocated
         context.activeTexture.set(gl.TEXTURE0 + RASTER_COLOR_TEXTURE_UNIT);
         let tex = layer.colorRampTexture;
-        if (!tex) tex = layer.colorRampTexture = new Texture(context, layer.colorRamp, gl.RGBA);
+        if (!tex) tex = layer.colorRampTexture = new Texture(context, layer.colorRamp, gl.RGBA8);
         tex.bind(gl.LINEAR, gl.CLAMP_TO_EDGE);
     }
 

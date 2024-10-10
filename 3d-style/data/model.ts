@@ -1,8 +1,5 @@
 import LngLat from '../../src/geo/lng_lat';
-import Color from '../../src/style-spec/util/color';
 import Texture from '../../src/render/texture';
-import {ModelLayoutArray, TriangleIndexArray, NormalLayoutArray, TexcoordLayoutArray, FeatureVertexArray} from '../../src/data/array_types';
-import {StructArray} from '../../src/util/struct_array';
 import {Aabb} from '../../src/util/primitives';
 import {mat4, vec4} from 'gl-matrix';
 import {modelAttributes, normalAttributes, texcoordAttributes, color3fAttributes, color4fAttributes, featureAttributes} from './model_attributes';
@@ -12,6 +9,9 @@ import {number as interpolate} from '../../src/style-spec/util/interpolate';
 import MercatorCoordinate, {getMetersPerPixelAtLatitude, getLatitudeScale, mercatorZfromAltitude} from '../../src/geo/mercator_coordinate';
 import {rotationScaleYZFlipMatrix, getBoxBottomFace, rotationFor3Points, convertModelMatrixForGlobe} from '../util/model_util';
 
+import type {StructArray} from '../../src/util/struct_array';
+import type {ModelLayoutArray, TriangleIndexArray, NormalLayoutArray, TexcoordLayoutArray, FeatureVertexArray} from '../../src/data/array_types';
+import type Color from '../../src/style-spec/util/color';
 import type {vec2, vec3, quat} from 'gl-matrix';
 import type Context from '../../src/gl/context';
 import type IndexBuffer from '../../src/gl/index_buffer';
@@ -316,7 +316,7 @@ export default class Model {
 }
 
 export function uploadTexture(texture: ModelTexture, context: Context, useSingleChannelTexture: boolean = false) {
-    const textureFormat = useSingleChannelTexture ? context.gl.R8 : context.gl.RGBA;
+    const textureFormat = useSingleChannelTexture ? context.gl.R8 : context.gl.RGBA8;
     if (!texture.uploaded) {
         const useMipmap = texture.sampler.minFilter >= context.gl.NEAREST_MIPMAP_NEAREST;
         texture.gfxTexture = new Texture(context, texture.image, textureFormat, {useMipmap});
