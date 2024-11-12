@@ -20,11 +20,11 @@ import type {Source} from './source_types';
 import type {Evented} from '../util/evented';
 import type {Callback} from '../types/callback';
 import type {MapEvents} from '../ui/events';
-import type {SourceSpecification} from '../style-spec/types';
+import type {CustomTags, SourceSpecification} from '../style-spec/types';
 
 export type {Source};
 
-export type SourceEvents = Pick<MapEvents, 'data' | 'dataloading' | 'error'>;
+export type SourceEvents = Pick<MapEvents, 'data' | 'dataloading' | 'error' | 'sourcetileloadfail'>;
 
 export type SourceRasterLayer = {
     id: string;
@@ -75,7 +75,7 @@ export interface ISource extends Evented<SourceEvents> {
     maxzoom: number;
     tileSize: number;
     attribution?: string;
-    customTags?: Record<string, any>,
+    customTags?: CustomTags,
     projection?: string,
 
     roundZoom?: boolean;

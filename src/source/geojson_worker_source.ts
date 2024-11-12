@@ -89,7 +89,7 @@ function loadGeoJSONTile(params: RequestedTileParameters, callback: LoadVectorDa
  */
 class GeoJSONWorkerSource extends VectorTileWorkerSource {
     _geoJSONIndex: GeoJSONIndex;
-    _featureMap: Map<number | string, unknown>;
+    _featureMap: Map<number | string, GeoJSON.Feature>;
 
     /**
      * @param [loadGeoJSON] Optional method for custom loading/parsing of
@@ -162,11 +162,11 @@ class GeoJSONWorkerSource extends VectorTileWorkerSource {
                                 if (!feature.geometry) {
                                     this._featureMap.delete(id);
                                 } else {
-                                    this._featureMap.set(id, feature) as unknown as GeoJSON.Feature[];
+                                    this._featureMap.set(id, feature);
                                 }
                             }
                         }
-                        data.features = [...this._featureMap.values()];
+                        data.features = Array.from(this._featureMap.values());
                     }
 
                     this._geoJSONIndex = params.cluster ?

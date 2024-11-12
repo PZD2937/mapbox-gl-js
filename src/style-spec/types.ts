@@ -1,6 +1,7 @@
 // Generated code; do not edit. Edit build/generate-typed-style-spec.ts instead.
 
 import type {UnionToIntersection} from './union-to-intersection';
+import type {CanonicalTileID} from "./types/tile_id";
 
 export type ColorSpecification = string;
 
@@ -9,6 +10,10 @@ export type FormattedSpecification = string;
 export type ResolvedImageSpecification = string;
 
 export type PromoteIdSpecification = {[_: string]: string} | string;
+
+export type CustomTagFun = (canonical: CanonicalTileID) => string | (() => string);
+
+export type CustomTags = Record<string, CustomTagFun | (string | number)[]>
 
 export type FilterSpecification =
     | ExpressionSpecification
@@ -223,7 +228,7 @@ export type VectorSourceSpecification = {
     "url"?: string,
     "tiles"?: Array<string>,
     "bounds"?: [number, number, number, number],
-    "customTags"?: Record<string, any>,
+    "customTags"?: CustomTags,
     "scheme"?: "xyz" | "tms",
     "minzoom"?: number,
     "maxzoom"?: number,
@@ -241,7 +246,7 @@ export type RasterSourceSpecification = {
     "tiles"?: Array<string>,
     "bounds"?: [number, number, number, number],
     "projection"?: RasterProjection,
-    "customTags"?: Record<string, any>
+    "customTags"?: CustomTags,
     "minzoom"?: number,
     "maxzoom"?: number,
     "tileSize"?: number,
@@ -256,7 +261,7 @@ export type RasterDEMSourceSpecification = {
     "url"?: string,
     "tiles"?: Array<string>,
     "bounds"?: [number, number, number, number],
-    "customTags"?: Record<string, any>
+    "customTags"?: CustomTags,
     "minzoom"?: number,
     "maxzoom"?: number,
     "tileSize"?: number,
@@ -276,7 +281,7 @@ export type RasterArraySourceSpecification = {
     "bounds"?: [number, number, number, number],
     "minzoom"?: number,
     "maxzoom"?: number,
-    "customTags"?: Record<string, any>;
+    "customTags"?: CustomTags,
     "tileSize"?: number,
     "attribution"?: string,
     "rasterLayers"?: unknown,
@@ -289,7 +294,7 @@ export type GeoJSONSourceSpecification = {
     "data"?: GeoJSON.GeoJSON | string,
     "maxzoom"?: number,
     "minzoom"?: number,
-    "customTags"?: Record<string, any>
+    "customTags"?: CustomTags,
     "attribution"?: string,
     "buffer"?: number,
     "filter"?: unknown,
@@ -308,14 +313,14 @@ export type GeoJSONSourceSpecification = {
 export type VideoSourceSpecification = {
     "type": "video",
     "urls": Array<string>,
-    "customTags"?: Record<string, any>
+    "customTags"?: CustomTags,
     "coordinates": [[number, number], [number, number], [number, number], [number, number]]
 }
 
 export type ImageSourceSpecification = {
     "type": "image",
     "url"?: string,
-    "customTags"?: Record<string, any>
+    "customTags"?: CustomTags,
     "coordinates": [[number, number], [number, number], [number, number], [number, number]]
 }
 
@@ -323,7 +328,7 @@ export type ModelSourceSpecification = {
     "type": "model" | "batched-model",
     "maxzoom"?: number,
     "minzoom"?: number,
-    "customTags"?: Record<string, any>;
+    "customTags"?: CustomTags,
     "tiles"?: Array<string>
 }
 
@@ -1115,85 +1120,38 @@ export type Layer = Pick<
     | "metadata"
 >;
 
+export type FillLayer = Omit<FillLayerSpecification, 'source'> & {source: GeoJSONSourceSpecification | FillLayerSpecification['source']};
+
+export type LineLayer = Omit<LineLayerSpecification, 'source'> & {source: GeoJSONSourceSpecification | LineLayerSpecification['source']};
+
+export type SymbolLayer = Omit<SymbolLayerSpecification, 'source'> & {source: GeoJSONSourceSpecification | SymbolLayerSpecification['source']};
+
+export type CircleLayer = Omit<CircleLayerSpecification, 'source'> & {source: GeoJSONSourceSpecification | CircleLayerSpecification['source']};
+
+export type HeatmapLayer = Omit<HeatmapLayerSpecification, 'source'> & {source: GeoJSONSourceSpecification | HeatmapLayerSpecification['source']};
+
+export type FillExtrusionLayer = Omit<FillExtrusionLayerSpecification, 'source'> & {source: GeoJSONSourceSpecification | FillExtrusionLayerSpecification['source']};
+
+export type RasterLayer = Omit<RasterLayerSpecification, 'source'> & {source: RasterSourceSpecification | RasterLayerSpecification['source']};
+
+export type RasterParticleLayer = Omit<RasterParticleLayerSpecification, 'source'> & {source: RasterArraySourceSpecification | RasterParticleLayerSpecification['source']};
+
+export type HillshadeLayer = Omit<HillshadeLayerSpecification, 'source'> & {source: RasterDEMSourceSpecification | HillshadeLayerSpecification['source']};
+
+export type ModelLayer = Omit<ModelLayerSpecification, 'source'> & {source: ModelSourceSpecification | ModelLayerSpecification['source']};
+
+export type BackgroundLayer = BackgroundLayerSpecification;
+
+export type SkyLayer = SkyLayerSpecification;
+
+export type SlotLayer = SlotLayerSpecification;
+
+export type ClipLayer = ClipLayerSpecification;
+
 /**
  * @deprecated Use `StyleSpecification` instead.
  */
 export type Style = StyleSpecification;
-
-/**
- * @deprecated Use `LayerSpecification` instead.
- */
-export type AnyLayer = LayerSpecification;
-
-/**
- * @deprecated Use `FillLayerSpecification` instead.
- */
-export type FillLayer = FillLayerSpecification;
-
-/**
- * @deprecated Use `LineLayerSpecification` instead.
- */
-export type LineLayer = LineLayerSpecification;
-
-/**
- * @deprecated Use `SymbolLayerSpecification` instead.
- */
-export type SymbolLayer = SymbolLayerSpecification;
-
-/**
- * @deprecated Use `CircleLayerSpecification` instead.
- */
-export type CircleLayer = CircleLayerSpecification;
-
-/**
- * @deprecated Use `HeatmapLayerSpecification` instead.
- */
-export type HeatmapLayer = HeatmapLayerSpecification;
-
-/**
- * @deprecated Use `FillExtrusionLayerSpecification` instead.
- */
-export type FillExtrusionLayer = FillExtrusionLayerSpecification;
-
-/**
- * @deprecated Use `RasterLayerSpecification` instead.
- */
-export type RasterLayer = RasterLayerSpecification;
-
-/**
- * @deprecated Use `RasterParticleLayerSpecification` instead.
- */
-export type RasterParticleLayer = RasterParticleLayerSpecification;
-
-/**
- * @deprecated Use `HillshadeLayerSpecification` instead.
- */
-export type HillshadeLayer = HillshadeLayerSpecification;
-
-/**
- * @deprecated Use `ModelLayerSpecification` instead.
- */
-export type ModelLayer = ModelLayerSpecification;
-
-/**
- * @deprecated Use `BackgroundLayerSpecification` instead.
- */
-export type BackgroundLayer = BackgroundLayerSpecification;
-
-/**
- * @deprecated Use `SkyLayerSpecification` instead.
- */
-export type SkyLayer = SkyLayerSpecification;
-
-/**
- * @deprecated Use `SlotLayerSpecification` instead.
- */
-export type SlotLayer = SlotLayerSpecification;
-
-/**
- * @deprecated Use `ClipLayerSpecification` instead.
- */
-export type ClipLayer = ClipLayerSpecification;
 
 /**
  * @deprecated Use `LayoutSpecification` instead.

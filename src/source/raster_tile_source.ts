@@ -23,7 +23,7 @@ import type {Cancelable} from '../types/cancelable';
 import type {
     RasterSourceSpecification,
     RasterDEMSourceSpecification,
-    RasterArraySourceSpecification, RasterProjection
+    RasterArraySourceSpecification, RasterProjection, CustomTags
 } from '../style-spec/types';
 import type Actor from '../util/actor';
 import type {WorkerCoverTilesResult} from "./worker_source";
@@ -61,7 +61,7 @@ class RasterTileSource<T extends 'raster' | 'raster-dem' | 'raster-array' = 'ras
     // eslint-disable-next-line camelcase
     mapbox_logo: boolean | undefined;
     tileSize: number;
-    customTags?: Record<string, any>;
+    customTags?: CustomTags;
     projection?: RasterProjection;
     minTileCacheSize: number | null | undefined;
     maxTileCacheSize: number | null | undefined;

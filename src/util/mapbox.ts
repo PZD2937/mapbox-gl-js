@@ -27,6 +27,7 @@ import type {Cancelable} from '../types/cancelable';
 import type {TileJSON} from '../types/tilejson';
 import type {Map as MapboxMap} from "../ui/map";
 import type {CanonicalTileID} from "../source/tile_id";
+import type {CustomTags} from "../style-spec/types";
 
 export type ResourceType = keyof typeof ResourceTypeEnum;
 export type RequestTransformFunction = (url: string, resourceTypeEnum?: ResourceType) => RequestParameters;
@@ -66,10 +67,10 @@ export class RequestManager {
         return Date.now() > this._skuTokenExpiresAt;
     }
 
-    transformRequest(url: string, type: ResourceType, tags?: Record<string, any>, tileID?: CanonicalTileID): RequestParameters {
+    transformRequest(url: string, type: ResourceType, tags?: CustomTags, tileID?: CanonicalTileID): RequestParameters {
         if (typeof tags === 'object') {
             url = url.replace(/\{ *([\w_]+) *}/g, (str, key) => {
-                let value = tags[key];
+                let value = tags[key] as any;
                 if (value === undefined) {
                     throw new Error(`No value provided for variable ${str}`);
                 } else if (Array.isArray(value)) {

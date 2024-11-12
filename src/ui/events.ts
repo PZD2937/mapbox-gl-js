@@ -415,6 +415,13 @@ export type MapSourceDataEvent = {
     coord?: Tile['tileID'];
 };
 
+export type MapSourceTileLoadFailEvent = {
+    error: any,
+    sourceId: string;
+    tile: Tile & {retryCount?: number, _url: string};
+    reloadTile: () => void
+};
+
 /**
  * `MapDataEvent` is a type of events related to _loading data, styles, and sources.
  * For a full list of available events, see [`Map` events](/mapbox-gl-js/api/map/#map-events).
@@ -1486,6 +1493,25 @@ export type MapEvents = {
      * });
      */
     'sourcedataloading': MapSourceDataEvent;
+
+    /**
+     * Fired when any source tile load fail.
+     *
+     * @event tileloadfail
+     * @memberof Map
+     * @instance
+     * @type {MapSourceTileLoadFailEvent}
+     * @example
+     * // Initialize the map
+     * const map = new mapboxgl.Map({});
+     * // Set an event listener that fires
+     * // when the map's sources begin _loading or
+     * // changing asynchronously.
+     * map.on('tileloadfail', () => {
+     *     console.log('A tileloadfail event occurred.');
+     * });
+     */
+    'sourcetileloadfail': MapSourceTileLoadFailEvent
 
     /**
      * Fired when an icon or pattern needed by the style is missing. The missing image can

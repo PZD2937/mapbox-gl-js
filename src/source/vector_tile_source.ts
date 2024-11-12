@@ -17,7 +17,7 @@ import type Dispatcher from '../util/dispatcher';
 import type Tile from './tile';
 import type {Callback} from '../types/callback';
 import type {Cancelable} from '../types/cancelable';
-import type {VectorSourceSpecification, PromoteIdSpecification} from '../style-spec/types';
+import type {VectorSourceSpecification, PromoteIdSpecification, CustomTags} from '../style-spec/types';
 import type Actor from '../util/actor';
 import type {LoadVectorTileResult} from './load_vector_tile';
 import type {WorkerTileResult} from './worker_source';
@@ -55,7 +55,7 @@ class VectorTileSource extends Evented<SourceEvents> implements ISource {
     minzoom: number;
     maxzoom: number;
     url: string;
-    customTags?: Record<string, any>;
+    customTags?: CustomTags;
     scheme: string;
     tileSize: number;
     minTileCacheSize: number | null | undefined;
@@ -65,7 +65,14 @@ class VectorTileSource extends Evented<SourceEvents> implements ISource {
     // eslint-disable-next-line camelcase
     mapbox_logo: boolean | undefined;
     promoteId: PromoteIdSpecification | null | undefined;
-    vtOptions?: any;
+    vtOptions?: {
+        /**
+         * 加密方式
+         * - 1 天地图
+         * - 2 星图.
+         */
+        encrypt: '1' | '2'
+    };
 
     _options: VectorSourceSpecification;
     _collectResourceTiming: boolean;

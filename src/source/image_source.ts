@@ -26,6 +26,7 @@ import type VertexBuffer from '../gl/vertex_buffer';
 import type IndexBuffer from '../gl/index_buffer';
 import type {ProjectedPoint} from '../geo/projection/projection';
 import type {
+    CustomTags,
     ImageSourceSpecification,
     VideoSourceSpecification
 } from '../style-spec/types';
@@ -267,6 +268,8 @@ class ImageSource<T extends 'image' | 'canvas' | 'video'= 'image'> extends Event
     hasTile: undefined;
     afterUpdate: undefined;
 
+    customTags?: CustomTags;
+
     /**
      * @private
      */
@@ -275,6 +278,10 @@ class ImageSource<T extends 'image' | 'canvas' | 'video'= 'image'> extends Event
         this.id = id;
         this.dispatcher = dispatcher;
         this.coordinates = options.coordinates;
+
+        if (options.type !== "canvas") {
+            this.customTags = options.customTags;
+        }
 
         this.type = 'image' as T;
         this.minzoom = 0;

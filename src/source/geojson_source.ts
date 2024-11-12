@@ -11,7 +11,7 @@ import type Tile from './tile';
 import type Actor from '../util/actor';
 import type {Callback} from '../types/callback';
 import type {GeoJSONWorkerOptions} from './geojson_worker_source';
-import type {GeoJSONSourceSpecification, PromoteIdSpecification} from '../style-spec/types';
+import type {CustomTags, GeoJSONSourceSpecification, PromoteIdSpecification} from '../style-spec/types';
 import type {Cancelable} from '../types/cancelable';
 
 /**
@@ -74,7 +74,7 @@ class GeoJSONSource extends Evented<SourceEvents> implements ISource {
     // eslint-disable-next-line camelcase
     mapbox_logo: boolean | undefined;
 
-    customTags?: Record<string, any>;
+    customTags?: CustomTags;
 
     roundZoom: boolean | undefined;
     isTileClipped: boolean | undefined;

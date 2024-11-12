@@ -263,8 +263,13 @@ class SourceCache extends Evented {
             tile.state = 'errored';
             if (err.status !== 404) {
                 this._source.fire(new ErrorEvent(err, {tile}));
-                // @ts-ignore
-                this._source.fire(new Event('tileloadfail', {error: err, tile, reloadTile: () => this._reloadTile(id, 'reloading')}));
+                this._source.fire(new Event('sourcetileloadfail', {
+                    error: err,
+                    sourceId: this._source.id,
+                    // @ts-ignore
+                    tile,
+                    reloadTile: () => this._reloadTile(id, 'reloading')
+                }));
             } else {
                 // If the requested tile is missing, try to load the parent tile
                 // to use it as an overscaled tile instead of the missing one.
