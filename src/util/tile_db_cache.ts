@@ -21,12 +21,13 @@ function isNullBodyStatus(status: Response["status"]): boolean {
 }
 
 function openDB() {
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
     if (tileDB) return;
     tileDB = new Promise((resolve, reject) => {
         const request = indexedDB.open("map-tiles", 1);
         request.onerror = (error) => {
             console.error('indexDB 初始化失败', error);
-            reject(error);
+            reject(new Error('indexDB 初始化失败'));
         };
         request.onupgradeneeded = () => {
             const db = request.result;
@@ -62,15 +63,15 @@ export function cachePutToDB(url: string, response: Response) {
     });
 }
 
-export function cacheGetFromDB(id: string, callback: (error?: any | null | undefined, response?: Response | null | undefined, fresh?: boolean | null | undefined) => void) {
+export function cacheGetFromDB(id: string, callback: (error?: any, response?: Response | null, fresh?: boolean | null) => void) {
     let cancel = false;
-    setTimeout(() => {
+    const timer = setTimeout(() => {
         cancel = true;
         callback(null);
     }, 2000);
     getObjectStore().then(store => {
-        // const tilesIndex = store.index('tiles');
-        if (cancel) return;
+        clearTimeout(timer);
+        if (cancel) return callback(null);
         const request = store.get(id);
         request.onerror = (error) => {
             console.error(error);
@@ -114,7 +115,7 @@ function removeTile(count: number) {
     });
 }
 
-export function clearDB(callback?: (err?: Error | null | undefined) => void) {
+export function clearDB(callback?: (err?: Error | null) => void) {
     getObjectStore().then(store => {
         store.clear();
         if (callback) callback();

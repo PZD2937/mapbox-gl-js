@@ -187,7 +187,7 @@ function makeFetchRequest(requestParameters: RequestParameters, callback: Respon
                 // reading the body can cause the cache insertion to error. We could catch this error
                 // in most browsers but in Firefox it seems to sometimes crash the tab. Adding
                 // it to the cache here avoids that error.
-                // eslint-disable-next-line no-unused-expressions
+                // eslint-disable-next-line no-unused-expressions,@typescript-eslint/no-unused-expressions
                 cacheUrl && request.headers.set('CacheUrl', cacheUrl);
                 cachePut(request, cacheableResponse, requestTime);
             }
@@ -199,7 +199,7 @@ function makeFetchRequest(requestParameters: RequestParameters, callback: Respon
     };
 
     if (cacheIgnoringSearch) {
-        // eslint-disable-next-line no-unused-expressions
+        // eslint-disable-next-line no-unused-expressions,@typescript-eslint/no-unused-expressions
         cacheUrl && request.headers.set('CacheUrl', cacheUrl);
         cacheGet(request, validateOrFetch);
     } else {
