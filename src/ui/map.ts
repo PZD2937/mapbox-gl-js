@@ -1,5 +1,5 @@
 import {version} from '../../package.json';
-import {asyncAll, extend, bindAll, warnOnce, uniqueId, isSafariWithAntialiasingBug} from '../util/util';
+import {asyncAll, deepEqual, extend, bindAll, warnOnce, uniqueId, isSafariWithAntialiasingBug} from '../util/util';
 import browser from '../util/browser';
 import * as DOM from '../util/dom';
 import {getImage, ResourceType} from '../util/ajax';
@@ -12,6 +12,7 @@ import {
     removeAuthState
 } from '../util/mapbox';
 import Style from '../style/style';
+import IndoorManager from '../style/indoor_manager';
 import EvaluationParameters from '../style/evaluation_parameters';
 import Painter from '../render/painter';
 import Transform from '../geo/transform';
@@ -51,7 +52,7 @@ import type {LngLatLike, LngLatBoundsLike} from '../geo/lng_lat';
 import type CustomStyleLayer from '../style/style_layer/custom_style_layer';
 import type {CustomLayerInterface} from '../style/style_layer/custom_style_layer';
 import type {StyleImageInterface, StyleImageMetadata} from '../style/style_image';
-import type {StyleOptions, StyleSetterOptions, AnyLayer, FeatureSelector} from '../style/style';
+import type {StyleOptions, StyleSetterOptions, AnyLayer, FeatureSelector, SourceSelector, QueryRenderedFeaturesParams, QueryRenderedFeaturesetParams} from '../style/style';
 import type ScrollZoomHandler from './handler/scroll_zoom';
 import type {ScrollZoomHandlerOptions} from './handler/scroll_zoom';
 import type BoxZoomHandler from './handler/box_zoom';
@@ -76,6 +77,8 @@ import type {
     LightsSpecification,
     TerrainSpecification,
     FogSpecification,
+    SnowSpecification,
+    RainSpecification,
     SourceSpecification,
     ProjectionSpecification,
     CameraSpecification,
@@ -87,11 +90,11 @@ import type {
 import type {Source, SourceClass} from '../source/source';
 import type {EasingOptions} from './camera';
 import type {ContextOptions} from '../gl/context';
-import type {QueryRenderedFeaturesParams} from '../source/query_features';
-import type {GeoJSONFeature} from '../util/vectortile_to_geojson';
+import type {GeoJSONFeature, FeaturesetDescriptor, TargetFeature, TargetDescriptor} from '../util/vectortile_to_geojson';
 import type {ITrackedParameters} from '../tracked-parameters/tracked_parameters_base';
-import type {Callback} from 'src/types/callback';
+import type {Callback} from '../types/callback';
 import type {Interaction} from './interactions';
+import type {SpriteFormat} from '../render/image_manager';
 
 export type ControlPosition = 'top-left' | 'top' | 'top-right' | 'right' | 'bottom-right' | 'bottom' | 'bottom-left' | 'left';
 /* eslint-disable no-use-before-define */
@@ -114,12 +117,10 @@ export type SetStyleOptions = {
     localIdeographFontFamily: StyleOptions['localIdeographFontFamily'];
 };
 
-export type QueryRenderedFeaturesOptions = Pick<QueryRenderedFeaturesParams, 'layers' | 'filter' | 'validate'>;
-
 type Listener<T extends MapEventType> = (event: MapEventOf<T>) => void;
 
 type DelegatedListener = {
-    layers: Set<string>;
+    targets: string[] | TargetDescriptor;
     listener: Listener<MapEventType>;
     delegates: {[T in MapEventType]?: Listener<T>};
 };
@@ -128,6 +129,17 @@ export const AVERAGE_ELEVATION_SAMPLING_INTERVAL = 500; // ms
 export const AVERAGE_ELEVATION_EASE_TIME = 300; // ms
 export const AVERAGE_ELEVATION_EASE_THRESHOLD = 1; // meters
 export const AVERAGE_ELEVATION_CHANGE_THRESHOLD = 1e-4; // meters
+
+// Check if the given TargetDescriptor targets are equal.
+function areTargetsEqual(a: string[] | TargetDescriptor, b: string[] | TargetDescriptor) {
+    if (Array.isArray(a) && Array.isArray(b)) {
+        const aSet = new Set(a);
+        const bSet = new Set(b);
+        return aSet.size === bSet.size && a.every(id => bSet.has(id));
+    } else {
+        return deepEqual(a, b);
+    }
+}
 
 export type MapOptions = {
     style?: StyleSpecification | string;
@@ -189,6 +201,8 @@ export type MapOptions = {
     localIdeographFontFamily?: string;
     performanceMetricsCollection?: boolean;
     tessellationStep?: number;
+    scaleFactor?: number;
+    spriteFormat?: SpriteFormat;
 };
 
 const defaultMinZoom = -2;
@@ -246,7 +260,9 @@ const defaultOptions: Omit<MapOptions, 'container'> = {
     crossSourceCollisions: true,
     collectResourceTiming: false,
     testMode: false,
-    precompilePrograms: true
+    precompilePrograms: true,
+    scaleFactor: 1.0,
+    spriteFormat: 'auto',
 };
 
 /**
@@ -371,6 +387,7 @@ const defaultOptions: Omit<MapOptions, 'container'> = {
  * @param {Object} [options.locale=null] A patch to apply to the default localization table for UI strings such as control tooltips. The `locale` object maps namespaced UI string IDs to translated strings in the target language;
  * see [`src/ui/default_locale.js`](https://github.com/mapbox/mapbox-gl-js/blob/main/src/ui/default_locale.js) for an example with all supported string IDs. The object may specify all UI strings (thereby adding support for a new translation) or only a subset of strings (thereby patching the default translation table).
  * @param {boolean} [options.testMode=false] Silences errors and warnings generated due to an invalid accessToken, useful when using the library to write unit tests.
+ * @param {'raster' | 'icon_set' | 'auto'} [options.spriteFormat='auto'] The format of the image sprite to use. If set to `'auto'`, vector iconset will be used for all mapbox-hosted sprites and raster sprite for all custom URLs.
  * @param {ProjectionSpecification} [options.projection='mercator'] The [projection](https://docs.mapbox.com/mapbox-gl-js/style-spec/projection/) the map should be rendered in.
  * Supported projections are:
  * * [Albers](https://en.wikipedia.org/wiki/Albers_projection) equal-area conic projection as `albers`
@@ -406,6 +423,7 @@ const defaultOptions: Omit<MapOptions, 'container'> = {
  */
 export class Map extends Camera {
     style: Style;
+    indoor: IndoorManager;
     painter: Painter;
     handlers?: HandlerManager;
 
@@ -439,6 +457,7 @@ export class Map extends Camera {
     _styleDirty?: boolean;
     _sourcesDirty?: boolean;
     _placementDirty?: boolean;
+    _scaleFactorChanged?: boolean;
     _loaded: boolean;
     _fullyLoaded: boolean; // accounts for placement finishing as well
     _trackResize: boolean;
@@ -483,6 +502,7 @@ export class Map extends Camera {
     _tessellationStep?: number;
     _precompilePrograms: boolean;
     _interactions: InteractionSet;
+    _scaleFactor: number;
 
     // `_useExplicitProjection` indicates that a projection is set by a call to map.setProjection()
     _useExplicitProjection: boolean;
@@ -543,6 +563,8 @@ export class Map extends Camera {
 
     // Current frame id, iterated on each render
     _frameId: number;
+
+    _spriteFormat: SpriteFormat;
 
     constructor(options: MapOptions) {
         LivePerformanceUtils.mark(LivePerformanceMarkers.create);
@@ -608,6 +630,7 @@ export class Map extends Camera {
         this._containerHeight = 0;
         this._showParseStatus = true;
         this._precompilePrograms = options.precompilePrograms;
+        this._scaleFactorChanged = false;
 
         this._averageElevationLastSampledAt = -Infinity;
         this._averageElevationExaggeration = 0;
@@ -619,6 +642,8 @@ export class Map extends Camera {
         this._useExplicitProjection = false; // Fallback to stylesheet by default
 
         this._frameId = 0;
+
+        this._scaleFactor = options.scaleFactor;
 
         this._requestManager = new RequestManager(options.transformRequest, options.accessToken, options.testMode);
         this._silenceAuthErrors = !!options.testMode;
@@ -649,6 +674,8 @@ export class Map extends Camera {
         if (options.maxBounds) {
             this.setMaxBounds(options.maxBounds);
         }
+
+        this._spriteFormat = options.spriteFormat;
 
         bindAll([
             '_onWindowOnline',
@@ -683,6 +710,9 @@ export class Map extends Camera {
         this._tp.registerParameter(this, ["Debug", "Wireframe"], "showTerrainWireframe");
         this._tp.registerParameter(this, ["Debug", "Wireframe"], "showLayers2DWireframe");
         this._tp.registerParameter(this, ["Debug", "Wireframe"], "showLayers3DWireframe");
+        this._tp.registerParameter(this, ["Scaling"], "_scaleFactor", {min: 0.1, max: 10.0, step: 0.1}, () => {
+            this.setScaleFactor(this._scaleFactor);
+        });
 
         this._setupPainter();
         if (this.painter === undefined) {
@@ -721,6 +751,8 @@ export class Map extends Camera {
         if (options.projection) {
             this.setProjection(options.projection);
         }
+
+        this.indoor = new IndoorManager(this);
 
         const hashName = (typeof options.hash === 'string' && options.hash) || undefined;
         if (options.hash) this._hash = (new Hash(hashName)).addTo(this);
@@ -1181,6 +1213,42 @@ export class Map extends Camera {
     getMaxPitch(): number { return this.transform.maxPitch; }
 
     /**
+     * Returns the map's current scale factor.
+     *
+     * @returns {number} Returns the map's scale factor.
+     * @private
+     *
+     * @example
+     * const scaleFactor = map.getScaleFactor();
+     */
+    getScaleFactor(): number {
+        return this._scaleFactor;
+    }
+
+    /**
+     * Sets the map's scale factor.
+     *
+     * @param {number} scaleFactor The scale factor to set.
+     * @returns {Map} Returns itself to allow for method chaining.
+     * @private
+     *
+     * @example
+     *
+     * map.setScaleFactor(2);
+     */
+    setScaleFactor(scaleFactor: number): this {
+        this._scaleFactor = scaleFactor;
+        this.painter.scaleFactor = scaleFactor;
+        this._tp.refreshUI();
+
+        this._scaleFactorChanged = true;
+
+        this.style._updateFilteredLayers((layer) => layer.type === 'symbol');
+        this._update(true);
+        return this;
+    }
+
+    /**
      * Returns the state of `renderWorldCopies`. If `true`, multiple copies of the world will be rendered side by side beyond -180 and 180 degrees longitude. If set to `false`:
      * - When the map is zoomed out far enough that a single representation of the world does not fill the map's entire
      * container, there will be blank space beyond 180 and -180 degrees longitude.
@@ -1505,12 +1573,26 @@ export class Map extends Camera {
         return (this.handlers && this.handlers._isDragging()) || false;
     }
 
-    _createDelegatedListener<T extends MapEventType>(type: T, layers: Array<string>, listener: Listener<T>): DelegatedListener {
+    _createDelegatedListener<T extends MapEventType>(type: T, targets: string[] | TargetDescriptor, listener: Listener<T>): DelegatedListener {
+        const queryRenderedFeatures = (point: PointLike | [PointLike, PointLike]) => {
+            let features = [];
+
+            if (Array.isArray(targets)) {
+                const filteredLayers = targets.filter(layerId => this.getLayer(layerId));
+                features = filteredLayers.length ? this.queryRenderedFeatures(point, {layers: filteredLayers}) : [];
+            } else {
+                features = this.queryRenderedFeatures(point, {target: targets});
+            }
+
+            return features;
+        };
+
         if (type === 'mouseenter' || type === 'mouseover') {
             let mousein = false;
+
             const mousemove = (e: MapMouseEvent) => {
-                const filteredLayers = layers.filter(layerId => this.getLayer(layerId));
-                const features = filteredLayers.length ? this.queryRenderedFeatures(e.point, {layers: filteredLayers}) : [];
+                const features = queryRenderedFeatures(e.point);
+
                 if (!features.length) {
                     mousein = false;
                 } else if (!mousein) {
@@ -1518,16 +1600,18 @@ export class Map extends Camera {
                     listener.call(this, new MapMouseEvent(type, this, e.originalEvent, {features}));
                 }
             };
+
             const mouseout = () => {
                 mousein = false;
             };
 
-            return {layers: new Set(layers), listener, delegates: {mousemove, mouseout}};
+            return {listener, targets, delegates: {mousemove, mouseout}};
         } else if (type === 'mouseleave' || type === 'mouseout') {
             let mousein = false;
+
             const mousemove = (e: MapMouseEvent) => {
-                const filteredLayers = layers.filter(layerId => this.getLayer(layerId));
-                const features = filteredLayers.length ? this.queryRenderedFeatures(e.point, {layers: filteredLayers}) : [];
+                const features = queryRenderedFeatures(e.point);
+
                 if (features.length) {
                     mousein = true;
                 } else if (mousein) {
@@ -1535,6 +1619,7 @@ export class Map extends Camera {
                     listener.call(this, new MapMouseEvent(type, this, e.originalEvent));
                 }
             };
+
             const mouseout = (e: MapMouseEvent) => {
                 if (mousein) {
                     mousein = false;
@@ -1542,11 +1627,11 @@ export class Map extends Camera {
                 }
             };
 
-            return {layers: new Set(layers), listener, delegates: {mousemove, mouseout}};
+            return {listener, targets, delegates: {mousemove, mouseout}};
         } else {
             const delegate = (e: MapMouseEvent) => {
-                const filteredLayers = layers.filter(layerId => this.getLayer(layerId));
-                const features = filteredLayers.length ? this.queryRenderedFeatures(e.point, {layers: filteredLayers}) : [];
+                const features = queryRenderedFeatures(e.point);
+
                 if (features.length) {
                     // Here we need to mutate the original event, so that preventDefault works as expected.
                     e.features = features;
@@ -1555,7 +1640,7 @@ export class Map extends Camera {
                 }
             };
 
-            return {layers: new Set(layers), listener, delegates: {[type]: delegate}};
+            return {listener, targets, delegates: {[type]: delegate}};
         }
     }
 
@@ -1674,26 +1759,19 @@ export class Map extends Camera {
      * @see [Example: Create a hover effect](https://docs.mapbox.com/mapbox-gl-js/example/hover-styles/)
      * @see [Example: Display popup on click](https://docs.mapbox.com/mapbox-gl-js/example/popup-on-click/)
      */
-    on<T extends MapEventType | (string & {})>(type: T, listener: Listener<Extract<T, MapEventType>>): this;
-    on<T extends MapEventType | (string & {})>(type: T, layerIds: string | string[], listener: Listener<Extract<T, MapEventType>>): this;
-    on<T extends MapEventType | (string & {})>(type: T, layerIds: string | string[] | Listener<Extract<T, MapEventType>>, listener?: Listener<Extract<T, MapEventType>>): this {
-        if (typeof layerIds === 'function' || listener === undefined) {
-            return super.on(type as MapEventType, layerIds as Listener<MapEventType>);
+    override on<T extends MapEventType | (string & {})>(type: T, listener: Listener<Extract<T, MapEventType>>): this;
+    override on<T extends MapEventType | (string & {})>(type: T, targets: string | string[] | TargetDescriptor, listener: Listener<Extract<T, MapEventType>>): this;
+    override on<T extends MapEventType | (string & {})>(type: T, targets: string | string[] | TargetDescriptor | Listener<Extract<T, MapEventType>>, listener?: Listener<Extract<T, MapEventType>>): this {
+        if (typeof targets === 'function' || listener === undefined) {
+            return super.on(type as MapEventType, targets as Listener<MapEventType>);
         }
 
-        if (!Array.isArray(layerIds)) {
-            layerIds = [layerIds];
+        if (typeof targets === 'string') targets = [targets];
+        if (!this._areTargetsValid(targets)) {
+            return this;
         }
 
-        if (layerIds) {
-            for (const layerId of layerIds) {
-                if (!this._isValidId(layerId)) {
-                    return this;
-                }
-            }
-        }
-
-        const delegatedListener = this._createDelegatedListener(type as MapEventType, layerIds, listener);
+        const delegatedListener = this._createDelegatedListener(type as MapEventType, targets, listener);
 
         this._delegatedListeners = this._delegatedListeners || {};
         this._delegatedListeners[type] = this._delegatedListeners[type] || [];
@@ -1745,28 +1823,21 @@ export class Map extends Camera {
      * @see [Example: Animate the camera around a point with 3D terrain](https://docs.mapbox.com/mapbox-gl-js/example/free-camera-point/)
      * @see [Example: Play map locations as a slideshow](https://docs.mapbox.com/mapbox-gl-js/example/playback-locations/)
      */
-    once<T extends MapEventType | (string & {})>(type: T): Promise<MapEventOf<Extract<T, MapEventType>>>;
-    once<T extends MapEventType | (string & {})>(type: T, listener: Listener<Extract<T, MapEventType>>): this;
-    once<T extends MapEventType | (string & {})>(type: T, layerIds: string | string[]): Promise<MapEventOf<Extract<T, MapEventType>>>;
-    once<T extends MapEventType | (string & {})>(type: T, layerIds: string | string[], listener: Listener<Extract<T, MapEventType>>): this;
-    once<T extends MapEventType | (string & {})>(type: T, layerIds?: string | string[] | Listener<Extract<T, MapEventType>>, listener?: Listener<Extract<T, MapEventType>>): this | Promise<MapEventOf<Extract<T, MapEventType>>> {
-        if (typeof layerIds === 'function' || listener === undefined) {
-            return super.once(type as MapEventType, layerIds as Listener<MapEventType>);
+    override once<T extends MapEventType | (string & {})>(type: T): Promise<MapEventOf<Extract<T, MapEventType>>>;
+    override once<T extends MapEventType | (string & {})>(type: T, listener: Listener<Extract<T, MapEventType>>): this;
+    override once<T extends MapEventType | (string & {})>(type: T, targets: string | string[] | TargetDescriptor): Promise<MapEventOf<Extract<T, MapEventType>>>;
+    override once<T extends MapEventType | (string & {})>(type: T, targets: string | string[] | TargetDescriptor, listener: Listener<Extract<T, MapEventType>>): this;
+    override once<T extends MapEventType | (string & {})>(type: T, targets?: string | string[] | TargetDescriptor | Listener<Extract<T, MapEventType>>, listener?: Listener<Extract<T, MapEventType>>): this | Promise<MapEventOf<Extract<T, MapEventType>>> {
+        if (typeof targets === 'function' || listener === undefined) {
+            return super.once(type as MapEventType, targets as Listener<MapEventType>);
         }
 
-        if (!Array.isArray(layerIds)) {
-            layerIds = [layerIds];
+        if (typeof targets === 'string') targets = [targets];
+        if (!this._areTargetsValid(targets)) {
+            return this;
         }
 
-        if (layerIds) {
-            for (const layerId of layerIds) {
-                if (!this._isValidId(layerId)) {
-                    return this;
-                }
-            }
-        }
-
-        const delegatedListener = this._createDelegatedListener(type as MapEventType, layerIds, listener);
+        const delegatedListener = this._createDelegatedListener(type as MapEventType, targets, listener);
 
         for (const event in delegatedListener.delegates) {
             this.once(event as T, delegatedListener.delegates[event]);
@@ -1800,37 +1871,22 @@ export class Map extends Camera {
      * });
      * @see [Example: Create a draggable point](https://docs.mapbox.com/mapbox-gl-js/example/drag-a-point/)
      */
-    off<T extends MapEventType | (string & {})>(type: T, listener: Listener<Extract<T, MapEventType>>): this;
-    off<T extends MapEventType | (string & {})>(type: T, layerIds: string | string[], listener: Listener<Extract<T, MapEventType>>): this;
-    off<T extends MapEventType | (string & {})>(type: T, layerIds: string | string[] | Listener<Extract<T, MapEventType>>, listener?: Listener<Extract<T, MapEventType>>): this {
-        if (typeof layerIds === 'function' || listener === undefined) {
-            return super.off(type as MapEventType, layerIds as Listener<MapEventType>);
+    override off<T extends MapEventType | (string & {})>(type: T, listener: Listener<Extract<T, MapEventType>>): this;
+    override off<T extends MapEventType | (string & {})>(type: T, targets: string | string[] | TargetDescriptor, listener: Listener<Extract<T, MapEventType>>): this;
+    override off<T extends MapEventType | (string & {})>(type: T, targets: string | string[] | TargetDescriptor | Listener<Extract<T, MapEventType>>, listener?: Listener<Extract<T, MapEventType>>): this {
+        if (typeof targets === 'function' || listener === undefined) {
+            return super.off(type as MapEventType, targets as Listener<MapEventType>);
         }
 
-        const uniqLayerIds = new Set(Array.isArray(layerIds) ? layerIds : [layerIds]);
-
-        for (const layerId of uniqLayerIds) {
-            if (!this._isValidId(layerId)) {
-                return this;
-            }
+        if (typeof targets === 'string') targets = [targets];
+        if (!this._areTargetsValid(targets)) {
+            return this;
         }
-
-        const areLayerIdsEqual = (hash1: Set<string>, hash2: Set<string>) => {
-            if (hash1.size !== hash2.size) {
-                return false; // at-least 1 arr has duplicate value(s)
-            }
-
-            // comparing values
-            for (const value of hash1) {
-                if (!hash2.has(value)) return false;
-            }
-            return true;
-        };
 
         const removeDelegatedListeners = (listeners: Array<DelegatedListener>) => {
             for (let i = 0; i < listeners.length; i++) {
                 const delegatedListener = listeners[i];
-                if (delegatedListener.listener === listener && areLayerIdsEqual(delegatedListener.layers, uniqLayerIds)) {
+                if (delegatedListener.listener === listener && areTargetsEqual(delegatedListener.targets, targets)) {
                     for (const event in delegatedListener.delegates) {
                         this.off(event as T, delegatedListener.delegates[event]);
                     }
@@ -1863,7 +1919,9 @@ export class Map extends Camera {
      * Only values within the existing viewport are supported.
      * @param {Object} [options] Options object.
      * @param {Array<string>} [options.layers] An array of [style layer IDs](https://docs.mapbox.com/mapbox-gl-js/style-spec/#layer-id) for the query to inspect.
-     * Only features within these layers will be returned. If this parameter is undefined, all layers will be checked.
+     * Only features within these layers will be returned. If `target` and `layers` are both undefined, the query will inspect all layers and featuresets in the root style, as well as all featuresets in the root style imports.
+     * @param {TargetDescriptor} [options.target] A query target to inspect. This could be a [style layer ID](https://docs.mapbox.com/mapbox-gl-js/style-spec/#layer-id) or a {@link FeaturesetDescriptor}.
+     * Only features within layers referenced by the query target will be returned. If `target` and `layers` are both undefined, the query will inspect all layers and featuresets in the root style, as well as all featuresets in the root style imports.
      * @param {Array} [options.filter] A [filter](https://docs.mapbox.com/mapbox-gl-js/style-spec/layers/#filter)
      * to limit query results.
      * @param {boolean} [options.validate=true] Whether to check if the [options.filter] conforms to the Mapbox GL Style Specification. Disabling validation is a performance optimization that should only be used if you have previously validated the values you will be passing to this function.
@@ -1874,8 +1932,12 @@ export class Map extends Camera {
      * The `properties` value of each returned feature object contains the properties of its source feature. For GeoJSON sources, only
      * string and numeric property values are supported. `null`, `Array`, and `Object` values are not supported.
      *
-     * Each feature includes top-level `layer`, `source`, and `sourceLayer` properties. The `layer` property is an object
-     * representing the style layer to  which the feature belongs. Layout and paint properties in this object contain values
+     * For featuresets in the style imports, each feature includes top-level `target` and an optional `namespace` property as defined in {@link TargetFeature}.
+     * The `target` property represents the query target associated with the feature, while the optional `namespace` property
+     * is included to prevent feature ID collisions when layers in the query target reference multiple sources.
+     *
+     * For layers and featuresets in the root style, each feature includes top-level `layer`, `source`, and `sourceLayer` properties. The `layer` property is an object
+     * representing the style layer to which the feature belongs. Layout and paint properties in this object contain values
      * which are fully evaluated for the given zoom level and feature.
      *
      * Only features that are currently rendered are included. Some features will **not** be included, like:
@@ -1903,14 +1965,14 @@ export class Map extends Camera {
      * // Find all features at a point
      * const features = map.queryRenderedFeatures(
      *   [20, 35],
-     *   {layers: ['my-layer-name']}
+     *   {target: {layerId: 'my-layer-name'}}
      * );
      *
      * @example
      * // Find all features within a static bounding box
      * const features = map.queryRenderedFeatures(
      *   [[10, 20], [30, 50]],
-     *   {layers: ['my-layer-name']}
+     *   {target: {layerId: 'my-layer-name'}}
      * );
      *
      * @example
@@ -1920,18 +1982,27 @@ export class Map extends Camera {
      * const features = map.queryRenderedFeatures([
      *     [point.x - width / 2, point.y - height / 2],
      *     [point.x + width / 2, point.y + height / 2]
-     * ], {layers: ['my-layer-name']});
+     * ], {target: {layerId: 'my-layer-name'}});
      *
      * @example
      * // Query all rendered features from a single layer
+     * const features = map.queryRenderedFeatures({target: {layerId: 'my-layer-name'}});
+     *
+     * // ...or
      * const features = map.queryRenderedFeatures({layers: ['my-layer-name']});
+     *
+     * // Query all rendered features from a `poi` featureset in the `basemap` style import
+     * const features = map.queryRenderedFeatures({target: {featuresetId: 'poi', importId: 'basemap'}});
+     *
      * @see [Example: Get features under the mouse pointer](https://www.mapbox.com/mapbox-gl-js/example/queryrenderedfeatures/)
      * @see [Example: Highlight features within a bounding box](https://www.mapbox.com/mapbox-gl-js/example/using-box-queryrenderedfeatures/)
      * @see [Example: Filter features within map view](https://www.mapbox.com/mapbox-gl-js/example/filter-features-within-map-view/)
      */
-    queryRenderedFeatures(geometry: PointLike | [PointLike, PointLike], options?: QueryRenderedFeaturesOptions): Array<GeoJSONFeature>;
-    queryRenderedFeatures(options?: QueryRenderedFeaturesOptions): Array<GeoJSONFeature>;
-    queryRenderedFeatures(geometry?: PointLike | [PointLike, PointLike] | QueryRenderedFeaturesOptions, options?: QueryRenderedFeaturesOptions): Array<GeoJSONFeature> {
+    queryRenderedFeatures(geometry: PointLike | [PointLike, PointLike], options?: QueryRenderedFeaturesParams): GeoJSONFeature[];
+    queryRenderedFeatures(geometry: PointLike | [PointLike, PointLike], options?: QueryRenderedFeaturesetParams): TargetFeature[];
+    queryRenderedFeatures(options?: QueryRenderedFeaturesParams): GeoJSONFeature[];
+    queryRenderedFeatures(options?: QueryRenderedFeaturesetParams): TargetFeature[];
+    queryRenderedFeatures(geometry?: PointLike | [PointLike, PointLike] | QueryRenderedFeaturesParams | QueryRenderedFeaturesetParams, options?: QueryRenderedFeaturesParams | QueryRenderedFeaturesetParams): GeoJSONFeature[] | TargetFeature[] {
         // The first parameter can be omitted entirely, making this effectively an overloaded method
         // with two signatures:
         //
@@ -1944,23 +2015,55 @@ export class Map extends Camera {
             return [];
         }
 
-        if (options === undefined && geometry !== undefined && !(geometry instanceof Point) && !Array.isArray(geometry)) {
+        // Handle the case where the first parameter is an options object
+        if (geometry !== undefined && !(geometry instanceof Point) && !Array.isArray(geometry) && options === undefined) {
             options = geometry;
             geometry = undefined;
         }
 
-        options = options || {};
         geometry = (geometry || [[0, 0], [this.transform.width, this.transform.height]]) as PointLike;
 
-        if (options.layers && Array.isArray(options.layers)) {
-            for (const layerId of options.layers) {
-                if (!this._isValidId(layerId)) {
-                    return [];
-                }
+        // Query for all rendered features and featureset target features
+        if (!options) {
+            const features = this.style.queryRenderedFeatures(geometry, undefined, this.transform);
+            const targetFeatures = this.style.queryRenderedFeatureset(geometry, undefined, this.transform);
+            return features.concat(targetFeatures);
+        }
+
+        // Query for rendered featureset targets if only featureset is provided
+        let featuresetIsValid = true;
+        if (options.target) {
+            featuresetIsValid = this._isTargetValid(options.target);
+            if (featuresetIsValid && !options.layers) {
+                return this.style.queryRenderedFeatureset(geometry, options as QueryRenderedFeaturesetParams, this.transform);
             }
         }
 
-        return this.style.queryRenderedFeatures(geometry, options, this.transform);
+        // Query for rendered features if only layers are provided
+        let layersAreValid = true;
+        if (options.layers && Array.isArray(options.layers)) {
+            for (const layerId of options.layers) {
+                if (!this._isValidId(layerId)) {
+                    layersAreValid = false;
+                    break;
+                }
+            }
+            if (layersAreValid && !options.target) {
+                return this.style.queryRenderedFeatures(geometry, options as QueryRenderedFeaturesParams, this.transform);
+            }
+        }
+
+        // Query for rendered features and featureset targets if both layers and featureset are provided
+        let features = [];
+        if (layersAreValid) {
+            features = features.concat(this.style.queryRenderedFeatures(geometry, options as QueryRenderedFeaturesParams, this.transform));
+        }
+
+        if (featuresetIsValid) {
+            features = features.concat(this.style.queryRenderedFeatureset(geometry, options as QueryRenderedFeaturesetParams, this.transform));
+        }
+
+        return features;
     }
 
     /**
@@ -2006,9 +2109,9 @@ export class Map extends Camera {
             sourceLayer?: string;
             filter?: FilterSpecification;
             validate?: boolean;
-        },
+        }
     ): Array<GeoJSONFeature> {
-        if (!this._isValidId(sourceId)) {
+        if (!sourceId || (typeof sourceId === 'string' && !this._isValidId(sourceId))) {
             return [];
         }
 
@@ -2034,20 +2137,44 @@ export class Map extends Camera {
 
     /**
      * Add an interaction — a named gesture handler of a given type.
+     * *This API is experimental and subject to change in future versions*.
      *
+     * @experimental
      * @param {string} id The ID of the interaction.
      * @param {Object} interaction The interaction object with the following properties.
      * @param {string} interaction.type The type of gesture to handle (e.g. 'click').
      * @param {Object} [interaction.filter] Filter expression to narrow down the interaction to a subset of features under the pointer.
-     * @param {string[]} [interaction.layers] A list of layer IDs to narrow down features to.
+     * @param {TargetDescriptor} [interaction.target] The interaction target, which can be either a reference to a layer or a reference to a featureset in a style import.
+     * Use `{layerId: string}` to reference features in the root style layer, or `{featuresetId: string, importId?: string}` to reference features in an imported style.
      * @param {Function} interaction.handler A handler function that will be invoked on the gesture and receive a `{feature, interaction}` object as a parameter.
      * @returns {Map} Returns itself to allow for method chaining.
      *
      * @example
      * map.addInteraction('poi-click', {
      *   type: 'click',
+     *   target: {featuresetId: 'poi', importId: 'basemap'},
      *   handler(e) {
      *     console.log(e.feature);
+     *   }
+     * });
+     *
+     * @example
+     * map.addInteraction('building-mouseenter', {
+     *   type: 'mouseenter',
+     *   target: {featuresetId: 'buildings', importId: 'basemap'},
+     *   handler: (e) => {
+     *     map.setFeatureState(e.feature, {highlight: true});
+     *   }
+     * });
+     *
+     * @example
+     * map.addInteraction('building-mouseleave', {
+     *   type: 'mouseleave',
+     *   target: {featuresetId: 'buildings', importId: 'basemap'},
+     *   handler: (e) => {
+     *     map.setFeatureState(e.feature, {highlight: true});
+     *     // Propagate the event so that the handler is called for each feature.
+     *     return false;
      *   }
      * });
      */
@@ -2058,7 +2185,9 @@ export class Map extends Camera {
 
     /**
      * Remove an interaction previously added with `addInteraction`.
+     * *This API is experimental and subject to change in future versions*.
      *
+     * @experimental
      * @param {string} id The id of the interaction to remove.
      * @returns {Map} Returns itself to allow for method chaining.
      *
@@ -2222,7 +2351,7 @@ export class Map extends Camera {
         return this.style.loaded();
     }
 
-    _isValidId(id?: string | null): boolean {
+    _isValidId(id?: string): boolean {
         if (id == null) {
             this.fire(new ErrorEvent(new Error(`IDs can't be empty.`)));
             return false;
@@ -2235,6 +2364,41 @@ export class Map extends Camera {
         }
 
         return true;
+    }
+
+    /**
+     * Checks if the given target is a valid featureset descriptor.
+     * @private
+     */
+    _isTargetValid(target: TargetDescriptor): boolean {
+        if ('featuresetId' in target) {
+            if ('importId' in target) return this._isValidId(target.importId);
+            return this._isValidId(target.featuresetId);
+        }
+
+        if ('layerId' in target) {
+            return this._isValidId(target.layerId);
+        }
+
+        return false;
+    }
+
+    /**
+     * Checks if the given targets are either list of valid layerIds or a valid featureset descriptor.
+     * @private
+     */
+    _areTargetsValid(targets: string[] | TargetDescriptor): boolean {
+        if (Array.isArray(targets)) {
+            for (const layerId of targets) {
+                if (!this._isValidId(layerId)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        return this._isTargetValid(targets);
     }
 
     /** @section {Sources} */
@@ -2435,7 +2599,7 @@ export class Map extends Camera {
 
         if (image instanceof HTMLImageElement || (ImageBitmap && image instanceof ImageBitmap)) {
             const {width, height, data} = browser.getImageData(image);
-            this.style.addImage(id, {data: new RGBAImage({width, height}, data), pixelRatio, stretchX, stretchY, content, sdf, version});
+            this.style.addImage(id, {data: new RGBAImage({width, height}, data), pixelRatio, stretchX, stretchY, content, sdf, version, usvg: false});
         } else if (image.width === undefined || image.height === undefined) {
             this.fire(new ErrorEvent(new Error(
                 'Invalid arguments to map.addImage(). The second argument must be an `HTMLImageElement`, `ImageData`, `ImageBitmap`, ' +
@@ -2452,6 +2616,7 @@ export class Map extends Camera {
                 stretchY,
                 content,
                 sdf,
+                usvg: false,
                 version,
                 userImage
             });
@@ -2508,7 +2673,10 @@ export class Map extends Camera {
             return;
         }
 
-        if (width !== existingImage.data.width || height !== existingImage.data.height) {
+        const existingImageWidth = existingImage.usvg ? existingImage.icon.usvg_tree.width : existingImage.data.width;
+        const existingImageHeight = existingImage.usvg ? existingImage.icon.usvg_tree.height : existingImage.data.height;
+
+        if (width !== existingImageWidth || height !== existingImageHeight) {
             this.fire(new ErrorEvent(new Error(
                 `The width and height of the updated image (${width}, ${height})
                 must be that same as the previous version of the image
@@ -2517,9 +2685,19 @@ export class Map extends Camera {
         }
 
         const copy = !(image instanceof HTMLImageElement || (ImageBitmap && image instanceof ImageBitmap));
-        existingImage.data.replace(data, copy);
 
-        this.style.updateImage(id, existingImage);
+        let performSymbolLayout = false;
+
+        if (existingImage.usvg) {
+            existingImage.data = new RGBAImage({width, height}, new Uint8Array(data));
+            existingImage.usvg = false;
+            existingImage.icon = undefined;
+            performSymbolLayout = true;
+        } else {
+            existingImage.data.replace(data, copy);
+        }
+
+        this.style.updateImage(id, existingImage, performSymbolLayout);
     }
 
     /**
@@ -3361,6 +3539,20 @@ export class Map extends Camera {
     }
 
     /**
+     * Returns a list of featureset descriptors for querying, interaction, and state management on the map.
+     * Each featureset descriptor can reference either individual layer or subset of layers within the map's style.
+     *
+     * @private
+     * @experimental
+     * @returns {FeaturesetDescriptor[]} The list of featuresets.
+     * @example
+     * const featuresetDescriptors = map.getFeaturesetDescriptors('basemap');
+     */
+    getFeaturesetDescriptors(importId?: string): Array<FeaturesetDescriptor> {
+        return this.style.getFeaturesetDescriptors(importId);
+    }
+
+    /**
      * Adds a set of Mapbox style light to the map's style.
      *
      * _Note: This light is not to confuse with our legacy light API used through {@link Map#setLight} and {@link Map#getLight}_.
@@ -3534,6 +3726,73 @@ export class Map extends Camera {
     }
 
     /**
+     * Sets the snow property of the style.
+     * *This API is experimental, not production ready and subject to change in future versions*.
+     *
+     * @experimental
+     * @param {SnowSpecification} snow The snow properties to set.
+     * If `null` or `undefined` is provided, this function call removes the snow from the map.
+     * @returns {Map} Returns itself to allow for method chaining.
+     * @example
+     *   map.setSnow({
+     *       density: 1,
+     *       intensity: 0.3
+     *   });
+     * */
+    setSnow(snow?: SnowSpecification | null): this {
+        this._lazyInitEmptyStyle();
+        this.style.setSnow(snow);
+        return this._update(true);
+    }
+
+    /**
+     * Returns the snow specification or `null` if snow is not set on the map.
+     * *This API is experimental, not production ready and subject to change in future versions*.
+     *
+     * @experimental
+     * @returns {SnowSpecification} Snow specification properties of the style.
+     * @example
+     * const snow = map.getSnow();
+     */
+    getSnow(): SnowSpecification | null | undefined {
+        return this.style ? this.style.getSnow() : null;
+    }
+
+    /**
+     * Sets the rain property of the style.
+     * *This API is experimental, not production ready and subject to change in future versions*.
+     *
+     * @experimental
+     * @param {RainSpecification} rain The rain properties to set.
+     * If `null` or `undefined` is provided, this function call removes the rain from the map.
+     * @returns {Map} Returns itself to allow for method chaining.
+     * @example
+     *   map.setRain({
+     *       density: 1,
+     *       intensity: 0.3,
+     *       "distortion-strength": 0.3
+     *   });
+     * */
+    setRain(rain?: RainSpecification | null): this {
+        this._lazyInitEmptyStyle();
+        this.style.setRain(rain);
+        return this._update(true);
+    }
+
+    /**
+     * Returns the rain specification or `null` if rain is not set on the map.
+     * *This API is experimental, not production ready and subject to change in future versions*.
+     *
+     * @experimental
+     * @returns {RainSpecification} Rain specification properties of the style.
+     * @example
+     * const rain = map.getRain();
+     */
+    getRain(): RainSpecification | null | undefined {
+        return this.style ? this.style.getRain() : null;
+    }
+
+    /**
      * Sets the color-theme property of the style.
      *
      * @param {ColorThemeSpecification} colorTheme The color-theme properties to set.
@@ -3548,6 +3807,25 @@ export class Map extends Camera {
     setColorTheme(colorTheme?: ColorThemeSpecification): this {
         this._lazyInitEmptyStyle();
         this.style.setColorTheme(colorTheme);
+        return this._update(true);
+    }
+
+    /**
+     * Sets the color-theme property of an import, which overrides the color-theme property of the imported style data.
+     *
+     * @param {string} importId Identifier of import to update.
+     * @param {ColorThemeSpecification} colorTheme The color-theme properties to set.
+     * If `null` or `undefined` is provided, this function call removes the color-theme override.
+     * Note: Calling this function triggers a full reload of tiles.
+     * @returns {Map} Returns itself to allow for method chaining.
+     * @example
+     * map.setImportColorTheme("someImportId", {
+     *     "data": "iVBORw0KGgoAA..."
+     * });
+     */
+    setImportColorTheme(importId: string, colorTheme?: ColorThemeSpecification): this {
+        this._lazyInitEmptyStyle();
+        this.style.setImportColorTheme(importId, colorTheme);
         return this._update(true);
     }
 
@@ -3638,8 +3916,8 @@ export class Map extends Camera {
      * @see [Example: Create a hover effect](https://docs.mapbox.com/mapbox-gl-js/example/hover-styles/)
      * @see [Tutorial: Create interactive hover effects with Mapbox GL JS](https://docs.mapbox.com/help/tutorials/create-interactive-hover-effects-with-mapbox-gl-js/)
      */
-    setFeatureState(feature: FeatureSelector | GeoJSONFeature, state: FeatureState): this {
-        if (!this._isValidId(feature.source)) {
+    setFeatureState(feature: FeatureSelector | GeoJSONFeature | TargetFeature, state: FeatureState): this {
+        if (feature.source && !this._isValidId(feature.source)) {
             return this;
         }
 
@@ -3693,8 +3971,8 @@ export class Map extends Camera {
      *     }, 'hover');
      * });
      */
-    removeFeatureState(feature: Omit<FeatureSelector, 'id'> & {id?: FeatureSelector['id'] } | GeoJSONFeature, key?: string): this {
-        if (!this._isValidId(feature.source)) {
+    removeFeatureState(feature: FeatureSelector | SourceSelector | GeoJSONFeature | TargetFeature, key?: string): this {
+        if (feature.source && !this._isValidId(feature.source)) {
             return this;
         }
 
@@ -3730,8 +4008,8 @@ export class Map extends Camera {
      *     }
      * });
      */
-    getFeatureState(feature: FeatureSelector | GeoJSONFeature): FeatureState | null | undefined {
-        if (!this._isValidId(feature.source)) {
+    getFeatureState(feature: FeatureSelector | GeoJSONFeature | TargetFeature): FeatureState | null | undefined {
+        if (feature.source && !this._isValidId(feature.source)) {
             return null;
         }
 
@@ -3781,7 +4059,6 @@ export class Map extends Camera {
         this._detectMissingCSS();
 
         const canvasContainer = this._canvasContainer = DOM.create('div', 'mapboxgl-canvas-container', container);
-        // @ts-expect-error - TS2740 - Type 'HTMLElement' is missing the following properties from type 'HTMLCanvasElement': height, width, captureStream, getContext, and 3 more.
         this._canvas = DOM.create('canvas', 'mapboxgl-canvas', canvasContainer);
 
         if (this._interactive) {
@@ -3856,7 +4133,7 @@ export class Map extends Camera {
 
         storeAuthState(gl, true);
 
-        this.painter = new Painter(gl, this._contextCreateOptions, this.transform, this._tp);
+        this.painter = new Painter(gl, this._contextCreateOptions, this.transform, this._scaleFactor, this._tp);
         this.on('data', (event) => {
             if (event.dataType === 'source') {
                 this.painter.setTileLoadedFlag(true);
@@ -3962,12 +4239,12 @@ export class Map extends Camera {
      * @returns An id that can be used to cancel the callback
      * @private
      */
-    _requestRenderFrame(callback: () => void): TaskID {
+    override _requestRenderFrame(callback: () => void): TaskID {
         this._update();
         return this._renderTaskQueue.add(callback);
     }
 
-    _cancelRenderFrame(id: TaskID) {
+    override _cancelRenderFrame(id: TaskID) {
         this._renderTaskQueue.remove(id);
     }
 
@@ -4072,7 +4349,10 @@ export class Map extends Camera {
             averageElevationChanged = this._updateAverageElevation(frameStartTime);
         }
 
-        const updatePlacementResult = this.style && this.style._updatePlacement(this.painter, this.painter.transform, this.showCollisionBoxes, fadeDuration, this._crossSourceCollisions, this.painter.replacementSource);
+        const updatePlacementResult = this.style && this.style._updatePlacement(this.painter, this.painter.transform, this.showCollisionBoxes, fadeDuration, this._crossSourceCollisions, this.painter.replacementSource, this._scaleFactorChanged);
+        if (this._scaleFactorChanged) {
+            this._scaleFactorChanged = false;
+        }
         if (updatePlacementResult) {
             this._placementDirty = updatePlacementResult.needsRerender;
         }
@@ -4111,6 +4391,11 @@ export class Map extends Camera {
         }
 
         if (this.style && (this.style.hasTransitions())) {
+            this._styleDirty = true;
+        }
+
+        // Whenever precipitation effects are present -> force constant redraw
+        if (this.style && (this.style.snow || this.style.rain)) {
             this._styleDirty = true;
         }
 
@@ -4394,6 +4679,7 @@ export class Map extends Camera {
         if (this.style) {
             this.style.destroy();
         }
+        this.indoor.destroy();
         this.painter.destroy();
         if (this.handlers) this.handlers.destroy();
         this.handlers = undefined;
@@ -4469,7 +4755,7 @@ export class Map extends Camera {
      * @private
      * @returns {Object} Returns `this` | Promise.
      */
-    _preloadTiles(transform: Transform | Array<Transform>): this {
+    override _preloadTiles(transform: Transform | Array<Transform>): this {
         const sourceCaches: Array<SourceCache> = this.style ? this.style.getSourceCaches() : [];
         asyncAll(sourceCaches, (sourceCache, done) => sourceCache._preloadTiles(transform, done), () => {
             this.triggerRepaint();

@@ -5,6 +5,8 @@ import EvaluationParameters from '../style/evaluation_parameters';
 
 import type {PropertyValue, PossiblyEvaluatedPropertyValue} from '../style/properties';
 import type {InterpolationType} from '../style-spec/expression/definitions/interpolate';
+import type {CanonicalTileID} from '../source/tile_id';
+import type {SymbolFeature} from '../data/bucket/symbol_bucket';
 
 const SIZE_PACK_FACTOR = 128;
 
@@ -33,6 +35,38 @@ export type InterpolatedSize = {
     uSize: number;
     uSizeT: number;
 };
+
+// We need to rasterize vector icon with maximum possible size to avoid
+// scaling artifacts. This function calculates the maximum size of the
+// icon that will be rasterized for a given zoom level and with the given
+// icon-size value.
+// - For composite functions, we need to rasterize the icon at the given maximum size
+// - For camera functions, we need to rasterize the icon at the maximum size of closest zoom stops
+// - For constant functions, we need to rasterize the icon at the given size
+export function getRasterizedIconSize(
+    sizeData: SizeData,
+    unevaluatedIconSize: PropertyValue<number, PossiblyEvaluatedPropertyValue<number>>,
+    canonical: CanonicalTileID,
+    zoom: number,
+    feature: SymbolFeature
+) {
+    if (sizeData.kind === 'camera') {
+        return sizeData.maxSize;
+    }
+
+    if (sizeData.kind === 'composite') {
+        const maxZoomSize = unevaluatedIconSize
+            .possiblyEvaluate(new EvaluationParameters(sizeData.maxZoom), canonical)
+            .evaluate(feature, {}, canonical);
+        const minZoomSize = unevaluatedIconSize
+            .possiblyEvaluate(new EvaluationParameters(sizeData.minZoom), canonical)
+            .evaluate(feature, {}, canonical);
+
+        return Math.max(maxZoomSize, minZoomSize);
+    }
+
+    return unevaluatedIconSize.possiblyEvaluate(new EvaluationParameters(zoom)).evaluate(feature, {}, canonical);
+}
 
 // For {text,icon}-size, get the bucket-level data that will be needed by
 // the painter to set symbol-size-related uniforms
@@ -101,12 +135,12 @@ function evaluateSizeForFeature(
     return uSize;
 }
 
-function evaluateSizeForZoom(sizeData: SizeData, zoom: number): InterpolatedSize {
+function evaluateSizeForZoom(sizeData: SizeData, zoom: number, scaleFactor: number = 1): InterpolatedSize {
     let uSizeT = 0;
     let uSize = 0;
 
     if (sizeData.kind === 'constant') {
-        uSize = sizeData.layoutSize;
+        uSize = sizeData.layoutSize * scaleFactor;
 
     } else if (sizeData.kind !== 'source') {
         const {interpolationType, minZoom, maxZoom} = sizeData;
@@ -120,9 +154,9 @@ function evaluateSizeForZoom(sizeData: SizeData, zoom: number): InterpolatedSize
             Interpolate.interpolationFactor(interpolationType, zoom, minZoom, maxZoom), 0, 1);
 
         if (sizeData.kind === 'camera') {
-            uSize = interpolate(sizeData.minSize, sizeData.maxSize, t);
+            uSize = interpolate(sizeData.minSize, sizeData.maxSize, t) * scaleFactor;
         } else {
-            uSizeT = t;
+            uSizeT = t * scaleFactor;
         }
     }
 
