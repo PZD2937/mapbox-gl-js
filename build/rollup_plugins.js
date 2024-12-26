@@ -37,6 +37,9 @@ export const plugins = ({mode, minified, production, test, bench, keepClassNames
         entries: [{
             find: '@mapbox/vector-tile',
             replacement: fileURLToPath(new URL('../lib/vector-tile/index.js', import.meta.url))
+        }, {
+            find: '@mapbox/tiny-sdf',
+            replacement: fileURLToPath(new URL('../lib/tiny-sdf/index.js', import.meta.url))
         }]
     }),
     (production && !bench) ? strip({
