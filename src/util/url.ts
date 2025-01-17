@@ -29,7 +29,8 @@ export function removeQueryParameters(url: string, params: string[]) {
     params.forEach(p => {
         searchParams.delete(p);
     });
-    return `${url.slice(0, paramStart)}?${searchParams.toString()}`;
+    const paramsString = searchParams.toString();
+    return `${url.slice(0, paramStart)}${paramsString.length > 0 ? `?${paramsString}` : ''}`;
 }
 
 type StripQueryParameters = {
